@@ -1,117 +1,16 @@
 import Game from './components/Game.tsx';
-
 import { ToastContainer } from 'react-toastify';
 import a16zImg from '../assets/a16z.png';
 import convexImg from '../assets/convex.svg';
 import starImg from '../assets/star.svg';
 import helpImg from '../assets/help.svg';
-// import { UserButton } from '@clerk/clerk-react';
-// import { Authenticated, Unauthenticated } from 'convex/react';
-// import LoginButton from './components/buttons/LoginButton.tsx';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactModal from 'react-modal';
 import MusicButton from './components/buttons/MusicButton.tsx';
 import Button from './components/buttons/Button.tsx';
-import InteractButton from './components/buttons/InteractButton.tsx';
 import FreezeButton from './components/FreezeButton.tsx';
-import { MAX_HUMAN_PLAYERS } from '../convex/constants.ts';
 import PoweredByConvex from './components/PoweredByConvex.tsx';
-
-export default function Home() {
-  const [helpModalOpen, setHelpModalOpen] = useState(false);
-  return (
-    <main className="relative flex min-h-screen flex-col items-center justify-between font-body game-background">
-      <PoweredByConvex />
-
-      <ReactModal
-        isOpen={helpModalOpen}
-        onRequestClose={() => setHelpModalOpen(false)}
-        style={modalStyles}
-        contentLabel="Help modal"
-        ariaHideApp={false}
-      >
-        <div className="font-body">
-          <h1 className="text-center text-6xl font-bold font-display game-title">Help</h1>
-          <p>
-            Welcome to AI town. AI town supports both anonymous <i>spectators</i> and logged in{' '}
-            <i>interactivity</i>.
-          </p>
-          <h2 className="text-4xl mt-4">Spectating</h2>
-          <p>
-            Click and drag to move around the town, and scroll in and out to zoom. You can click on
-            an individual character to view its chat history.
-          </p>
-          <h2 className="text-4xl mt-4">Interactivity</h2>
-          <p>
-            If you log in, you can join the simulation and directly talk to different agents! After
-            logging in, click the "Interact" button, and your character will appear somewhere on the
-            map with a highlighted circle underneath you.
-          </p>
-          <p className="text-2xl mt-2">Controls:</p>
-          <p className="mt-4">Click to navigate around.</p>
-          <p className="mt-4">
-            To talk to an agent, click on them and then click "Start conversation," which will ask
-            them to start walking towards you. Once they're nearby, the conversation will start, and
-            you can speak to each other. You can leave at any time by closing the conversation pane
-            or moving away. They may propose a conversation to you - you'll see a button to accept
-            in the messages panel.
-          </p>
-          <p className="mt-4">
-            AI town only supports {MAX_HUMAN_PLAYERS} humans at a time. If you're idle for five
-            minutes, you'll be automatically removed from the simulation.
-          </p>
-        </div>
-      </ReactModal>
-      {/*<div className="p-3 absolute top-0 right-0 z-10 text-2xl">
-        <Authenticated>
-          <UserButton afterSignOutUrl="/ai-town" />
-        </Authenticated>
-
-        <Unauthenticated>
-          <LoginButton />
-        </Unauthenticated>
-      </div> */}
-
-      <div className="w-full lg:h-screen min-h-screen relative isolate overflow-hidden lg:p-8 shadow-2xl flex flex-col justify-start">
-        <h1 className="mx-auto text-4xl p-3 sm:text-8xl lg:text-9xl font-bold font-display leading-none tracking-wide game-title w-full text-left sm:text-center sm:w-auto">
-          AI Town
-        </h1>
-
-        <div className="max-w-xs md:max-w-xl lg:max-w-none mx-auto my-4 text-center text-base sm:text-xl md:text-2xl text-white leading-tight shadow-solid">
-          A virtual town where AI characters live, chat and socialize.
-          {/* <Unauthenticated>
-            <div className="my-1.5 sm:my-0" />
-            Log in to join the town
-            <br className="block sm:hidden" /> and the conversation!
-          </Unauthenticated> */}
-        </div>
-
-        <Game />
-
-        <footer className="justify-end bottom-0 left-0 w-full flex items-center mt-4 gap-3 p-6 flex-wrap pointer-events-none">
-          <div className="flex gap-4 flex-grow pointer-events-none">
-            <FreezeButton />
-            <MusicButton />
-            <Button href="https://github.com/a16z-infra/ai-town" imgUrl={starImg}>
-              Star
-            </Button>
-            <InteractButton />
-            <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
-              Help
-            </Button>
-          </div>
-          <a href="https://a16z.com">
-            <img className="w-8 h-8 pointer-events-auto" src={a16zImg} alt="a16z" />
-          </a>
-          <a href="https://convex.dev/c/ai-town">
-            <img className="w-20 h-8 pointer-events-auto" src={convexImg} alt="Convex" />
-          </a>
-        </footer>
-        <ToastContainer position="bottom-right" autoClose={2000} closeOnClick theme="dark" />
-      </div>
-    </main>
-  );
-}
+import MapEditor from './components/MapEditor.tsx';
 
 const modalStyles = {
   overlay: {
@@ -126,7 +25,6 @@ const modalStyles = {
     marginRight: '-50%',
     transform: 'translate(-50%, -50%)',
     maxWidth: '50%',
-
     border: '10px solid rgb(23, 20, 33)',
     borderRadius: '0',
     background: 'rgb(35, 38, 58)',
@@ -134,3 +32,111 @@ const modalStyles = {
     fontFamily: '"Upheaval Pro", "sans-serif"',
   },
 };
+
+export default function Home() {
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+
+  useEffect(() => {
+    // Simple way to access editor: add ?editor=true to URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('editor') === 'true') {
+      setShowEditor(true);
+    }
+  }, []);
+
+  if (showEditor) {
+    return <MapEditor />;
+  }
+
+  return (
+    <main className="relative flex min-h-screen flex-col items-center justify-between font-body game-background">
+      
+      {helpModalOpen && (
+        <ReactModal
+          isOpen={helpModalOpen}
+          onRequestClose={() => setHelpModalOpen(false)}
+          style={modalStyles}
+          contentLabel="Help Modal"
+          ariaHideApp={false}
+        >
+          <div className="font-body">
+            <h1 className="text-center text-6xl font-bold font-display game-title">Help</h1>
+            <p>
+              Welcome to Eliza Town! This is a virtual world where AI characters live, chat, and
+              socialize.
+            </p>
+            <h2 className="text-4xl mt-4">Controls</h2>
+            <p>
+              Click and drag to move around the town. Click on a character to view their
+              conversations.
+            </p>
+            <h2 className="text-4xl mt-4">About</h2>
+            <p>
+              Eliza Town is built with <a href="https://convex.dev">Convex</a>,{' '}
+              <a href="https://pixijs.com/">PixiJS</a>, and{' '}
+              <a href="https://react.dev/">React</a>. The interactions and conversations are driven
+              by LLMs.
+            </p>
+          </div>
+        </ReactModal>
+      )}
+
+      {!gameStarted ? (
+        // LANDING PAGE STATE
+        <div className="w-full h-screen flex flex-col items-center justify-center relative z-10">
+          <h1 className="text-6xl sm:text-9xl font-bold font-display game-title mb-8 tracking-wider text-center">
+            ELIZA TOWN
+          </h1>
+          
+          <button
+            onClick={() => setGameStarted(true)}
+            className="px-12 py-6 bg-white/10 hover:bg-white/20 border-4 border-white text-white text-4xl font-bold font-display rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+          >
+             ENTER WORLD 
+          </button>
+
+          <div className="absolute bottom-10 flex gap-6">
+             <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
+              Help
+            </Button>
+            <Button href="https://github.com/a16z-infra/ai-town" imgUrl={starImg}>
+              Star
+            </Button>
+            <MusicButton />
+          </div>
+          
+           <div className="absolute bottom-2 right-4 text-white/50 text-sm">
+            Powered by Convex
+          </div>
+        </div>
+      ) : (
+        // GAME STATE
+        <div className="w-full h-screen flex flex-col">
+          {/* Game area fills remaining space */}
+          <div className="flex-grow relative overflow-hidden">
+            <Game />
+          </div>
+
+          {/* Minimal Overlay Controls for Game Mode */}
+          <div className="absolute top-4 right-4 flex gap-2 pointer-events-auto">
+             <FreezeButton />
+             <MusicButton />
+             <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
+              Help
+            </Button>
+             <button 
+               onClick={() => setGameStarted(false)}
+               className="bg-red-500/80 hover:bg-red-600 text-white px-3 py-1 rounded border-2 border-white/20 font-display text-xs"
+             >
+               EXIT
+             </button>
+          </div>
+        </div>
+      )}
+      
+      <ToastContainer position="bottom-right" autoClose={2000} closeOnClick theme="dark" />
+    </main>
+  );
+}
