@@ -1,22 +1,17 @@
-import { data as f1SpritesheetData } from './spritesheets/f1';
-import { data as f2SpritesheetData } from './spritesheets/f2';
-import { data as f3SpritesheetData } from './spritesheets/f3';
-import { data as f4SpritesheetData } from './spritesheets/f4';
-import { data as f5SpritesheetData } from './spritesheets/f5';
-import { data as f6SpritesheetData } from './spritesheets/f6';
-import { data as f7SpritesheetData } from './spritesheets/f7';
-import { data as f8SpritesheetData } from './spritesheets/f8';
+/**
+ * Character definitions for AI Town.
+ * 
+ * Each character now uses an individual sprite image (96 x 128 px)
+ * instead of a shared sprite sheet. This enables:
+ * - Easier management of individual characters
+ * - Future support for user-uploaded custom characters
+ * - Dynamic character loading via Convex
+ */
 
+import { standard32x32 } from './spritesheets/standard32x32';
+
+// Agent descriptions - personality and behavior
 export const Descriptions = [
-  // {
-  //   name: 'Alex',
-  //   character: 'f5',
-  //   identity: `You are a fictional character whose name is Alex.  You enjoy painting,
-  //     programming and reading sci-fi books.  You are currently talking to a human who
-  //     is very interested to get to know you. You are kind but can be sarcastic. You
-  //     dislike repetitive questions. You get SUPER excited about books.`,
-  //   plan: 'You want to find love.',
-  // },
   {
     name: 'Lucky',
     character: 'f1',
@@ -35,14 +30,6 @@ export const Descriptions = [
     identity: `Stella can never be trusted. she tries to trick people all the time. normally into giving her money, or doing things that will make her money. she's incredibly charming and not afraid to use her charm. she's a sociopath who has no empathy. but hides it well.`,
     plan: 'You want to take advantage of others as much as possible.',
   },
-  // {
-  //   name: 'Kurt',
-  //   character: 'f2',
-  //   identity: `Kurt knows about everything, including science and
-  //     computers and politics and history and biology. He loves talking about
-  //     everything, always injecting fun facts about the topic of discussion.`,
-  //   plan: 'You want to spread knowledge.',
-  // },
   {
     name: 'Alice',
     character: 'f3',
@@ -55,64 +42,56 @@ export const Descriptions = [
     identity: `Pete is deeply religious and sees the hand of god or of the work of the devil everywhere. He can't have a conversation without bringing up his deep faith. Or warning others about the perils of hell.`,
     plan: 'You want to convert everyone to your religion.',
   },
-  // {
-  //   name: 'Kira',
-  //   character: 'f8',
-  //   identity: `Kira wants everyone to think she is happy. But deep down,
-  //     she's incredibly depressed. She hides her sadness by talking about travel,
-  //     food, and yoga. But often she can't keep her sadness in and will start crying.
-  //     Often it seems like she is close to having a mental breakdown.`,
-  //   plan: 'You want find a way to be happy.',
-  // },
 ];
 
+// Character sprite definitions - now using individual images
 export const characters = [
   {
     name: 'f1',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f1SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f1.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f2',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f2SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f2.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f3',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f3SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f3.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f4',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f4SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f4.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f5',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f5SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f5.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f6',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f6SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f6.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f7',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f7SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f7.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
   {
     name: 'f8',
-    textureUrl: '/ai-town/assets/32x32folk.png',
-    spritesheetData: f8SpritesheetData,
+    textureUrl: '/ai-town/assets/characters/char-f8.png',
+    spritesheetData: standard32x32,
     speed: 0.1,
   },
 ];
