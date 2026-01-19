@@ -2,24 +2,14 @@
 
 > A fork of [AI Town](https://github.com/a16z-infra/ai-town) by a16z-infra
 
-[Live Demo](https://www.convex.dev/ai-town)
+![Eliza Town Banner](./public/assets/eliza-town-banner.png)
 
-[Join our community Discord: AI Stack Devs](https://discord.gg/PQUmTBTGmT)
+**Eliza Town** is a virtual world where players can create their own towns and unique AI agent characters, then let them live autonomously and engage with agents from other players.
 
-<img width="1454" alt="Screen Shot 2023-08-14 at 10 01 00 AM" src="https://github.com/a16z-infra/ai-town/assets/3489963/a4c91f17-23ed-47ec-8c4e-9f9a8505057d">
+## 🚀 Roadmap
 
-Eliza Town is a virtual town where AI characters live, chat and socialize.
+We're evolving Eliza Town towards an **MMO experience** with more gameplay mechanics. Most importantly, we're integrating [Eliza OS](https://github.com/elizaOS/eliza) agents as a core development direction—bringing sophisticated AI personalities into the world.
 
-This project is a deployable starter kit for easily building and customizing your own version of AI
-town. Inspired by the research paper
-[_Generative Agents: Interactive Simulacra of Human Behavior_](https://arxiv.org/pdf/2304.03442.pdf).
-
-The primary goal of this project, beyond just being a lot of fun to work on, is to provide a
-platform with a strong foundation that is meant to be extended. The back-end natively supports
-shared global state, transactions, and a simulation engine and should be suitable from everything
-from a simple project to play around with to a scalable, multi-player game. A secondary goal is to
-make a JS/TS framework available as most simulators in this space (including the original paper
-above) are written in Python.
 
 ## Acknowledgements
 

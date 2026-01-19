@@ -74,19 +74,19 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
       return;
     }
     if (!selectedId) {
-      setError('请先选择一个角色。');
+      setError('Pick a character first.');
       return;
     }
     if (!name.trim()) {
-      setError('请输入角色名字。');
+      setError('Enter a character name.');
       return;
     }
     if (!identity.trim()) {
-      setError('请填写角色身份描述。');
+      setError('Add an identity description.');
       return;
     }
     if (!plan.trim()) {
-      setError('请填写角色的行动计划。');
+      setError('Add an activity plan.');
       return;
     }
 
@@ -124,8 +124,8 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h2 className="text-3xl font-display">创建 AI Agent</h2>
-            <p className="text-sm text-white/70 mt-1">自定义角色与行为，让它加入这个世界。</p>
+            <h2 className="text-3xl font-display">Create AI Agent</h2>
+            <p className="text-sm text-white/70 mt-1">Define a character and drop them into the world.</p>
           </div>
           <button
             onClick={onClose}
@@ -152,7 +152,7 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
                 {selectedCharacter.displayName ?? selectedCharacter.name}
               </div>
               <div className="text-xs">
-                {selectedCharacter.isCustom ? '自定义角色' : '默认角色'}
+                {selectedCharacter.isCustom ? 'Custom character' : 'Default character'}
               </div>
             </div>
           </div>
@@ -169,7 +169,7 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-white/70">名字</label>
+            <label className="text-xs text-white/70">Name</label>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -178,7 +178,7 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
             />
           </div>
           <div>
-            <label className="text-xs text-white/70">身份描述</label>
+            <label className="text-xs text-white/70">Identity</label>
             <textarea
               value={identity}
               onChange={(event) => setIdentity(event.target.value)}
@@ -188,7 +188,7 @@ export default function CreateAgentDialog({ isOpen, onClose }: Props) {
             />
           </div>
           <div>
-            <label className="text-xs text-white/70">行动计划</label>
+            <label className="text-xs text-white/70">Plan</label>
             <textarea
               value={plan}
               onChange={(event) => setPlan(event.target.value)}

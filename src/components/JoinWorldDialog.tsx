@@ -50,7 +50,7 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
 
   const handleJoin = () => {
     if (!selectedId) {
-      setError('请先选择一个角色。');
+      setError('Pick a character first.');
       return;
     }
     setError(null);
@@ -68,8 +68,8 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h2 className="text-3xl font-display">选择你的角色</h2>
-            <p className="text-sm text-white/70 mt-1">加入世界前选择一个角色外观。</p>
+            <h2 className="text-3xl font-display">Choose Your Character</h2>
+            <p className="text-sm text-white/70 mt-1">Choose a look before you join the world.</p>
           </div>
           <button
             onClick={onClose}
@@ -96,7 +96,7 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
                 {selectedCharacter.displayName ?? selectedCharacter.name}
               </div>
               <div className="text-xs">
-                {selectedCharacter.isCustom ? '自定义角色' : '默认角色'}
+                {selectedCharacter.isCustom ? 'Custom character' : 'Default character'}
               </div>
             </div>
           </div>

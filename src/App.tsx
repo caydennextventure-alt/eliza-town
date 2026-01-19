@@ -139,11 +139,19 @@ export default function Home() {
             <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
               Help
             </Button>
-            <Button imgUrl={interactImg} onClick={() => setCreateCharacterOpen(true)}>
-              Create
+            <Button
+              imgUrl={interactImg}
+              onClick={() => setCreateCharacterOpen(true)}
+              title="Upload a custom character sprite"
+            >
+              Characters
             </Button>
-            <Button imgUrl={interactImg} onClick={() => setCreateAgentOpen(true)}>
-              Agent
+            <Button
+              imgUrl={interactImg}
+              onClick={() => setCreateAgentOpen(true)}
+              title="Create a new AI agent in this world"
+            >
+              New Agent
             </Button>
             <Button imgUrl={closeImg} onClick={() => setGameStarted(false)}>
               Exit

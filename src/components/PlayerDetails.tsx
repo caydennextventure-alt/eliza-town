@@ -239,7 +239,7 @@ export default function PlayerDetails({
         </>
       )}
       {!playerConversation && player.activity && player.activity.until > Date.now() && (
-        <div className="box flex-grow mt-6">
+        <div className="box mt-6">
           <h2 className="bg-brown-700 text-base sm:text-lg text-center">
             {player.activity.description}
           </h2>
