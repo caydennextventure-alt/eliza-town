@@ -40,7 +40,7 @@ Unlike standard AI Town, **Eliza Town** integrates the powerful [ElizaOS framewo
 ### Step 1: Clone & Install
 
 ```bash
-git clone https://github.com/elizaOS/eliza-town.git
+git clone https://github.com/cayden970207/eliza-town.git
 cd eliza-town
 npm install
 ```

@@ -140,7 +140,7 @@ export default function Home() {
              <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
               Help
             </Button>
-            <Button href="https://github.com/elizaOS/eliza-town" imgUrl={starImg}>
+            <Button href="https://github.com/cayden970207/eliza-town" imgUrl={starImg}>
               Star
             </Button>
             <MusicButton />
