@@ -116,6 +116,47 @@ export const agentInputs = {
       return null;
     },
   }),
+  agentAbortConversation: inputHandler({
+    args: {
+      agentId,
+      conversationId,
+      operationId: v.string(),
+      leaveConversation: v.boolean(),
+    },
+    handler: (game, now, args) => {
+      const agentId = parseGameId('agents', args.agentId);
+      const agent = game.world.agents.get(agentId);
+      if (!agent) {
+        console.warn(`Couldn't find agent for abort: ${agentId}`);
+        return null;
+      }
+      if (
+        !agent.inProgressOperation ||
+        agent.inProgressOperation.operationId !== args.operationId
+      ) {
+        console.debug(`Agent ${agentId} wasn't running ${args.operationId}`);
+        return null;
+      }
+      delete agent.inProgressOperation;
+      const player = game.world.players.get(agent.playerId);
+      if (!player) {
+        console.warn(`Couldn't find player for abort: ${agent.playerId}`);
+        return null;
+      }
+      const conversationId = parseGameId('conversations', args.conversationId);
+      const conversation = game.world.conversations.get(conversationId);
+      if (!conversation) {
+        return null;
+      }
+      if (conversation.isTyping && conversation.isTyping.playerId === agent.playerId) {
+        delete conversation.isTyping;
+      }
+      if (args.leaveConversation) {
+        conversation.leave(game, now, player);
+      }
+      return null;
+    },
+  }),
   createAgent: inputHandler({
     args: {
       descriptionIndex: v.number(),
@@ -147,6 +188,7 @@ export const agentInputs = {
           agentId: agentId,
           identity: description.identity,
           plan: description.plan,
+          isCustom: false,
         }),
       );
       return { agentId };
@@ -158,6 +200,7 @@ export const agentInputs = {
       character: v.string(),
       identity: v.string(),
       plan: v.string(),
+      ownerId: v.optional(v.string()),
     },
     handler: (game, now, args) => {
       const playerId = Player.join(game, now, args.name, args.character, args.identity);
@@ -179,9 +222,48 @@ export const agentInputs = {
           agentId: agentId,
           identity: args.identity,
           plan: args.plan,
+          isCustom: true,
+          ownerId: args.ownerId,
         }),
       );
       return { agentId };
+    },
+  }),
+  removeAgent: inputHandler({
+    args: {
+      agentId,
+      tokenIdentifier: v.optional(v.string()),
+    },
+    handler: (game, now, args) => {
+      const agentId = parseGameId('agents', args.agentId);
+      const agent = game.world.agents.get(agentId);
+      if (!agent) {
+        throw new Error(`Invalid agent ID ${args.agentId}`);
+      }
+      const agentDescription = game.agentDescriptions.get(agentId);
+      if (!agentDescription || agentDescription.isCustom !== true) {
+        throw new Error('Only custom agents can be removed.');
+      }
+      if (
+        args.tokenIdentifier &&
+        agentDescription.ownerId &&
+        agentDescription.ownerId !== args.tokenIdentifier
+      ) {
+        throw new Error('You do not own this agent.');
+      }
+      const player = game.world.players.get(agent.playerId);
+      if (!player) {
+        throw new Error(`Invalid player ID ${agent.playerId}`);
+      }
+      if (player.human) {
+        throw new Error('Release this agent before removing it.');
+      }
+      player.leave(game, now);
+      game.world.agents.delete(agentId);
+      game.agentDescriptions.delete(agentId);
+      game.playerDescriptions.delete(agent.playerId);
+      game.descriptionsModified = true;
+      return null;
     },
   }),
 };

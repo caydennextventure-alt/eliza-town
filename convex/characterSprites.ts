@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { mutation, query, action } from './_generated/server';
 import { DEFAULT_NAME } from './constants';
 
 const resolveOwnerId = async (ctx: { auth: { getUserIdentity: () => Promise<{ tokenIdentifier?: string } | null> } }) => {
@@ -13,6 +13,7 @@ const buildSpriteResponse = async (
     spriteId: string;
     displayName: string;
     storageId: string;
+    portraitStorageId?: string;
     frameWidth: number;
     frameHeight: number;
     framesPerDirection: number;
@@ -23,9 +24,11 @@ const buildSpriteResponse = async (
   },
 ) => {
   const textureUrl = await ctx.storage.getUrl(sprite.storageId);
+  const portraitUrl = sprite.portraitStorageId ? await ctx.storage.getUrl(sprite.portraitStorageId) : null;
   return {
     ...sprite,
     textureUrl,
+    portraitUrl,
   };
 };
 
@@ -34,6 +37,29 @@ const createSpriteId = () => `custom_${Date.now()}_${Math.random().toString(36).
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const storeImage = action({
+  args: { imageUrl: v.string() },
+  handler: async (ctx, args) => {
+    let blob: Blob;
+    
+    // Check if base64
+    if (args.imageUrl.startsWith('data:')) {
+      const base64Response = await fetch(args.imageUrl);
+      blob = await base64Response.blob();
+    } else {
+      // Fetch from URL
+      const response = await fetch(args.imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+      blob = await response.blob();
+    }
+
+    const storageId = await ctx.storage.store(blob);
+    return { storageId };
   },
 });
 
@@ -65,6 +91,7 @@ export const listMine = query({
 export const create = mutation({
   args: {
     storageId: v.string(),
+    portraitStorageId: v.optional(v.string()),
     displayName: v.string(),
     frameWidth: v.number(),
     frameHeight: v.number(),
@@ -89,6 +116,7 @@ export const create = mutation({
       spriteId,
       displayName,
       storageId: args.storageId,
+      portraitStorageId: args.portraitStorageId,
       frameWidth: args.frameWidth,
       frameHeight: args.frameHeight,
       framesPerDirection: args.framesPerDirection,

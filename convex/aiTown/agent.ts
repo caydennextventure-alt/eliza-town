@@ -52,7 +52,20 @@ export class Agent {
   tick(game: Game, now: number) {
     const player = game.world.players.get(this.playerId);
     if (!player) {
-      throw new Error(`Invalid player ID ${this.playerId}`);
+      console.warn(`Agent ${this.id} missing player ${this.playerId}, removing agent.`);
+      for (const conversation of [...game.world.conversations.values()]) {
+        if (conversation.participants.has(this.playerId)) {
+          conversation.stop(game, now);
+        }
+      }
+      game.world.agents.delete(this.id);
+      game.agentDescriptions.delete(this.id);
+      game.playerDescriptions.delete(this.playerId);
+      game.descriptionsModified = true;
+      return;
+    }
+    if (player.human) {
+      return;
     }
     if (this.inProgressOperation) {
       if (now < this.inProgressOperation.started + ACTION_TIMEOUT) {

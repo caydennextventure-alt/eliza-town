@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import Button from './buttons/Button';
+import Button from '../ui/buttons/Button';
 
 export default function FreezeButton() {
   const stopAllowed = useQuery(api.testing.stopAllowed) ?? false;

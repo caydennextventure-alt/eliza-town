@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import ReactModal from 'react-modal';
 import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -6,7 +6,7 @@ import { api } from '../../convex/_generated/api';
 const modalStyles = {
   overlay: {
     backgroundColor: 'rgb(0, 0, 0, 75%)',
-    zIndex: 12,
+    zIndex: 200, // High z-index to be on top of everything
   },
   content: {
     top: '50%',
@@ -38,32 +38,35 @@ type Props = {
 
 export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
   const [displayName, setDisplayName] = useState('');
+  
   // Generation state
+  const [step, setStep] = useState<'concept' | 'sprite'>('concept');
   const [prompt, setPrompt] = useState('');
+  const [conceptUrl, setConceptUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedStorageId, setGeneratedStorageId] = useState<string | null>(null);
   
-  // Existing upload state (kept for "Upload Reference" or manual override if we want, 
-  // but user said "No Upload Existing, just Generate New" for the MAIN flow, 
-  // but we might need to handle the case where we upload a reference image for generation?)
-  // User said: "User can input a prompt ... / OR upload a photo" (for generation reference).
+  // Existing upload fallback
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
   const [error, setError] = useState<string | null>(null);
 
+  const generateCharacterConcept = useAction(api.characterGeneration.generateCharacterConcept);
   const generateCharacter = useAction(api.characterGeneration.generate);
   const createSprite = useMutation(api.characterSprites.create);
   const removeSprite = useMutation(api.characterSprites.remove);
   const mySprites = useQuery(api.characterSprites.listMine) ?? [];
+  const generatedPreviewUrl = useQuery(api.characterSprites.getUrl, generatedStorageId ? { storageId: generatedStorageId } : "skip");
 
   // Reset state on open
   useEffect(() => {
     if (isOpen) {
       setDisplayName('');
       setPrompt('');
+      setStep('concept');
+      setConceptUrl(null);
       setReferenceFile(null);
       setGeneratedStorageId(null);
-      setPreviewUrl(null);
       setError(null);
       setIsGenerating(false);
     }
@@ -73,7 +76,6 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
     const file = event.target.files?.[0] ?? null;
     if (file) {
         setReferenceFile(file);
-        // Show preview of reference?
     }
   };
 
@@ -87,19 +89,58 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
     });
   };
 
-  const generatedPreviewUrl = useQuery(api.characterSprites.getUrl, generatedStorageId ? { storageId: generatedStorageId } : "skip");
+  // Helper to fetch valid image blob from URL
+  const urlToBase64 = async (url: string): Promise<string> => {
+      // Replicate URLs usually support CORS. If this fails, we might need a backend proxy.
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+      });
+  };
 
-  const handleGenerate = async () => {
-    if (!prompt && !referenceFile) {
-        setError("Please enter a prompt or upload a reference photo.");
-        return;
-    }
+  const handleGenerateConcept = async () => {
+      if (!prompt.trim() && !referenceFile) {
+          setError("Please enter a character description or upload an image.");
+          return;
+      }
+      setIsGenerating(true);
+      setError(null);
+      try {
+          let imageUrl = undefined;
+          if (referenceFile) {
+              imageUrl = await fileToBase64(referenceFile);
+          }
+
+          const result = await generateCharacterConcept({ prompt, image: imageUrl });
+          if (result.imageUrl) {
+              setConceptUrl(result.imageUrl);
+              setStep('sprite');
+          }
+      } catch (e: any) {
+          console.error(e);
+          setError(e.message ?? "Concept generation failed");
+      } finally {
+          setIsGenerating(false);
+      }
+  };
+
+  const handleGenerateSprite = async () => {
     setIsGenerating(true);
     setError(null);
     try {
         let imageUrl = undefined;
-        if (referenceFile) {
+        // Use concept URL if available, otherwise check reference file
+        if (conceptUrl) {
+            imageUrl = await urlToBase64(conceptUrl);
+        } else if (referenceFile) {
             imageUrl = await fileToBase64(referenceFile);
+        } else if (!prompt) {
+             setError("Please enter a prompt or upload a reference image.");
+             return;
         }
 
         const result = await generateCharacter({ prompt, image: imageUrl });
@@ -115,12 +156,21 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
     }
   };
 
+  const storeImage = useAction(api.characterSprites.storeImage);
+
   const handleSave = async () => {
     if (!generatedStorageId) return;
     
     try {
+        let portraitStorageId = undefined;
+        if (conceptUrl) {
+           const result = await storeImage({ imageUrl: conceptUrl });
+           portraitStorageId = result.storageId;
+        }
+
         await createSprite({
             storageId: generatedStorageId,
+            portraitStorageId,
             displayName: displayName.trim() || 'AI Character',
             frameWidth: FRAME_WIDTH,
             frameHeight: FRAME_HEIGHT,
@@ -129,7 +179,8 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
         });
         onClose();
     } catch (e: any) {
-        setError("Failed to save character");
+        console.error("Save failed:", e);
+        setError("Failed to save character: " + e.message);
     }
   };
 
@@ -145,9 +196,9 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
       contentLabel="Create Character"
       ariaHideApp={false}
     >
-      <div className="space-y-4 font-sans text-white">
+      <div className="space-y-4 font-dialog text-white">
         <div className="flex items-start justify-between gap-6">
-          <h2 className="text-2xl font-bold font-display">Create Character (AI)</h2>
+          <h2 className="text-2xl font-bold">Create Character (AI)</h2>
           <button
             onClick={onClose}
             className="border border-white/30 px-3 py-1 text-xs hover:border-white text-gray-400 hover:text-white"
@@ -158,60 +209,88 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
 
         {/* Generation Form */}
         {!generatedStorageId ? (
-            // ... existing form ...
             <div className="space-y-4">
-                {/* ... prompt input ... */}
-                <div>
-                     <label className="block text-sm text-gray-400 mb-1">Description (Prompt)</label>
-                     <textarea 
-                        className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-emerald-500 outline-none"
-                        rows={3}
-                        placeholder="A futuristic cyber-ninja with a glowing katana..."
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                    />
+                {/* Step Indicator */}
+                <div className="flex gap-2 text-xs uppercase tracking-wider mb-4">
+                    <div className={`flex-1 py-2 text-center border-b-2 ${step === 'concept' ? 'border-emerald-500 text-emerald-400' : 'border-gray-700 text-gray-500'}`}>1. Design</div>
+                    <div className={`flex-1 py-2 text-center border-b-2 ${step === 'sprite' ? 'border-emerald-500 text-emerald-400' : 'border-gray-700 text-gray-500'}`}>2. Sprite Sheet</div>
                 </div>
-                {/* ... image input ... */}
-                <div>
-                     <label className="block text-sm text-gray-400 mb-1">Reference Image (Optional)</label>
-                     <input 
-                         type="file" 
-                         accept="image/*"
-                         className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-white hover:file:bg-gray-700"
-                         onChange={handleReferenceFileChange}
-                     />
-                 </div>
- 
+
+                {step === 'concept' && (
+                    <div className="fade-in">
+                        <label className="block text-sm text-gray-400 mb-1">Describe your character (Pixel Art Concept)</label>
+                         <textarea 
+                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-emerald-500 outline-none"
+                            rows={3}
+                            placeholder="A futuristic cyber-ninja with a glowing katana..."
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
+                         
+                         {/* Fallback Reference Upload (Optional) */}
+                         <div className="mt-2">
+                             <label className="block text-xs text-gray-500 mb-1">Or upload reference (Optional)</label>
+                             <input 
+                                 type="file" 
+                                 accept="image/*"
+                                 className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-800 file:text-white hover:file:bg-gray-700"
+                                 onChange={handleReferenceFileChange}
+                             />
+                         </div>
+
+                         <button 
+                             onClick={handleGenerateConcept}
+                             disabled={isGenerating}
+                             className={`w-full mt-4 font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2 ${
+                                isGenerating ? 'bg-indigo-800 text-indigo-200 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                             }`}
+                         >
+                             {isGenerating ? (
+                                <span className="animate-spin">⟳</span>
+                             ) : null}
+                             {isGenerating ? 'Designing...' : referenceFile ? 'Generate Concept from Image' : 'Generate Concept Art'}
+                         </button>
+                    </div>
+                )}
+
+                {step === 'sprite' && (conceptUrl || referenceFile) && (
+                    <div className="fade-in space-y-4">
+                        <div className="flex justify-center bg-gray-900 border border-gray-700 rounded p-4">
+                            {conceptUrl ? (
+                                <img src={conceptUrl} alt="Concept" className="h-48 object-contain bg-[url('/assets/bg_pattern.png')]" />
+                            ) : (
+                                <p className="text-xs text-gray-400">Reference: {referenceFile?.name}</p>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                             <button 
+                                 onClick={() => setStep('concept')}
+                                 disabled={isGenerating}
+                                 className="flex-1 px-4 border border-gray-600 hover:bg-gray-800 text-white py-2 rounded text-sm"
+                             >
+                                Back
+                             </button>
+                             <button 
+                                 onClick={handleGenerateSprite}
+                                 disabled={isGenerating}
+                                 className={`flex-2 w-full font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2 ${
+                                    isGenerating ? 'bg-emerald-800 text-emerald-200 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                 }`}
+                             >
+                                 {isGenerating ? (
+                                    <span className="animate-spin">⟳</span>
+                                 ) : null}
+                                 {isGenerating ? 'Animating...' : 'Generate Sprite Sheet'}
+                             </button>
+                        </div>
+                    </div>
+                )}
+
                  {error && (
                      <div className="text-red-400 text-sm bg-red-900/20 p-2 rounded">
                          {error}
                      </div>
                  )}
- 
-                 <button 
-                     onClick={handleGenerate}
-                     disabled={isGenerating}
-                     className={`w-full font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2 ${
-                        isGenerating 
-                            ? 'bg-emerald-800 text-emerald-200 cursor-wait' 
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                     }`}
-                 >
-                     {isGenerating ? (
-                        <>
-                            <svg className="animate-spin h-5 w-5 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span>Creation in progress...</span>
-                        </>
-                     ) : (
-                        'Generate Sprite Sheet'
-                     )}
-                 </button>
-                 <p className="text-xs text-center text-gray-500">
-                     AI will generate a full body art, create a sprite sheet, and remove the background inside Nanobanana pipeline.
-                 </p>
             </div>
         ) : (
             // Preview & Save
@@ -256,7 +335,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                     </div>
                  </div>
                 
-                {/* ... remaining inputs ... */}
+                {/* Save Form */}
                 <div>
                      <label className="block text-sm text-gray-400 mb-1">Character Name</label>
                      <input
@@ -267,7 +346,6 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                      />
                 </div>
 
-                {/* ... buttons ... */}
                 <div className="flex gap-2">
                      <button
                         onClick={() => setGeneratedStorageId(null)} // Back to edit
@@ -276,7 +354,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                         Back
                      </button>
                      <button
-                        onClick={handleGenerate} // Regenerate
+                        onClick={handleGenerateSprite} // Regenerate using same prompt/concept
                         disabled={isGenerating}
                         className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-2"
                      >

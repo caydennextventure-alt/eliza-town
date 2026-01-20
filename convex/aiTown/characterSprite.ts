@@ -11,6 +11,7 @@ export const serializedCharacterSprite = {
   isCustom: v.boolean(),
   ownerId: v.string(),
   createdAt: v.number(),
+  portraitStorageId: v.optional(v.string()),
 };
 
 export type SerializedCharacterSprite = ObjectType<typeof serializedCharacterSprite>;

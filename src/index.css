@@ -12,12 +12,27 @@
   src: url(/assets/fonts/vcr_osd_mono.ttf);
 }
 
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url(/assets/fonts/pixelify_sans.ttf);
+}
+
+@font-face {
+  font-family: 'DotGothic16';
+  src: url(/assets/fonts/dotgothic16.ttf);
+}
+
 .font-display {
   font-family: 'Upheaval Pro', 'sans-serif';
 }
 
 .font-body {
   font-family: 'VCR OSD Mono', 'monospace';
+}
+
+.font-dialog {
+  font-family: 'DotGothic16', 'Pixelify Sans', 'VCR OSD Mono', 'monospace';
+  letter-spacing: 0.02em;
 }
 
 .font-system {

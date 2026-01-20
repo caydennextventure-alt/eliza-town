@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactModal from 'react-modal';
-import { useCharacters } from '../lib/characterRegistry';
-import CharacterSelectGrid from './CharacterSelectGrid';
+import { CharacterDefinition } from '../lib/characterRegistry';
+import agentAvatar from '../../assets/ui/agent-avatar.svg';
 
 const modalStyles = {
   overlay: {
@@ -28,39 +28,50 @@ type Props = {
   isOpen: boolean;
   isJoining: boolean;
   onClose: () => void;
-  onJoin: (characterId: string) => void;
+  onTakeOver: (agentId: string) => void;
+  onCreateAgent?: () => void;
+  agents: AgentOption[];
 };
 
-export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: Props) {
-  const { characters } = useCharacters();
+type AgentOption = {
+  agentId: string;
+  name: string;
+  character: CharacterDefinition;
+};
+
+export default function JoinWorldDialog({
+  isOpen,
+  isJoining,
+  onClose,
+  onTakeOver,
+  onCreateAgent,
+  agents,
+}: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const customCharacters = useMemo(
-    () => characters.filter((character) => character.isCustom),
-    [characters],
-  );
-  const selectableCharacters = customCharacters.length > 0 ? customCharacters : characters;
-  const isCustomOnly = customCharacters.length > 0;
 
   useEffect(() => {
-    if (selectableCharacters.length === 0) return;
-    if (!selectedId || !selectableCharacters.some((character) => character.name === selectedId)) {
-      setSelectedId(selectableCharacters[0].name);
+    if (agents.length === 0) {
+      setSelectedId(null);
+      return;
     }
-  }, [selectableCharacters, selectedId]);
+    if (!selectedId || !agents.some((agent) => agent.agentId === selectedId)) {
+      setSelectedId(agents[0].agentId);
+    }
+  }, [agents, selectedId]);
 
-  const selectedCharacter = useMemo(
-    () => selectableCharacters.find((character) => character.name === selectedId) ?? null,
-    [selectableCharacters, selectedId],
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.agentId === selectedId) ?? null,
+    [agents, selectedId],
   );
 
-  const handleJoin = () => {
+  const handleTakeOver = () => {
     if (!selectedId) {
-      setError('Pick a character first.');
+      setError('Pick an agent first.');
       return;
     }
     setError(null);
-    onJoin(selectedId);
+    onTakeOver(selectedId);
   };
 
   return (
@@ -71,15 +82,17 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
       contentLabel="Join World"
       ariaHideApp={false}
     >
-      <div className="space-y-4">
+      <div className="space-y-4 font-dialog">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h2 className="text-3xl font-display">Choose Your Character</h2>
-            <p className="text-sm text-white/70 mt-1">Choose a look before you join the world.</p>
+            <h2 className="text-3xl">Take Over an Agent</h2>
+            <p className="text-sm text-white/70 mt-1">
+              Take control of an agent you created.
+            </p>
             <p className="text-xs text-white/50 mt-1">
-              {isCustomOnly
-                ? 'Showing your custom characters.'
-                : 'No custom characters yet — showing defaults.'}
+              {agents.length > 0
+                ? 'Showing your custom agents.'
+                : 'No custom agents available yet.'}
             </p>
           </div>
           <button
@@ -90,37 +103,81 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
           </button>
         </div>
 
-        {selectedCharacter && (
+        {selectedAgent && (
           <div className="flex items-center gap-4">
             <div className="box shrink-0">
               <div className="bg-brown-200 p-1">
                 <img
-                  src={selectedCharacter.portraitUrl ?? selectedCharacter.textureUrl}
-                  alt={selectedCharacter.displayName ?? selectedCharacter.name}
+                  src={agentAvatar}
+                  alt={selectedAgent.name}
                   className="h-20 w-20 rounded-sm object-cover object-top"
-                  style={{ imageRendering: 'pixelated' }}
                 />
               </div>
             </div>
             <div className="text-sm text-white/80">
-              <div className="text-lg font-display">
-                {selectedCharacter.displayName ?? selectedCharacter.name}
+              <div className="text-lg">
+                {selectedAgent.name}
               </div>
               <div className="text-xs">
-                {selectedCharacter.isCustom ? 'Custom character' : 'Default character'}
+                {selectedAgent.character.displayName ?? selectedAgent.character.name}
               </div>
             </div>
           </div>
         )}
 
-        <CharacterSelectGrid
-          characters={selectableCharacters}
-          selectedId={selectedId}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setError(null);
-          }}
-        />
+        {agents.length > 0 ? (
+          <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+            {agents.map((agent) => {
+              const isSelected = selectedId === agent.agentId;
+              return (
+                <button
+                  key={agent.agentId}
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(agent.agentId);
+                    setError(null);
+                  }}
+                  className={[
+                    'border-2 px-2 py-2 text-left transition',
+                    isSelected
+                      ? 'border-emerald-400'
+                      : 'border-white/20 hover:border-white/60',
+                  ].join(' ')}
+                >
+                  <div className="bg-brown-200 p-1">
+                    <img
+                      src={agentAvatar}
+                      alt={agent.name}
+                      className="h-14 w-14 sm:h-16 sm:w-16 rounded-sm object-cover object-top"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="mt-2 text-[10px] uppercase text-white/80 truncate">
+                    {agent.name}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/70">
+            <p>No custom agents available.</p>
+            <p className="text-xs text-white/50 mt-1">
+              Create a custom agent first, then take it over here.
+            </p>
+            {onCreateAgent && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onCreateAgent();
+                }}
+                className="mt-3 border border-white/30 px-3 py-1 text-xs hover:border-white"
+              >
+                Create Agent
+              </button>
+            )}
+          </div>
+        )}
 
         {error && <p className="text-xs text-red-300">{error}</p>}
 
@@ -132,11 +189,11 @@ export default function JoinWorldDialog({ isOpen, isJoining, onClose, onJoin }: 
             Cancel
           </button>
           <button
-            onClick={handleJoin}
-            disabled={isJoining}
+            onClick={handleTakeOver}
+            disabled={agents.length === 0 || isJoining}
             className="bg-emerald-500/80 hover:bg-emerald-500 px-4 py-2 text-sm font-bold border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isJoining ? 'Joining...' : 'Join World'}
+            {isJoining ? 'Taking over...' : 'Take Over'}
           </button>
         </div>
       </div>

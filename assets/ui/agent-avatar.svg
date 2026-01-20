@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Agent avatar">
+  <rect width="96" height="96" rx="10" fill="#24263a"/>
+  <rect x="18" y="14" width="60" height="60" rx="10" fill="#f1d2b1"/>
+  <rect x="18" y="14" width="60" height="20" rx="10" fill="#3a2f3d"/>
+  <rect x="24" y="28" width="48" height="10" rx="5" fill="#3a2f3d"/>
+  <rect x="30" y="42" width="8" height="8" fill="#2a2231"/>
+  <rect x="58" y="42" width="8" height="8" fill="#2a2231"/>
+  <rect x="38" y="58" width="20" height="6" rx="3" fill="#d99286"/>
+  <rect x="24" y="70" width="48" height="18" rx="8" fill="#5a8b9a"/>
+  <rect x="24" y="70" width="48" height="6" rx="3" fill="#7ab7c8"/>
+</svg>

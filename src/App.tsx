@@ -4,18 +4,20 @@ import a16zImg from '../assets/a16z.png';
 import convexImg from '../assets/convex.svg';
 import starImg from '../assets/star.svg';
 import helpImg from '../assets/help.svg';
-import interactImg from '../assets/interact.svg';
 import closeImg from '../assets/close.svg';
+import charactersImg from '../assets/ui/icon-characters.svg';
+import newAgentImg from '../assets/ui/icon-new-agent.svg';
+import agentsImg from '../assets/ui/icon-agents.svg';
 import { useState, useEffect } from 'react';
 import ReactModal from 'react-modal';
-import MusicButton from './components/buttons/MusicButton.tsx';
-import Button from './components/buttons/Button.tsx';
-import FreezeButton from './components/FreezeButton.tsx';
+import MusicButton from './ui/buttons/MusicButton.tsx';
+import Button from './ui/buttons/Button.tsx';
 import PoweredByConvex from './components/PoweredByConvex.tsx';
 import MapEditor from './components/MapEditor.tsx';
 import CreateCharacterDialog from './components/CreateCharacterDialog.tsx';
 import CreateAgentDialog from './components/CreateAgentDialog.tsx';
 import WorldJoinControls from './components/WorldJoinControls.tsx';
+import AgentListDialog from './components/AgentListDialog.tsx';
 
 const modalStyles = {
   overlay: {
@@ -42,6 +44,7 @@ export default function Home() {
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [createCharacterOpen, setCreateCharacterOpen] = useState(false);
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
+  const [agentListOpen, setAgentListOpen] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [showVisualTest, setShowVisualTest] = useState(false);
@@ -102,7 +105,22 @@ export default function Home() {
         isOpen={createCharacterOpen}
         onClose={() => setCreateCharacterOpen(false)}
       />
-      <CreateAgentDialog isOpen={createAgentOpen} onClose={() => setCreateAgentOpen(false)} />
+      <CreateAgentDialog
+        isOpen={createAgentOpen}
+        onClose={() => setCreateAgentOpen(false)}
+        onCreateCharacter={() => {
+          setCreateAgentOpen(false);
+          setCreateCharacterOpen(true);
+        }}
+      />
+      <AgentListDialog
+        isOpen={agentListOpen}
+        onClose={() => setAgentListOpen(false)}
+        onCreateAgent={() => {
+          setAgentListOpen(false);
+          setCreateAgentOpen(true);
+        }}
+      />
 
       {!gameStarted ? (
         // LANDING PAGE STATE
@@ -142,25 +160,27 @@ export default function Home() {
 
           {/* Minimal Overlay Controls for Game Mode */}
           <div className="absolute top-4 left-4 z-10 flex flex-wrap items-start gap-3 pointer-events-auto max-w-[calc(100%-2rem)]">
-            <WorldJoinControls />
-            <FreezeButton />
-            <MusicButton />
-            <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
-              Help
-            </Button>
+            <WorldJoinControls onCreateAgent={() => setCreateAgentOpen(true)} />
             <Button
-              imgUrl={interactImg}
+              imgUrl={charactersImg}
               onClick={() => setCreateCharacterOpen(true)}
               title="Upload a custom character sprite"
             >
               Characters
             </Button>
             <Button
-              imgUrl={interactImg}
+              imgUrl={newAgentImg}
               onClick={() => setCreateAgentOpen(true)}
               title="Create a new AI agent in this world"
             >
               New Agent
+            </Button>
+            <Button
+              imgUrl={agentsImg}
+              onClick={() => setAgentListOpen(true)}
+              title="Manage your custom agents"
+            >
+              Agents
             </Button>
             <Button imgUrl={closeImg} onClick={() => setGameStarted(false)}>
               Exit

@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "categories": {
+    "terrain": {
+      "name": "地形",
+      "folder": "terrain"
+    },
+    "paths": {
+      "name": "道路",
+      "folder": "paths"
+    },
+    "buildings": {
+      "name": "建筑",
+      "folder": "buildings"
+    },
+    "furniture": {
+      "name": "家具",
+      "folder": "furniture"
+    },
+    "decorations": {
+      "name": "装饰",
+      "folder": "decorations"
+    },
+    "nature": {
+      "name": "自然",
+      "folder": "nature"
+    },
+    "fences": {
+      "name": "围栏",
+      "folder": "fences"
+    },
+    "animated": {
+      "name": "动画",
+      "folder": "animated"
+    }
+  },
+  "objects": [
+    {
+      "id": "autumn-tree1",
+      "name": "Autumn Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Autumn_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "autumn-tree2",
+      "name": "Autumn Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Autumn_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "autumn-tree3",
+      "name": "Autumn Tree 3",
+      "category": "nature",
+      "image": "assets/nature/Autumn_tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "tree1",
+      "name": "Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "tree2",
+      "name": "Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "tree3",
+      "name": "Tree 3",
+      "category": "nature",
+      "image": "assets/nature/Tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "palm-tree1-1",
+      "name": "Palm Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Palm_tree1_1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "palm-tree1-2",
+      "name": "Palm Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Palm_tree1_2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "palm-tree2-1",
+      "name": "Palm Tree 3",
+      "category": "nature",
+      "image": "assets/nature/Palm_tree2_1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "moss-tree1",
+      "name": "Moss Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Moss_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "moss-tree2",
+      "name": "Moss Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Moss_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "flower-tree1",
+      "name": "Flower Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Flower_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "flower-tree2",
+      "name": "Flower Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Flower_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "fruit-tree1",
+      "name": "Fruit Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Fruit_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "fruit-tree2",
+      "name": "Fruit Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Fruit_tree2.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "snow-tree1",
+      "name": "Snow Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Snow_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "snow-tree2",
+      "name": "Snow Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Snow_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "christmas-tree1",
+      "name": "Christmas Tree 1",
+      "category": "nature",
+      "image": "assets/nature/Christmas_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "christmas-tree2",
+      "name": "Christmas Tree 2",
+      "category": "nature",
+      "image": "assets/nature/Christmas_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64,
+      "anchor": "bottom-left"
+    }
+  ]
+}

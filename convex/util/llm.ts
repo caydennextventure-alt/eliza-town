@@ -3,6 +3,12 @@
 const OPENAI_EMBEDDING_DIMENSION = 1536;
 const TOGETHER_EMBEDDING_DIMENSION = 768;
 const OLLAMA_EMBEDDING_DIMENSION = 1024;
+const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 20_000;
+const getRequestTimeoutMs = () => {
+  const raw = process.env.LLM_REQUEST_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_LLM_REQUEST_TIMEOUT_MS;
+};
 
 export const EMBEDDING_DIMENSION: number = OLLAMA_EMBEDDING_DIMENSION;
 
@@ -116,6 +122,29 @@ const AuthHeaders = (): Record<string, string> =>
       }
     : {};
 
+const toRetryError = (error: unknown, context: string) => {
+  if (error instanceof Error && error.name === 'AbortError') {
+    const timeoutMs = getRequestTimeoutMs();
+    return {
+      retry: false,
+      error: new Error(`${context} timed out after ${timeoutMs}ms`),
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return { retry: true, error: new Error(`${context} failed: ${message}`) };
+};
+
+const fetchWithTimeout = async (url: string, options: RequestInit) => {
+  const timeoutMs = getRequestTimeoutMs();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 // Overload for non-streaming
 export async function chatCompletion(
   body: Omit<CreateChatCompletionRequest, 'model'> & {
@@ -147,15 +176,19 @@ export async function chatCompletion(
     retries,
     ms,
   } = await retryWithBackoff(async () => {
-    const result = await fetch(config.url + '/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...AuthHeaders(),
-      },
-
-      body: JSON.stringify(body),
-    });
+    let result;
+    try {
+      result = await fetchWithTimeout(config.url + '/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...AuthHeaders(),
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw toRetryError(error, 'Chat completion');
+    }
     if (!result.ok) {
       const error = await result.text();
       console.error({ error });
@@ -190,7 +223,7 @@ export async function chatCompletion(
 export async function tryPullOllama(model: string, error: string) {
   if (error.includes('try pulling')) {
     console.error('Embedding model not found, pulling from Ollama');
-    const pullResp = await fetch(getLLMConfig().url + '/api/pull', {
+    const pullResp = await fetchWithTimeout(getLLMConfig().url + '/api/pull', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -217,18 +250,23 @@ export async function fetchEmbeddingBatch(texts: string[]) {
     retries,
     ms,
   } = await retryWithBackoff(async () => {
-    const result = await fetch(config.url + '/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...AuthHeaders(),
-      },
+    let result;
+    try {
+      result = await fetchWithTimeout(config.url + '/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...AuthHeaders(),
+        },
 
-      body: JSON.stringify({
-        model: config.embeddingModel,
-        input: texts.map((text) => text.replace(/\n/g, ' ')),
-      }),
-    });
+        body: JSON.stringify({
+          model: config.embeddingModel,
+          input: texts.map((text) => text.replace(/\n/g, ' ')),
+        }),
+      });
+    } catch (error) {
+      throw toRetryError(error, 'Embedding');
+    }
     if (!result.ok) {
       throw {
         retry: result.status === 429 || result.status >= 500,
@@ -259,17 +297,22 @@ export async function fetchEmbedding(text: string) {
 
 export async function fetchModeration(content: string) {
   const { result: flagged } = await retryWithBackoff(async () => {
-    const result = await fetch(getLLMConfig().url + '/v1/moderations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...AuthHeaders(),
-      },
+    let result;
+    try {
+      result = await fetchWithTimeout(getLLMConfig().url + '/v1/moderations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...AuthHeaders(),
+        },
 
-      body: JSON.stringify({
-        input: content,
-      }),
-    });
+        body: JSON.stringify({
+          input: content,
+        }),
+      });
+    } catch (error) {
+      throw toRetryError(error, 'Moderation');
+    }
     if (!result.ok) {
       throw {
         retry: result.status === 429 || result.status >= 500,
@@ -688,13 +731,18 @@ export class ChatCompletionContent {
 export async function ollamaFetchEmbedding(text: string) {
   const config = getLLMConfig();
   const { result } = await retryWithBackoff(async () => {
-    const resp = await fetch(config.url + '/api/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model: config.embeddingModel, prompt: text }),
-    });
+    let resp;
+    try {
+      resp = await fetchWithTimeout(config.url + '/api/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: config.embeddingModel, prompt: text }),
+      });
+    } catch (error) {
+      throw toRetryError(error, 'Embedding');
+    }
     if (resp.status === 404) {
       const error = await resp.text();
       await tryPullOllama(config.embeddingModel, error);

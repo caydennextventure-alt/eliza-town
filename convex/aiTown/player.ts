@@ -1,7 +1,6 @@
 import { Infer, ObjectType, v } from 'convex/values';
 import { Point, Vector, path, point, vector } from '../util/types';
-import { GameId, parseGameId } from './ids';
-import { playerId } from './ids';
+import { GameId, parseGameId, agentId, playerId } from './ids';
 import {
   PATHFINDING_TIMEOUT,
   PATHFINDING_BACKOFF,
@@ -86,6 +85,14 @@ export class Player {
 
   tick(game: Game, now: number) {
     if (this.human && this.lastInput < now - HUMAN_IDLE_TOO_LONG) {
+      const agent = [...game.world.agents.values()].find((candidate) => candidate.playerId === this.id);
+      if (agent) {
+        delete this.human;
+        delete this.pathfinding;
+        delete this.activity;
+        this.lastInput = now;
+        return;
+      }
       this.leave(game, now);
     }
   }
@@ -279,6 +286,50 @@ export const playerInputs = {
       return null;
     },
   }),
+  takeOverAgent: inputHandler({
+    args: {
+      agentId,
+      tokenIdentifier: v.string(),
+    },
+    handler: (game, now, args) => {
+      const agentId = parseGameId('agents', args.agentId);
+      const agent = game.world.agents.get(agentId);
+      if (!agent) {
+        throw new Error(`Invalid agent ID ${args.agentId}`);
+      }
+      const agentDescription = game.agentDescriptions.get(agentId);
+      if (!agentDescription || agentDescription.isCustom !== true) {
+        throw new Error('Only custom agents can be taken over.');
+      }
+      if (agentDescription.ownerId && agentDescription.ownerId !== args.tokenIdentifier) {
+        throw new Error('You do not own this agent.');
+      }
+      const player = game.world.players.get(agent.playerId);
+      if (!player) {
+        throw new Error(`Invalid player ID ${agent.playerId}`);
+      }
+      if (player.human) {
+        throw new Error('This agent is already controlled by a human.');
+      }
+      let numHumans = 0;
+      for (const existing of game.world.players.values()) {
+        if (existing.human) {
+          numHumans++;
+        }
+        if (existing.human === args.tokenIdentifier) {
+          throw new Error('You are already in this game!');
+        }
+      }
+      if (numHumans >= MAX_HUMAN_PLAYERS) {
+        throw new Error(`Only ${MAX_HUMAN_PLAYERS} human players allowed at once.`);
+      }
+      player.human = args.tokenIdentifier;
+      player.lastInput = now;
+      delete player.pathfinding;
+      delete player.activity;
+      return null;
+    },
+  }),
   leave: inputHandler({
     args: { playerId },
     handler: (game, now, args) => {
@@ -286,6 +337,14 @@ export const playerInputs = {
       const player = game.world.players.get(playerId);
       if (!player) {
         throw new Error(`Invalid player ID ${playerId}`);
+      }
+      const agent = [...game.world.agents.values()].find((candidate) => candidate.playerId === playerId);
+      if (agent && player.human) {
+        delete player.human;
+        delete player.pathfinding;
+        delete player.activity;
+        player.lastInput = now;
+        return null;
       }
       player.leave(game, now);
       return null;

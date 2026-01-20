@@ -17,7 +17,7 @@ export async function startConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, agent, otherAgent, lastConversation } = await ctx.runQuery(
+  const { player, otherPlayer, agent, otherAgent, lastConversation, elizaAgent } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -26,6 +26,18 @@ export async function startConversationMessage(
       conversationId,
     },
   );
+  
+  if (elizaAgent) {
+    const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+      elizaAgentId: elizaAgent.elizaAgentId,
+      // For start, we simulate an approach
+      message: "*Approaches you to start a conversation*", 
+      senderId: otherPlayer.id,
+      conversationId,
+    });
+    if (response) return response;
+    // Fallback if Eliza fails
+  }
   const embedding = await embeddingsCache.fetch(
     ctx,
     `${player.name} is talking to ${otherPlayer.name}`,
@@ -82,7 +94,7 @@ export async function continueConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, elizaAgent } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -91,6 +103,26 @@ export async function continueConversationMessage(
       conversationId,
     },
   );
+  
+  if (elizaAgent) {
+    // Get last message from other player
+    const messages = await ctx.runQuery(api.messages.listMessages, { worldId, conversationId });
+    const lastMessage = messages[messages.length - 1];
+    
+    // Only reply if the last message is from the other player (which it should be if it's our turn)
+    if (lastMessage && lastMessage.author === otherPlayerId) {
+       const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+          elizaAgentId: elizaAgent.elizaAgentId,
+          message: lastMessage.text,
+          senderId: otherPlayerId,
+          conversationId,
+       });
+       if (response) return response;
+    } else {
+       // Weird state, or maybe we just continue?
+       // Default fallback
+    }
+  }
   const now = Date.now();
   const started = new Date(conversation.created);
   const embedding = await embeddingsCache.fetch(
@@ -140,7 +172,7 @@ export async function leaveConversationMessage(
   playerId: GameId<'players'>,
   otherPlayerId: GameId<'players'>,
 ): Promise<string> {
-  const { player, otherPlayer, conversation, agent, otherAgent } = await ctx.runQuery(
+  const { player, otherPlayer, conversation, agent, otherAgent, elizaAgent } = await ctx.runQuery(
     selfInternal.queryPromptData,
     {
       worldId,
@@ -149,6 +181,16 @@ export async function leaveConversationMessage(
       conversationId,
     },
   );
+  
+  if (elizaAgent) {
+     const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+        elizaAgentId: elizaAgent.elizaAgentId,
+        message: "*I need to leave now*",
+        senderId: otherPlayerId,
+        conversationId,
+     });
+     if (response) return response;
+  }
   const prompt = [
     `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
     `You've decided to leave the question and would like to politely tell them you're leaving the conversation.`,
@@ -330,6 +372,11 @@ export const queryPromptData = internalQuery({
         throw new Error(`Conversation ${lastTogether.conversationId} not found`);
       }
     }
+    const elizaAgent = await ctx.db
+      .query('elizaAgents')
+      .withIndex('playerId', (q) => q.eq('playerId', args.playerId))
+      .first();
+
     return {
       player: { name: playerDescription.name, ...player },
       otherPlayer: { name: otherPlayerDescription.name, ...otherPlayer },
@@ -341,6 +388,7 @@ export const queryPromptData = internalQuery({
         ...otherAgent,
       },
       lastConversation,
+      elizaAgent,
     };
   },
 });

@@ -24,22 +24,28 @@ export const agentRememberConversation = internalAction({
     operationId: v.string(),
   },
   handler: async (ctx, args) => {
-    await rememberConversation(
-      ctx,
-      args.worldId,
-      args.agentId as GameId<'agents'>,
-      args.playerId as GameId<'players'>,
-      args.conversationId as GameId<'conversations'>,
-    );
-    await sleep(Math.random() * 1000);
-    await ctx.runMutation(api.aiTown.main.sendInput, {
-      worldId: args.worldId,
-      name: 'finishRememberConversation',
-      args: {
-        agentId: args.agentId,
-        operationId: args.operationId,
-      },
-    });
+    try {
+      await rememberConversation(
+        ctx,
+        args.worldId,
+        args.agentId as GameId<'agents'>,
+        args.playerId as GameId<'players'>,
+        args.conversationId as GameId<'conversations'>,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`agentRememberConversation failed: ${message}`);
+    } finally {
+      await sleep(Math.random() * 1000);
+      await ctx.runMutation(api.aiTown.main.sendInput, {
+        worldId: args.worldId,
+        name: 'finishRememberConversation',
+        args: {
+          agentId: args.agentId,
+          operationId: args.operationId,
+        },
+      });
+    }
   },
 });
 
@@ -69,24 +75,38 @@ export const agentGenerateMessage = internalAction({
       default:
         assertNever(args.type);
     }
-    const text = await completionFn(
-      ctx,
-      args.worldId,
-      args.conversationId as GameId<'conversations'>,
-      args.playerId as GameId<'players'>,
-      args.otherPlayerId as GameId<'players'>,
-    );
-
-    await ctx.runMutation(internal.aiTown.agent.agentSendMessage, {
-      worldId: args.worldId,
-      conversationId: args.conversationId,
-      agentId: args.agentId,
-      playerId: args.playerId,
-      text,
-      messageUuid: args.messageUuid,
-      leaveConversation: args.type === 'leave',
-      operationId: args.operationId,
-    });
+    try {
+      const text = await completionFn(
+        ctx,
+        args.worldId,
+        args.conversationId as GameId<'conversations'>,
+        args.playerId as GameId<'players'>,
+        args.otherPlayerId as GameId<'players'>,
+      );
+      await ctx.runMutation(internal.aiTown.agent.agentSendMessage, {
+        worldId: args.worldId,
+        conversationId: args.conversationId,
+        agentId: args.agentId,
+        playerId: args.playerId,
+        text,
+        messageUuid: args.messageUuid,
+        leaveConversation: args.type === 'leave',
+        operationId: args.operationId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`agentGenerateMessage failed: ${message}`);
+      await ctx.runMutation(api.aiTown.main.sendInput, {
+        worldId: args.worldId,
+        name: 'agentAbortConversation',
+        args: {
+          agentId: args.agentId,
+          conversationId: args.conversationId,
+          operationId: args.operationId,
+          leaveConversation: true,
+        },
+      });
+    }
   },
 });
 

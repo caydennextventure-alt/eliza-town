@@ -8,11 +8,11 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { AnimatedSprite as PixiAnimatedSprite, Container, Stage } from '@pixi/react';
-import { StardewFrame } from './ui/stardew/StardewFrame';
-import { StardewButton } from './ui/stardew/StardewButton';
-import { StardewCheckbox } from './ui/stardew/StardewCheckbox';
-import { HangingSign } from './ui/stardew/HangingSign';
-import { StardewTab } from './ui/stardew/StardewTab';
+import { StardewFrame } from '../ui/stardew/StardewFrame';
+import { StardewButton } from '../ui/stardew/StardewButton';
+import { StardewCheckbox } from '../ui/stardew/StardewCheckbox';
+import { HangingSign } from '../ui/stardew/HangingSign';
+import { StardewTab } from '../ui/stardew/StardewTab';
 import { BaseTexture, SCALE_MODES, Spritesheet, type ISpritesheetData } from 'pixi.js';
 // Map editor starts with an empty canvas; tilesets are supplied via packs.
 import * as campfire from '../../data/animations/campfire.json';
@@ -20,12 +20,13 @@ import * as gentlesparkle from '../../data/animations/gentlesparkle.json';
 import * as gentlewaterfall from '../../data/animations/gentlewaterfall.json';
 import * as gentlesplash from '../../data/animations/gentlesplash.json';
 import * as windmill from '../../data/animations/windmill.json';
-const DEFAULT_MAP_WIDTH = 64;
-const DEFAULT_MAP_HEIGHT = 48;
+const DEFAULT_MAP_WIDTH = 45;
+const DEFAULT_MAP_HEIGHT = 32;
 const DEFAULT_TILE_SIZE = 32;
 const EMPTY_TILESET_DATA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgCj2R1kAAAAASUVORK5CYII=';
 const PACK_INDEX_PATH = 'assets/packs/index.json';
+const ASSETS_JSON_PATH = 'assets/assets.json';
 
 const MAP_WIDTH = DEFAULT_MAP_WIDTH;
 const MAP_HEIGHT = DEFAULT_MAP_HEIGHT;
@@ -377,6 +378,7 @@ const MapEditor = () => {
   const tilesetRef = useRef<HTMLImageElement | null>(null);
   const dragToolRef = useRef<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object' | null>(null);
   const stampFileInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -412,8 +414,41 @@ const MapEditor = () => {
             } as AssetPack;
           }),
         );
+        
+        // Also load from assets.json (category-based system)
+        let categoryObjects: PackObject[] = [];
+        try {
+          const assetsUrl = resolveAssetPath(ASSETS_JSON_PATH);
+          const assetsResponse = await fetch(assetsUrl);
+          if (assetsResponse.ok) {
+            const assetsData = await assetsResponse.json();
+            if (Array.isArray(assetsData?.objects)) {
+              categoryObjects = assetsData.objects.map((obj: any) => ({
+                id: obj.id,
+                name: obj.name,
+                image: obj.image,
+                pixelWidth: obj.pixelWidth ?? 64,
+                pixelHeight: obj.pixelHeight ?? 64,
+                anchor: obj.anchor ?? 'bottom-left',
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load assets.json:', e);
+        }
+        
         if (!active) return;
-        setAssetPacks(packs.filter((pack): pack is AssetPack => Boolean(pack)));
+        
+        // Create a virtual pack for category-based objects
+        const allPacks = packs.filter((pack): pack is AssetPack => Boolean(pack));
+        if (categoryObjects.length > 0) {
+          allPacks.push({
+            id: 'category-assets',
+            name: 'Assets',
+            objects: categoryObjects,
+          });
+        }
+        setAssetPacks(allPacks);
       } catch (error) {
         console.error('Failed to load asset packs:', error);
         if (!active) return;
@@ -1861,52 +1896,46 @@ const MapEditor = () => {
 
   // Export map data
   const exportMap = () => {
-    const objectSprites = placedObjects
-      .map((placement) => {
-        const def = objectsById.get(placement.objectId);
-        if (!def) return null;
-        return {
-          id: placement.id,
-          name: def.name,
-          tileX: def.tileX,
-          tileY: def.tileY,
-          tileWidth: def.tileWidth,
-          tileHeight: def.tileHeight,
-          anchor: def.anchor,
-          imagePath: def.imagePath,
-          pixelWidth: def.pixelWidth,
-          pixelHeight: def.pixelHeight,
-          col: placement.col,
-          row: placement.row,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-    const mapData = {
-      tilesetpath: tilesetUrl,
-      tiledim: tileset.tileDim,
-      tilesetpxw: tileset.pixelWidth,
-      tilesetpxh: tileset.pixelHeight,
-      mapwidth: MAP_WIDTH,
-      mapheight: MAP_HEIGHT,
-      bgtiles: bgLayers,
-      objmap: [collisionLayer], // Keep same structure
-      animatedsprites: animatedSprites,
-      objectCatalog: tilesetObjectsForSet,
-      objectPlacements: placedObjects,
-      objectSprites,
-    };
+    // Generate object map from placements
+    const objectMapLayer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
+    // This is a simplified reconstruction; ideally we'd track the full object layer state
+    // But since placedObjects tracks explicit objects, we might want to rely on that.
+    // However, the engine expects `objmap` to be a dense int array for collision/rendering if used that way.
+    // In gentle.js, `objmap` is [ [row...] ].
+    // Let's assume we just want to export the collision layer as the object map for now,
+    // or if we have distinct object layers, export those.
+    // The current state has `collisionLayer`.
+    
+    // Construct valid JS content matching data/gentle.js format
+    const jsContent = `
+export const tilesetpath = "${tilesetUrl}";
+export const tiledim = ${tileset.tileDim};
+export const screenxtiles = ${MAP_WIDTH};
+export const screenytiles = ${MAP_HEIGHT};
+export const tilesetpxw = ${tileset.pixelWidth};
+export const tilesetpxh = ${tileset.pixelHeight};
+
+export const bgtiles = ${JSON.stringify(bgLayers)};
+
+export const objmap = ${JSON.stringify([collisionLayer])};
+
+export const animatedsprites = ${JSON.stringify(animatedSprites)};
+
+export const mapwidth = ${MAP_WIDTH};
+export const mapheight = ${MAP_HEIGHT};
+`;
+
     console.log("===== EXPORTED MAP DATA =====");
-    console.log(JSON.stringify(mapData, null, 2));
-    const blob = new Blob([JSON.stringify(mapData, null, 2)], { type: 'application/json' });
+    const blob = new Blob([jsContent], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'map_export.json';
+    a.download = 'gentle.js';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    alert("Map exported! Check your downloads folder.");
+    alert("Map exported! Replace 'data/gentle.js' with this file.");
   };
 
   const renderSidebar = () => {
@@ -1962,7 +1991,7 @@ const MapEditor = () => {
                        {objectCaptureMode ? 'Creating...' : 'New Object'}
                      </button>
                   </div>
-                   <div className="grid grid-cols-2 gap-2">
+                   <div className="grid grid-cols-2 gap-1">
                       {tilesetObjectsForSet.map(obj => {
                          const preview = getObjectPreviewData(obj);
                          return (
@@ -2232,18 +2261,30 @@ const MapEditor = () => {
   };
 
   const renderCanvas = () => {
-    return (
+      // Dimensions of the scaled content
+      const contentWidth = mapPixelWidth * 0.7;
+      const contentHeight = mapPixelHeight * 0.7;
+
+      return (
         <div 
-             className="w-full h-full relative overflow-auto custom-scrollbar"
-             onContextMenu={(event) => event.preventDefault()}
-             onPointerLeave={() => setHoverInfo(null)}
+          ref={canvasContainerRef}
+          className="w-full h-full overflow-auto custom-scrollbar bg-[#a89070] relative"
         >
-          {/* Main Map Content */}
-          <div
-             className="relative inline-block"
-             style={{ width: mapPixelWidth, height: mapPixelHeight }}
-          >
-             <div
+          {/* Main Map Content - Wrapped to fix scroll bounds for scaled content */}
+          <div style={{ width: contentWidth, height: contentHeight, position: 'relative', margin: 'auto' }}>
+            <div
+                className="relative origin-top-left"
+                style={{ 
+                    width: mapPixelWidth, 
+                    height: mapPixelHeight,
+                    transform: 'scale(0.7)',
+                    transformOrigin: 'top left',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                }}
+            >
+             {/* Base Layers */}         <div
                className="absolute inset-0 bg-[#d4c4a0] border-2 border-[#8b6b4a] shadow-xl rounded"
                style={{
                  display: 'grid',
@@ -2372,6 +2413,7 @@ const MapEditor = () => {
                 <div className="absolute pointer-events-none border-2 border-cyan-400/80 bg-cyan-400/10" style={{ left: selectionBounds.minCol * tileSize, top: selectionBounds.minRow * tileSize, width: (selectionBounds.maxCol - selectionBounds.minCol + 1) * tileSize, height: (selectionBounds.maxRow - selectionBounds.minRow + 1) * tileSize }} />
              )}
           </div>
+          </div>
           
            {/* Hover Info Overlay - Floating in Canvas Area */}
            <div className="fixed bottom-4 right-4 bg-black/80 text-[#f6e2b0] px-3 py-1.5 rounded-md pointer-events-none z-50 text-[10px] border border-[#5a4030] shadow shadow-black/50 font-mono">
@@ -2409,14 +2451,20 @@ const MapEditor = () => {
             Area: sidebar-left
             Responsive Width: min-content (based on children)
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-left' }} className="relative h-full pt-6 min-w-[260px] min-h-[450px]">
-            {/* Hanging Sign - Positioned at screen edge */}
-            {/* Hanging Sign - Positioned at screen edge */}
-            <div className="fixed top-0 left-[120px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%)' }}>
-                 <HangingSign scale={0.9} />
-            </div>
+         {/* Hanging Sign - Positioned absolutely relative to the scaled grid container, at the top left column */}
+         <div className="absolute top-0 left-[140px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%) translateY(-25%)' }}>
+             <HangingSign scale={0.9} />
+         </div>
+
+        {/* --------------------------------------------------------------------------
+            Zone: Sidebar Left (Tiles)
+            Area: sidebar-left
+            Responsive Width: min-content (based on children)
+           -------------------------------------------------------------------------- */}
+        <div style={{ gridArea: 'sidebar-left', transform: 'translateY(-5%)' }} className="relative h-full pt-4 min-w-[260px] min-h-[450px]">
+            {/* Hanging Sign removed from here */}
             
-            <StardewFrame className="w-full h-full flex flex-col pt-6 pb-2 px-3" >
+            <StardewFrame className="w-full h-full flex flex-col pt-4 pb-2 px-2" >
                <div className="flex-1 min-h-0 w-full h-full overflow-hidden rounded-sm relative"> {/* overflow-hidden to clip content to frame */}
                  <div className="absolute inset-0 overflow-y-auto overflow-x-hidden custom-scrollbar px-2 py-1"> {/* Scroll container with padding */}
                   {/* Tileset Selector */}
@@ -2602,7 +2650,7 @@ const MapEditor = () => {
             Area: footer
             Responsive Height: auto
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'footer' }} className="flex justify-center items-center h-[100px]">
+        <div style={{ gridArea: 'footer', transform: 'translateY(-15%)' }} className="flex justify-center items-center h-[100px]">
              <div className="h-full">
                 <StardewFrame className="h-full flex items-center justify-center px-4" >
                      <div className="flex gap-2 items-center">
@@ -2619,12 +2667,15 @@ const MapEditor = () => {
                                        const preview = getObjectPreviewData(objDef);
                                        content = (
                                            <div 
-                                                className="w-full h-full bg-no-repeat bg-center"
+                                                className="bg-no-repeat bg-center"
                                                 style={{
+                                                    width: `${objDef.pixelWidth ?? objDef.tileWidth * tileSize}px`,
+                                                    height: `${objDef.pixelHeight ?? objDef.tileHeight * tileSize}px`,
                                                     backgroundImage: `url(${preview.imageUrl})`,
                                                     backgroundPosition: preview.backgroundPosition,
                                                     backgroundSize: preview.backgroundSize,
-                                                    transform: 'scale(0.8)'
+                                                    transform: 'scale(0.8)',
+                                                    imageRendering: 'pixelated'
                                                 }}
                                             />
                                        );
@@ -2633,8 +2684,10 @@ const MapEditor = () => {
                                    const pos = getTilePos(tileId);
                                    content = (
                                         <div
-                                            className="w-full h-full rendering-pixelated"
+                                            className="rendering-pixelated"
                                             style={{
+                                                width: `${tileSize}px`,
+                                                height: `${tileSize}px`,
                                                 backgroundImage: `url(${tilesetUrl})`,
                                                 backgroundPosition: `-${pos.sx}px -${pos.sy}px`,
                                                 backgroundSize: `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
@@ -2684,6 +2737,15 @@ const MapEditor = () => {
 
             <StardewFrame className="p-4 w-full" >
                 <div className="flex flex-col gap-2">
+                   {/* Export Button moved here */}
+                   <button 
+                        onClick={exportMap}
+                        className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-2 rounded text-[10px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider mb-2 w-full"
+                    >
+                        EXPORT
+                    </button>
+                    <div className="h-0.5 bg-[#6d4c30] w-full mb-2 opacity-30" />
+
                    <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
                       <StardewCheckbox 
                         label="GRID" 
