@@ -115,6 +115,16 @@ We welcome contributions! Here's how to get started:
 4. Run tests: `npm test` (if available)
 5. Submit a Pull Request
 
+## Tests
+
+- Unit tests: `npm test`
+- E2E (Playwright): `npm run test:e2e` (runs with a deterministic mock backend)
+- E2E UI runner: `npm run test:e2e:ui`
+
+E2E coverage includes landing page actions, character creation/deletion, agent creation/removal,
+join/release flows, conversations (invite/accept/reject/message/leave), and movement.
+Playwright E2E runs automatically on pull requests.
+
 ### Project Structure
 
 ```

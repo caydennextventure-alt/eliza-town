@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ReactModal from 'react-modal';
 import { useAction, useConvex, useQuery } from 'convex/react';
 import { ConvexError } from 'convex/values';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import agentAvatar from '../../assets/ui/agent-avatar.svg';
 import { waitForInput } from '../hooks/sendInput';
 import { useCharacters } from '../lib/characterRegistry';
@@ -170,7 +170,10 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       contentLabel="Create Eliza Agent"
       ariaHideApp={false}
     >
-      <div className="flex flex-col h-full bg-[#23202b] text-white font-dialog">
+      <div
+        className="flex flex-col h-full bg-[#23202b] text-white font-dialog"
+        data-testid="create-agent-dialog"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b-4 border-[#4a3b5b] bg-[#2d2438]">
           <div className="flex items-center gap-3">
@@ -184,6 +187,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
           <button
             onClick={onClose}
             className="text-[#a395b8] hover:text-white transition-colors"
+            data-testid="create-agent-close"
           >
             ✕
           </button>
@@ -217,6 +221,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                                                 setSelectedId(selectableCharacters[prevIndex].name);
                                             }}
                                             className="absolute left-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-[#2d2438] text-[#a395b8] hover:bg-[#4a3b5b] hover:text-white border-2 border-[#4a3b5b] rounded-sm transition-colors"
+                                            data-testid="agent-character-prev"
                                         >
                                             ◄
                                         </button>
@@ -227,6 +232,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                                                 setSelectedId(selectableCharacters[nextIndex].name);
                                             }}
                                             className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-[#2d2438] text-[#a395b8] hover:bg-[#4a3b5b] hover:text-white border-2 border-[#4a3b5b] rounded-sm transition-colors"
+                                            data-testid="agent-character-next"
                                         >
                                             ►
                                         </button>
@@ -275,6 +281,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. Luna"
                       className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
+                      data-testid="agent-name"
                     />
                  </div>
                  
@@ -290,6 +297,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                                     ? 'bg-[#3b8f6e] border-[#5ec29d] text-white shadow-[0_2px_0_#23634a] translate-y-[-1px]'
                                     : 'bg-[#2d2438] border-[#4a3b5b] text-[#a395b8] hover:border-[#6d607d] hover:text-white'
                                 }`}
+                                data-testid={`agent-personality-${trait.toLowerCase()}`}
                             >
                                 {trait}{personality.includes(trait) && ' ✓'}
                             </button>
@@ -305,6 +313,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                       placeholder="Describe who this agent is, their background..."
                       rows={4}
                       className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] resize-none"
+                      data-testid="agent-identity"
                     />
                 </div>
                 
@@ -316,6 +325,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                       placeholder={DEFAULT_PLAN}
                       rows={2}
                       className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] resize-none"
+                      data-testid="agent-plan"
                     />
                 </div>
             </div>
@@ -324,7 +334,10 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
         {/* Footer */}
         <div className="p-6 pt-0 mt-auto shrink-0">
             {error && (
-                <div className="mb-4 px-3 py-2 bg-red-900/30 border border-red-500/30 text-red-200 text-xs flex items-center gap-2">
+                <div
+                  className="mb-4 px-3 py-2 bg-red-900/30 border border-red-500/30 text-red-200 text-xs flex items-center gap-2"
+                  data-testid="agent-error"
+                >
                     <span>⚠️</span> {error}
                 </div>
             )}
@@ -333,6 +346,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                 <button
                     onClick={onClose}
                     className="px-6 py-2 text-xs uppercase font-bold tracking-wider text-[#a395b8] hover:text-white transition-colors"
+                    data-testid="agent-cancel"
                 >
                     Cancel
                 </button>
@@ -342,6 +356,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                     className={`px-6 py-2 bg-[#3b8f6e] border-b-4 border-[#23634a] text-white text-xs uppercase font-bold tracking-widest hover:bg-[#46a881] hover:translate-y-[-1px] active:translate-y-[1px] active:border-b-0 transition-all ${
                         isCreating ? 'opacity-50 cursor-wait' : ''
                     }`}
+                    data-testid="agent-create"
                 >
                     {isCreating ? 'Summoning...' : 'Create Agent'}
                 </button>

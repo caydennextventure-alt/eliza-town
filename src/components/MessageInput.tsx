@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useMutation, useQuery } from 'convex/react';
 import { KeyboardEvent, useRef, useState } from 'react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { useSendInput } from '../hooks/sendInput';
 import { Player } from '../../convex/aiTown/player';
@@ -87,6 +87,7 @@ export function MessageInput({
           tabIndex={0}
           placeholder="Type here"
           onKeyDown={(e) => onKeyDown(e)}
+          data-testid="message-input"
         />
       </div>
     </div>

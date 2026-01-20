@@ -82,7 +82,7 @@ export default function JoinWorldDialog({
       contentLabel="Join World"
       ariaHideApp={false}
     >
-      <div className="space-y-4 font-dialog">
+      <div className="space-y-4 font-dialog" data-testid="join-world-dialog">
         <div className="flex items-start justify-between gap-6">
           <div>
             <h2 className="text-3xl">Take Over an Agent</h2>
@@ -98,6 +98,7 @@ export default function JoinWorldDialog({
           <button
             onClick={onClose}
             className="border border-white/30 px-3 py-1 text-xs hover:border-white"
+            data-testid="join-world-close"
           >
             Close
           </button>
@@ -143,6 +144,7 @@ export default function JoinWorldDialog({
                       ? 'border-emerald-400'
                       : 'border-white/20 hover:border-white/60',
                   ].join(' ')}
+                  data-testid={`join-world-agent-${agent.agentId}`}
                 >
                   <div className="bg-brown-200 p-1">
                     <img
@@ -172,6 +174,7 @@ export default function JoinWorldDialog({
                   onCreateAgent();
                 }}
                 className="mt-3 border border-white/30 px-3 py-1 text-xs hover:border-white"
+                data-testid="join-world-create-agent"
               >
                 Create Agent
               </button>
@@ -179,12 +182,17 @@ export default function JoinWorldDialog({
           </div>
         )}
 
-        {error && <p className="text-xs text-red-300">{error}</p>}
+        {error && (
+          <p className="text-xs text-red-300" data-testid="join-world-error">
+            {error}
+          </p>
+        )}
 
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
             className="border border-white/30 px-4 py-2 text-sm hover:border-white"
+            data-testid="join-world-cancel"
           >
             Cancel
           </button>
@@ -192,6 +200,7 @@ export default function JoinWorldDialog({
             onClick={handleTakeOver}
             disabled={agents.length === 0 || isJoining}
             className="bg-emerald-500/80 hover:bg-emerald-500 px-4 py-2 text-sm font-bold border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="join-world-takeover"
           >
             {isJoining ? 'Taking over...' : 'Take Over'}
           </button>

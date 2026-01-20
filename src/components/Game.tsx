@@ -5,12 +5,14 @@ import { useElementSize } from 'usehooks-ts';
 import { Stage } from '@pixi/react';
 import { ConvexProvider, useConvex, useQuery } from 'convex/react';
 import PlayerDetails from './PlayerDetails.tsx';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { useWorldHeartbeat } from '../hooks/useWorldHeartbeat.ts';
 import { useHistoricalTime } from '../hooks/useHistoricalTime.ts';
 import { DebugTimeManager } from './DebugTimeManager.tsx';
 import { GameId } from '../../convex/aiTown/ids.ts';
 import { useServerGame } from '../hooks/serverGame.ts';
+import { useSendInput } from '../hooks/sendInput.ts';
+import { isE2E } from '../mocks/env';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
@@ -27,6 +29,13 @@ export default function Game() {
   const engineId = worldStatus?.engineId;
 
   const game = useServerGame(worldId);
+  const humanTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
+  const humanPlayerId =
+    game && humanTokenIdentifier
+      ? [...game.world.players.values()].find((p) => p.human === humanTokenIdentifier)?.id
+      : undefined;
+  const moveTo = useSendInput(engineId!, 'moveTo');
+  const [mockDestination, setMockDestination] = useState<{ x: number; y: number } | null>(null);
 
   // Send a periodic heartbeat to our world to keep it alive.
   useWorldHeartbeat();
@@ -37,10 +46,59 @@ export default function Game() {
   if (!worldId || !engineId || !game) {
     return null;
   }
+  const humanPlayer = humanPlayerId ? game.world.players.get(humanPlayerId) : undefined;
+  const handleMockMove = async () => {
+    if (!humanPlayerId) {
+      return;
+    }
+    const next = {
+      x: mockDestination ? mockDestination.x + 1 : 1,
+      y: mockDestination ? mockDestination.y + 1 : 1,
+    };
+    setMockDestination(next);
+    await moveTo({ playerId: humanPlayerId, destination: next });
+  };
   return (
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
       <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
+        {isE2E && (
+          <div
+            className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 bg-black/40 p-3 text-white text-xs max-w-[240px]"
+            data-testid="mock-controls"
+          >
+            <div className="font-bold uppercase tracking-wider">Test Controls</div>
+            <button
+              type="button"
+              onClick={() => void handleMockMove()}
+              className="border border-white/40 px-2 py-1 hover:border-white"
+              data-testid="mock-move"
+            >
+              Move +1,+1
+            </button>
+            <div>
+              Position:{' '}
+              <span data-testid="player-position">
+                {humanPlayer
+                  ? `${Math.floor(humanPlayer.position.x)},${Math.floor(humanPlayer.position.y)}`
+                  : 'not-playing'}
+              </span>
+            </div>
+            <div className="space-y-1" data-testid="mock-player-list">
+              {[...game.world.players.values()].map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  onClick={() => setSelectedElement({ kind: 'player', id: player.id })}
+                  className="block w-full border border-white/20 px-2 py-1 text-left hover:border-white"
+                  data-testid={`player-select-${player.id}`}
+                >
+                  Select {player.id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <Stage width={width} height={height} options={{ backgroundColor: 0x7ab5ff }}>
           <ConvexProvider client={convex}>
             <PixiGame

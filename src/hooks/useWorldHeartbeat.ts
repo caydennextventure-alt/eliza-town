@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from 'convex/react';
 import { useEffect } from 'react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { WORLD_HEARTBEAT_INTERVAL } from '../../convex/constants';
 
 export function useWorldHeartbeat() {

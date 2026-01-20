@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import ReactModal from 'react-modal';
 import { useMutation, useQuery, useAction } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 
 const modalStyles = {
   overlay: {
@@ -196,12 +196,13 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
       contentLabel="Create Character"
       ariaHideApp={false}
     >
-      <div className="space-y-4 font-dialog text-white">
+      <div className="space-y-4 font-dialog text-white" data-testid="create-character-dialog">
         <div className="flex items-start justify-between gap-6">
           <h2 className="text-2xl font-bold">Create Character (AI)</h2>
           <button
             onClick={onClose}
             className="border border-white/30 px-3 py-1 text-xs hover:border-white text-gray-400 hover:text-white"
+            data-testid="create-character-close"
           >
             Close
           </button>
@@ -225,6 +226,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                             placeholder="A futuristic cyber-ninja with a glowing katana..."
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
+                            data-testid="character-prompt"
                         />
                          
                          {/* Fallback Reference Upload (Optional) */}
@@ -235,6 +237,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                                  accept="image/*"
                                  className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-800 file:text-white hover:file:bg-gray-700"
                                  onChange={handleReferenceFileChange}
+                                 data-testid="character-reference-upload"
                              />
                          </div>
 
@@ -244,6 +247,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                              className={`w-full mt-4 font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2 ${
                                 isGenerating ? 'bg-indigo-800 text-indigo-200 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                              }`}
+                             data-testid="character-generate-concept"
                          >
                              {isGenerating ? (
                                 <span className="animate-spin">⟳</span>
@@ -267,6 +271,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                                  onClick={() => setStep('concept')}
                                  disabled={isGenerating}
                                  className="flex-1 px-4 border border-gray-600 hover:bg-gray-800 text-white py-2 rounded text-sm"
+                                 data-testid="character-back"
                              >
                                 Back
                              </button>
@@ -276,6 +281,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                                  className={`flex-2 w-full font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2 ${
                                     isGenerating ? 'bg-emerald-800 text-emerald-200 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                                  }`}
+                                 data-testid="character-generate-sprite"
                              >
                                  {isGenerating ? (
                                     <span className="animate-spin">⟳</span>
@@ -287,7 +293,10 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                 )}
 
                  {error && (
-                     <div className="text-red-400 text-sm bg-red-900/20 p-2 rounded">
+                     <div
+                        className="text-red-400 text-sm bg-red-900/20 p-2 rounded"
+                        data-testid="character-error"
+                     >
                          {error}
                      </div>
                  )}
@@ -343,6 +352,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                         onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="My Character"
                         className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-emerald-500 outline-none"
+                        data-testid="character-name"
                      />
                 </div>
 
@@ -350,6 +360,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                      <button
                         onClick={() => setGeneratedStorageId(null)} // Back to edit
                         className="px-4 border border-gray-600 hover:bg-gray-800 text-white py-2 rounded text-sm"
+                        data-testid="character-edit-back"
                      >
                         Back
                      </button>
@@ -357,6 +368,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                         onClick={handleGenerateSprite} // Regenerate using same prompt/concept
                         disabled={isGenerating}
                         className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-2"
+                        data-testid="character-regenerate"
                      >
                         {isGenerating ? (
                             <span className="animate-spin">⟳</span>
@@ -367,6 +379,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                      <button
                         onClick={handleSave}
                         className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded text-sm"
+                        data-testid="character-save"
                      >
                         Save Character
                      </button>
@@ -384,7 +397,11 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
            <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Your Characters</h3>
            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
               {mySprites.map((sprite) => (
-                <div key={sprite.spriteId} className="flex items-center gap-3 bg-gray-800/50 p-2 rounded border border-gray-700">
+                <div
+                  key={sprite.spriteId}
+                  className="flex items-center gap-3 bg-gray-800/50 p-2 rounded border border-gray-700"
+                  data-testid={`character-item-${sprite.spriteId}`}
+                >
                   <div
                     className="shrink-0 bg-gray-900 w-8 h-8 rounded overflow-hidden relative"
                   >
@@ -405,6 +422,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                   <button
                     onClick={() => handleRemove(sprite.spriteId)}
                     className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
+                    data-testid={`character-delete-${sprite.spriteId}`}
                   >
                     Delete
                   </button>

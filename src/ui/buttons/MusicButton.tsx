@@ -3,7 +3,8 @@ import volumeImg from '../../../assets/volume.svg';
 import { sound } from '@pixi/sound';
 import Button from './Button';
 import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
+import { isE2E } from '../../mocks/env';
 
 export default function MusicButton() {
   const musicUrl = useQuery(api.music.getBackgroundMusic);
@@ -16,10 +17,23 @@ export default function MusicButton() {
   }, [musicUrl]);
 
   const flipSwitch = async () => {
+    if (isE2E) {
+      setPlaying((prev) => !prev);
+      return;
+    }
+    if (!musicUrl || typeof sound.exists !== 'function' || !sound.exists('background')) {
+      setPlaying((prev) => !prev);
+      return;
+    }
     if (isPlaying) {
       sound.stop('background');
     } else {
-      await sound.play('background');
+      try {
+        await sound.play('background');
+      } catch (error) {
+        console.warn('Failed to play background music.', error);
+        return;
+      }
     }
     setPlaying(!isPlaying);
   };
@@ -45,6 +59,7 @@ export default function MusicButton() {
         className="hidden lg:block"
         title="Play AI generated music (press m to play/mute)"
         imgUrl={volumeImg}
+        dataTestId="music-toggle"
       >
         {isPlaying ? 'Mute' : 'Music'}
       </Button>

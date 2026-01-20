@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useConvex, useMutation, useQuery } from 'convex/react';
 import { ConvexError } from 'convex/values';
 import { toast } from 'react-toastify';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import Button from '../ui/buttons/Button';
 import takeOverImg from '../../assets/ui/icon-takeover.svg';
 import { waitForInput } from '../hooks/sendInput';
@@ -120,6 +120,7 @@ export default function WorldJoinControls({ onCreateAgent }: Props) {
         imgUrl={takeOverImg}
         onClick={onClick}
         className={isDisabled ? 'opacity-50 pointer-events-none' : undefined}
+        dataTestId="join-world"
       >
         {isPlaying ? (isLeaving ? 'Releasing...' : 'Release') : 'Take Over'}
       </Button>

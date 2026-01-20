@@ -80,7 +80,16 @@ export default function Home() {
           contentLabel="Help Modal"
           ariaHideApp={false}
         >
-          <div className="font-body">
+          <div className="font-body" data-testid="help-modal">
+            <div className="flex justify-end">
+              <button
+                onClick={() => setHelpModalOpen(false)}
+                className="border border-white/30 px-3 py-1 text-xs hover:border-white"
+                data-testid="help-close"
+              >
+                Close
+              </button>
+            </div>
             <h1 className="text-center text-6xl font-bold font-display game-title">Help</h1>
             <p>
               Welcome to Eliza Town! This is a virtual world where AI characters live, chat, and
@@ -132,15 +141,25 @@ export default function Home() {
           <button
             onClick={() => setGameStarted(true)}
             className="px-12 py-6 bg-white/10 hover:bg-white/20 border-4 border-white text-white text-4xl font-bold font-display rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+            data-testid="enter-world"
           >
              ENTER WORLD 
           </button>
 
           <div className="absolute bottom-10 flex gap-6">
-             <Button imgUrl={helpImg} onClick={() => setHelpModalOpen(true)}>
+             <Button
+              imgUrl={helpImg}
+              onClick={() => setHelpModalOpen(true)}
+              dataTestId="help-button"
+            >
               Help
             </Button>
-            <Button href="https://github.com/cayden970207/eliza-town" imgUrl={starImg}>
+            <Button
+              href="https://github.com/cayden970207/eliza-town"
+              imgUrl={starImg}
+              dataTestId="star-link"
+              ariaLabel="Star Eliza Town on GitHub"
+            >
               Star
             </Button>
             <MusicButton />
@@ -152,7 +171,7 @@ export default function Home() {
         </div>
       ) : (
         // GAME STATE
-        <div className="w-full h-screen flex flex-col">
+        <div className="w-full h-screen flex flex-col" data-testid="game-view">
           {/* Game area fills remaining space */}
           <div className="flex-grow relative overflow-hidden">
             <Game />
@@ -165,6 +184,7 @@ export default function Home() {
               imgUrl={charactersImg}
               onClick={() => setCreateCharacterOpen(true)}
               title="Upload a custom character sprite"
+              dataTestId="open-characters"
             >
               Characters
             </Button>
@@ -172,6 +192,7 @@ export default function Home() {
               imgUrl={newAgentImg}
               onClick={() => setCreateAgentOpen(true)}
               title="Create a new AI agent in this world"
+              dataTestId="open-create-agent"
             >
               New Agent
             </Button>
@@ -179,10 +200,11 @@ export default function Home() {
               imgUrl={agentsImg}
               onClick={() => setAgentListOpen(true)}
               title="Manage your custom agents"
+              dataTestId="open-agent-list"
             >
               Agents
             </Button>
-            <Button imgUrl={closeImg} onClick={() => setGameStarted(false)}>
+            <Button imgUrl={closeImg} onClick={() => setGameStarted(false)} dataTestId="exit-world">
               Exit
             </Button>
           </div>

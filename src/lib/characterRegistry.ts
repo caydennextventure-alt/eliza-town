@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { characters as builtInCharacters } from '../../data/characters';
 import { standard32x32 } from '../../data/spritesheets/standard32x32';
 import { SpritesheetData } from '../../data/spritesheets/types';

@@ -3,7 +3,7 @@ import ReactModal from 'react-modal';
 import { useConvex, useMutation, useQuery } from 'convex/react';
 import { ConvexError } from 'convex/values';
 import { toast } from 'react-toastify';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { waitForInput } from '../hooks/sendInput';
 import { useServerGame } from '../hooks/serverGame';
 import { CharacterDefinition, useCharacters } from '../lib/characterRegistry';
@@ -148,7 +148,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
       contentLabel="Agent List"
       ariaHideApp={false}
     >
-      <div className="space-y-4 font-dialog">
+      <div className="space-y-4 font-dialog" data-testid="agent-list-dialog">
         <div className="flex items-start justify-between gap-6">
           <div>
             <h2 className="text-3xl">My Agents</h2>
@@ -163,6 +163,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
           <button
             onClick={onClose}
             className="border border-white/30 px-3 py-1 text-xs hover:border-white"
+            data-testid="agent-list-close"
           >
             Close
           </button>
@@ -229,6 +230,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                           onClick={() => handleRemove(agent)}
                           disabled={isRemoving}
                           className="bg-red-500/80 hover:bg-red-500 px-3 py-1 text-xs font-bold border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                          data-testid={`agent-confirm-remove-${agent.agentId}`}
                         >
                           {isRemoving ? 'Removing...' : confirmLabel}
                         </button>
@@ -237,6 +239,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                           onClick={() => setConfirmingAgentId(null)}
                           disabled={isRemoving}
                           className="border border-white/30 px-3 py-1 text-xs hover:border-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          data-testid={`agent-cancel-remove-${agent.agentId}`}
                         >
                           Cancel
                         </button>
@@ -252,6 +255,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                             ? 'This agent is controlled by someone else.'
                             : 'Remove agent from world'
                         }
+                        data-testid={`agent-remove-${agent.agentId}`}
                       >
                         {removeLabel}
                       </button>
@@ -274,6 +278,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                   onCreateAgent();
                 }}
                 className="mt-3 border border-white/30 px-3 py-1 text-xs hover:border-white"
+                data-testid="agent-list-create-agent"
               >
                 Create Agent
               </button>
@@ -285,6 +290,7 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
           <button
             onClick={onClose}
             className="border border-white/30 px-4 py-2 text-sm hover:border-white"
+            data-testid="agent-list-done"
           >
             Done
           </button>

@@ -1,5 +1,5 @@
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import closeImg from '../../assets/close.svg';
 import { SelectElement } from './Player';
@@ -52,7 +52,10 @@ export default function PlayerDetails({
 
   if (!playerId) {
     return (
-      <div className="h-full text-xl flex text-center items-center p-4">
+      <div
+        className="h-full text-xl flex text-center items-center p-4"
+        data-testid="player-details-empty"
+      >
         Click on an agent on the map to see chat history.
       </div>
     );
@@ -129,7 +132,7 @@ export default function PlayerDetails({
 
   const pendingSuffix = (s: string) => '';
   return (
-    <div className="flex h-full flex-col gap-4 min-h-0">
+    <div className="flex h-full flex-col gap-4 min-h-0" data-testid="player-details">
       <div className="flex gap-4">
         <div className="box flex-grow">
           <h2 className="bg-brown-700 p-2 font-display text-4xl tracking-wider shadow-solid text-center">
@@ -139,6 +142,7 @@ export default function PlayerDetails({
         <a
           className="button text-white shadow-solid text-2xl cursor-pointer pointer-events-auto"
           onClick={() => setSelectedElement(undefined)}
+          data-testid="close-player-details"
         >
           <h2 className="h-full bg-clay-700">
             <img className="w-5 h-5" src={closeImg} />
@@ -152,6 +156,7 @@ export default function PlayerDetails({
             pendingSuffix('startConversation')
           }
           onClick={onStartConversation}
+          data-testid="start-conversation"
         >
           <div className="h-full bg-clay-700 text-center">
             <span>Start conversation</span>
@@ -179,6 +184,7 @@ export default function PlayerDetails({
             pendingSuffix('leaveConversation')
           }
           onClick={onLeaveConversation}
+          data-testid="leave-conversation"
         >
           <div className="h-full bg-clay-700 text-center">
             <span>Leave conversation</span>
@@ -193,6 +199,7 @@ export default function PlayerDetails({
               pendingSuffix('acceptInvite')
             }
             onClick={onAcceptInvite}
+            data-testid="accept-invite"
           >
             <div className="h-full bg-clay-700 text-center">
               <span>Accept</span>
@@ -204,6 +211,7 @@ export default function PlayerDetails({
               pendingSuffix('rejectInvite')
             }
             onClick={onRejectInvite}
+            data-testid="reject-invite"
           >
             <div className="h-full bg-clay-700 text-center">
               <span>Reject</span>

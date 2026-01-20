@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { Doc, Id } from '../../convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { MessageInput } from './MessageInput';
 import { Player } from '../../convex/aiTown/player';
 import { Conversation } from '../../convex/aiTown/conversation';
@@ -140,7 +140,7 @@ export function Messages({
   const nodes = [...messageNodes, ...membershipNodes];
   nodes.sort((a, b) => a.time - b.time);
   return (
-    <div className="chats h-full flex flex-col">
+    <div className="chats h-full flex flex-col" data-testid="messages">
       <div ref={scrollViewRef} className="bg-brown-200 text-black p-2 flex-1 overflow-y-auto">
         {nodes.length > 0 && nodes.map((n) => n.node)}
         {currentlyTyping && currentlyTyping.playerId !== humanPlayerId && (

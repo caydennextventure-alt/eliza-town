@@ -7,6 +7,8 @@ export default function Button(props: {
   imgUrl: string;
   onClick?: MouseEventHandler;
   title?: string;
+  dataTestId?: string;
+  ariaLabel?: string;
   children: ReactNode;
 }) {
   return (
@@ -15,6 +17,8 @@ export default function Button(props: {
       href={props.href}
       title={props.title}
       onClick={props.onClick}
+      data-testid={props.dataTestId}
+      aria-label={props.ariaLabel}
     >
       <div className="inline-block bg-clay-700">
         <span>

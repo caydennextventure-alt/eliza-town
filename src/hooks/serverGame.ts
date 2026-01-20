@@ -6,7 +6,7 @@ import { WorldMap } from '../../convex/aiTown/worldMap.ts';
 import { Id } from '../../convex/_generated/dataModel';
 import { useMemo } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from 'convex/_generated/api';
 import { parseMap } from '../../convex/util/object.ts';
 
 export type ServerGame = {
