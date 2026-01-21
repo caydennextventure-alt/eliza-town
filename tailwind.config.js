@@ -1,5 +1,7 @@
+import forms from '@tailwindcss/forms';
+
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     fontFamily: {
@@ -27,5 +29,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require('@tailwindcss/forms')],
+  plugins: [forms],
 };
