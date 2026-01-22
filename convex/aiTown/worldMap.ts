@@ -15,6 +15,15 @@ const animatedSprite = {
 };
 export type AnimatedSprite = ObjectType<typeof animatedSprite>;
 
+const placedObject = {
+  id: v.string(),
+  objectId: v.string(),
+  col: v.number(),
+  row: v.number(),
+  rotation: v.optional(v.number()),
+};
+export type PlacedObject = ObjectType<typeof placedObject>;
+
 export const serializedWorldMap = {
   width: v.number(),
   height: v.number(),
@@ -28,6 +37,7 @@ export const serializedWorldMap = {
   tileDim: v.number(),
   bgTiles: v.array(v.array(v.array(v.number()))),
   objectTiles: v.array(tileLayer),
+  placedObjects: v.optional(v.array(v.object(placedObject))),
   animatedSprites: v.array(v.object(animatedSprite)),
 };
 export type SerializedWorldMap = ObjectType<typeof serializedWorldMap>;
@@ -44,6 +54,7 @@ export class WorldMap {
 
   bgTiles: TileLayer[];
   objectTiles: TileLayer[];
+  placedObjects: PlacedObject[];
   animatedSprites: AnimatedSprite[];
 
   constructor(serialized: SerializedWorldMap) {
@@ -55,6 +66,7 @@ export class WorldMap {
     this.tileDim = serialized.tileDim;
     this.bgTiles = serialized.bgTiles;
     this.objectTiles = serialized.objectTiles;
+    this.placedObjects = serialized.placedObjects ?? [];
     this.animatedSprites = serialized.animatedSprites;
   }
 
@@ -68,6 +80,7 @@ export class WorldMap {
       tileDim: this.tileDim,
       bgTiles: this.bgTiles,
       objectTiles: this.objectTiles,
+      placedObjects: this.placedObjects,
       animatedSprites: this.animatedSprites,
     };
   }

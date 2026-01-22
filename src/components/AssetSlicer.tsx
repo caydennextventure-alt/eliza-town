@@ -19,7 +19,7 @@ interface AssetSlicerProps {
 export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [slices, setSlices] = useState<Slice[]>([]);
-  const [mode, setMode] = useState<'smart' | 'grid'>('smart');
+  const [mode, setMode] = useState<'smart' | 'grid' | 'manual'>('smart');
   
   // View Params
   const [zoom, setZoom] = useState(1);
@@ -39,6 +39,13 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [manualSelection, setManualSelection] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    isDragging: boolean;
+  } | null>(null);
 
   // Load Image
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,25 +108,34 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
       ctx.fillRect(slice.x, slice.y, slice.w, slice.h);
     });
 
-  }, [image, slices]);
+    if (manualSelection?.isDragging) {
+      const x = Math.min(manualSelection.startX, manualSelection.endX);
+      const y = Math.min(manualSelection.startY, manualSelection.endY);
+      const w = Math.abs(manualSelection.endX - manualSelection.startX);
+      const h = Math.abs(manualSelection.endY - manualSelection.startY);
+      ctx.strokeStyle = '#4aa3ff';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 2]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+    }
+  }, [image, slices, manualSelection]);
+
+  const getCanvasPoint = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = rect.width / canvasRef.current.width;
+    const scaleY = rect.height / canvasRef.current.height;
+    const x = (event.clientX - rect.left) / scaleX;
+    const y = (event.clientY - rect.top) / scaleY;
+    return { x, y };
+  };
 
   // Handle Canvas Click for Selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
      if (!canvasRef.current || !image) return;
-     
-     // Get click coordinates relative to the canvas element (undistorted by CSS scale)
-     const rect = canvasRef.current.getBoundingClientRect();
-     // The raw client X/Y in the viewport
-     const clientX = e.clientX;
-     const clientY = e.clientY;
-     
-     // Calculate scale factor between displayed size and actual canvas size
-     const scaleX = rect.width / canvasRef.current.width;
-     const scaleY = rect.height / canvasRef.current.height;
-
-     // Calculate pixel coordinates in the original image
-     const x = (clientX - rect.left) / scaleX;
-     const y = (clientY - rect.top) / scaleY;
+     if (mode === 'manual') return;
+     const { x, y } = getCanvasPoint(e);
 
      // Toggle isSelected for any slice containing this point
      const newSlices = slices.map(slice => {
@@ -129,6 +145,129 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
          return slice;
      });
      setSlices(newSlices);
+  };
+
+  const handleCanvasPointerDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!image || mode !== 'manual') return;
+    const { x, y } = getCanvasPoint(e);
+    setManualSelection({ startX: x, startY: y, endX: x, endY: y, isDragging: true });
+  };
+
+  const handleCanvasPointerMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!manualSelection?.isDragging || mode !== 'manual') return;
+    const { x, y } = getCanvasPoint(e);
+    setManualSelection((prev) =>
+      prev ? { ...prev, endX: x, endY: y } : prev,
+    );
+  };
+
+  const handleCanvasPointerUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!manualSelection?.isDragging || mode !== 'manual' || !image) return;
+    const { x, y } = getCanvasPoint(e);
+    const startX = manualSelection.startX;
+    const startY = manualSelection.startY;
+    const endX = x;
+    const endY = y;
+    const minX = Math.max(0, Math.min(startX, endX));
+    const minY = Math.max(0, Math.min(startY, endY));
+    const maxX = Math.min(image.width, Math.max(startX, endX));
+    const maxY = Math.min(image.height, Math.max(startY, endY));
+    const w = Math.round(maxX - minX);
+    const h = Math.round(maxY - minY);
+
+    if (!canvasRef.current) {
+      setManualSelection(null);
+      return;
+    }
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) {
+      setManualSelection(null);
+      return;
+    }
+
+    const imgData = ctx.getImageData(0, 0, image.width, image.height);
+    const data = imgData.data;
+    const width = image.width;
+    const height = image.height;
+
+    const rectCenterX = minX + w / 2;
+    const rectCenterY = minY + h / 2;
+
+    let nearest: { x: number; y: number } | null = null;
+    let nearestDist = Number.POSITIVE_INFINITY;
+
+    for (let yy = Math.floor(minY); yy < Math.ceil(maxY); yy += 1) {
+      for (let xx = Math.floor(minX); xx < Math.ceil(maxX); xx += 1) {
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+        const idx = (yy * width + xx) * 4 + 3;
+        if (data[idx] > threshold) {
+          const dx = xx - rectCenterX;
+          const dy = yy - rectCenterY;
+          const dist = dx * dx + dy * dy;
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = { x: xx, y: yy };
+          }
+        }
+      }
+    }
+
+    const addSlice = (sliceX: number, sliceY: number, sliceW: number, sliceH: number) => {
+      if (sliceW < 1 || sliceH < 1) return;
+      setSlices((prev) => [
+        ...prev,
+        { x: sliceX, y: sliceY, w: sliceW, h: sliceH, id: `${sliceX}-${sliceY}-${Date.now()}`, isSelected: true },
+      ]);
+    };
+
+    if (!nearest || w < 1 || h < 1) {
+      addSlice(Math.round(minX), Math.round(minY), w, h);
+      setManualSelection(null);
+      return;
+    }
+
+    const visited = new Uint8Array(width * height);
+    const stack: Array<[number, number]> = [[nearest.x, nearest.y]];
+    let minBX = nearest.x;
+    let maxBX = nearest.x;
+    let minBY = nearest.y;
+    let maxBY = nearest.y;
+    visited[nearest.y * width + nearest.x] = 1;
+
+    while (stack.length > 0) {
+      const [cx, cy] = stack.pop()!;
+      if (cx < minBX) minBX = cx;
+      if (cx > maxBX) maxBX = cx;
+      if (cy < minBY) minBY = cy;
+      if (cy > maxBY) maxBY = cy;
+
+      const neighbors = [
+        [cx + 1, cy],
+        [cx - 1, cy],
+        [cx, cy + 1],
+        [cx, cy - 1],
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const nIdx = ny * width + nx;
+        if (visited[nIdx]) continue;
+        const alpha = data[nIdx * 4 + 3];
+        if (alpha > threshold) {
+          visited[nIdx] = 1;
+          stack.push([nx, ny]);
+        }
+      }
+    }
+
+    const baseW = maxBX - minBX + 1;
+    const baseH = maxBY - minBY + 1;
+    const px = Math.max(0, minBX - padding);
+    const py = Math.max(0, minBY - padding);
+    const pw = Math.min(width - px, baseW + padding * 2);
+    const ph = Math.min(height - py, baseH + padding * 2);
+
+    addSlice(px, py, pw, ph);
+    setManualSelection(null);
   };
 
   // Algorithms
@@ -341,11 +480,19 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
                                 >
                                     Grid Split
                                 </button>
+                                <button
+                                    onClick={() => setMode('manual')}
+                                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${mode === 'manual' ? 'bg-[#444] text-white' : 'text-[#666] hover:text-[#999]'}`}
+                                >
+                                    Manual
+                                </button>
                             </div>
                             <p className="text-[10px] text-[#777] leading-tight">
                                 {mode === 'smart' 
                                     ? "Automatically finds object boundaries using pixel transparency (Flood Fill)."
-                                    : "Slices image into a fixed-size grid. Ideal for tilesets."}
+                                    : mode === 'grid'
+                                      ? "Slices image into a fixed-size grid. Ideal for tilesets."
+                                      : "Draw rectangles directly on the image to add slices."}
                             </p>
                         </div>
 
@@ -376,7 +523,7 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
                                     <p className="text-[10px] text-[#666]">Add extra space around cropped items.</p>
                                 </div>
                             </div>
-                        ) : (
+                        ) : mode === 'grid' ? (
                              <div className="space-y-3">
                                 <div className="flex gap-2">
                                     <div className="flex-1 space-y-1">
@@ -400,6 +547,12 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
                                     <input type="number" value={gap} onChange={e => setGap(Number(e.target.value))} className="w-full bg-[#111] text-white px-2 py-1 rounded border border-[#444] text-xs" />
                                 </div>
                                 <p className="text-[10px] text-[#666]">Adjust grid size and start position to align with your tileset.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <p className="text-[10px] text-[#777] leading-tight">
+                                    Drag on the image to create a slice. Click existing slices to toggle selection.
+                                </p>
                             </div>
                         )}
                         
@@ -456,7 +609,11 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
                     <canvas 
                         ref={canvasRef} 
                         onClick={handleCanvasClick}
-                        className="shadow-2xl border border-[#333] cursor-pointer transition-transform duration-200"
+                        onMouseDown={handleCanvasPointerDown}
+                        onMouseMove={handleCanvasPointerMove}
+                        onMouseUp={handleCanvasPointerUp}
+                        onMouseLeave={() => mode === 'manual' && setManualSelection(null)}
+                        className={`shadow-2xl border border-[#333] transition-transform duration-200 ${mode === 'manual' ? 'cursor-crosshair' : 'cursor-pointer'}`}
                         style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }} 
                     />
                 )}
@@ -471,4 +628,3 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
     </div>
   );
 };
-

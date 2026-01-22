@@ -122,12 +122,24 @@ type PlacedObject = {
   objectId: string;
   col: number;
   row: number;
+  rotation?: ObjectRotation;
 };
 
 type EditorSnapshot = {
   bgLayers: number[][][];
   collisionLayer: number[][];
   placedObjects: PlacedObject[];
+};
+
+type SavedMapPayload = {
+  version: number;
+  mapWidth: number;
+  mapHeight: number;
+  tileset: TilesetConfig;
+  bgLayers: number[][][];
+  collisionLayer: number[][];
+  placedObjects: PlacedObject[];
+  animatedSprites: MapAnimatedSprite[];
 };
 
 type AutoStampOptions = {
@@ -137,6 +149,8 @@ type AutoStampOptions = {
   maxStamps: number;
   groundCoverage: number;
 };
+
+type ObjectRotation = 0 | 90 | 180 | 270;
 
 const CATEGORY_FILTERS: Array<{ id: TileCategoryFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -165,6 +179,8 @@ const CATEGORY_STORAGE_KEY = 'ai-town.tilesetCategories.v1';
 const STAMP_STORAGE_KEY = 'ai-town.tilesetStamps.v1';
 const OBJECT_STORAGE_KEY = 'ai-town.tilesetObjects.v1';
 const AUTO_STAMP_STORAGE_KEY = 'ai-town.tilesetAutoStamps.v1';
+const MAP_SAVE_STORAGE_KEY = 'ai-town.mapEditor.save.v1';
+const MAP_SAVE_VERSION = 1;
 const AUTO_STAMP_LIMIT = 12;
 const STAMP_PREVIEW_MAX_SIZE = 64;
 const HISTORY_LIMIT = 100;
@@ -188,6 +204,22 @@ const createBlankLayers = (count: number, width: number, height: number) =>
 const cloneLayer = (layer: number[][]) => layer.map((column) => [...column]);
 const cloneLayers = (layers: number[][][]) => layers.map((layer) => layer.map((column) => [...column]));
 const clonePlacedObjects = (objects: PlacedObject[]) => objects.map((obj) => ({ ...obj }));
+
+const normalizeRotation = (rotation: number): ObjectRotation => {
+  const normalized = ((rotation % 360) + 360) % 360;
+  if (normalized === 90 || normalized === 180 || normalized === 270) return normalized;
+  return 0;
+};
+
+const getRotatedSize = (width: number, height: number, rotation: ObjectRotation) =>
+  rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
+
+const getRotationTransform = (width: number, height: number, rotation: ObjectRotation) => {
+  if (rotation === 90) return `translate(0px, ${width}px) rotate(90deg)`;
+  if (rotation === 180) return `translate(${width}px, ${height}px) rotate(180deg)`;
+  if (rotation === 270) return `translate(${height}px, 0px) rotate(270deg)`;
+  return 'none';
+};
 
 const DEFAULT_TILESET: TilesetConfig = {
   id: 'starter',
@@ -287,12 +319,14 @@ const MapEditor = () => {
   const [tileset, setTileset] = useState<TilesetConfig>(() => DEFAULT_TILESET);
   const [tilesetOptions, setTilesetOptions] = useState<TilesetConfig[]>([DEFAULT_TILESET]);
   const [assetPacks, setAssetPacks] = useState<AssetPack[]>([]);
+  const [assetReloadToken, setAssetReloadToken] = useState(0);
   const [packLoadError, setPackLoadError] = useState<string | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
   const [showCollision, setShowCollision] = useState(true); // Toggle collision overlay
   const [showAnimatedSprites, setShowAnimatedSprites] = useState(true);
   const [showObjects, setShowObjects] = useState(true); // Toggle placed objects visibility
   const [canvasScale, setCanvasScale] = useState(0.7); // Zoom level (0.3 - 2.0)
+  const [isZoomCollapsed, setIsZoomCollapsed] = useState(false);
   const [tilesetLoaded, setTilesetLoaded] = useState(false);
   const [activeTool, setActiveTool] = useState<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object'>('brush');
   const [activeLayerIndex, setActiveLayerIndex] = useState(0);
@@ -314,12 +348,14 @@ const MapEditor = () => {
   const canRedo = history.future.length > 0;
   const pendingHistoryRef = useRef<EditorSnapshot | null>(null);
   const historyDirtyRef = useRef(false);
+  const groundOverlayRef = useRef(false);
   const [recentTiles, setRecentTiles] = useState<number[]>([]);
   const [recentObjects, setRecentObjects] = useState<string[]>([]);
   const [animatedSprites, setAnimatedSprites] = useState<MapAnimatedSprite[]>(() => INITIAL_ANIMATED_SPRITES);
   const [tilesetLoadError, setTilesetLoadError] = useState<string | null>(null);
   const [transparentTiles, setTransparentTiles] = useState<boolean[]>([]);
   const [hiddenTiles, setHiddenTiles] = useState<boolean[]>([]);
+  const [activeObjectRotation, setActiveObjectRotation] = useState<ObjectRotation>(0);
   const [tilesetCategories, setTilesetCategories] = useState<Record<string, Record<number, TileCategory>>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -417,7 +453,7 @@ const MapEditor = () => {
         let categoryObjects: PackObject[] = [];
         try {
           const assetsUrl = resolveAssetPath(ASSETS_JSON_PATH);
-          const assetsResponse = await fetch(assetsUrl);
+          const assetsResponse = await fetch(assetsUrl, { cache: 'no-store' });
           if (assetsResponse.ok) {
             const assetsData = await assetsResponse.json();
             if (Array.isArray(assetsData?.objects)) {
@@ -465,7 +501,7 @@ const MapEditor = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [assetReloadToken]);
 
   useEffect(() => {
     const nextOptions = assetPacks
@@ -511,6 +547,10 @@ const MapEditor = () => {
     () => assetPacks.filter((pack) => (pack.objects?.length ?? 0) > 0),
     [assetPacks],
   );
+
+  const reloadAssets = useCallback(() => {
+    setAssetReloadToken((prev) => prev + 1);
+  }, []);
 
   // Pack switching effect removed - we now load all objects from all packs
 
@@ -668,7 +708,10 @@ const MapEditor = () => {
 
         // For terrain/paths, always use 1x1 tile grid regardless of pixel size
         // This ensures 64x64 terrain tiles align to single grid cells
-        const isGroundTile = source.category === 'terrain' || source.category === 'paths';
+        const isGroundTile =
+          source.category === 'terrain' ||
+          source.category === 'paths' ||
+          source.category === 'tile-object';
         const tileWidth = isGroundTile ? 1 : Math.max(1, Math.ceil(pixelWidth / tileSize));
         const tileHeight = isGroundTile ? 1 : Math.max(1, Math.ceil(pixelHeight / tileSize));
 
@@ -699,11 +742,11 @@ const MapEditor = () => {
     [builtinObjectsForSet, userObjectsForSet],
   );
   const activeObject = tilesetObjectsForSet.find((obj) => obj.id === activeObjectId) ?? null;
-  const activeToolLabel =
+    const activeToolLabel =
     activeTool === 'stamp'
       ? `Stamp${activeStamp ? `: ${activeStamp.name}` : ''}${stampRotation ? ` (${stampRotation}deg)` : ''}`
       : activeTool === 'object'
-      ? `Object${activeObject ? `: ${activeObject.name}` : ''}`
+      ? `Object${activeObject ? `: ${activeObject.name}` : ''}${activeObjectRotation ? ` (${activeObjectRotation}°)` : ''}`
       : `${activeTool.charAt(0).toUpperCase()}${activeTool.slice(1)}`;
 
   const objectsById = useMemo(() => {
@@ -1175,10 +1218,67 @@ const MapEditor = () => {
     );
   }, [hoverInfo, transformedStampSize]);
 
+  function getPlacementRotation(placement: { rotation?: ObjectRotation }) {
+    return normalizeRotation(placement.rotation ?? 0);
+  }
+
+  function getObjectTileSize(object: ObjectDefinition, rotation: ObjectRotation = 0) {
+    const rotated = rotation === 90 || rotation === 270;
+    return {
+      tileWidth: rotated ? object.tileHeight : object.tileWidth,
+      tileHeight: rotated ? object.tileWidth : object.tileHeight,
+    };
+  }
+
+  function getObjectAnchorOffset(object: ObjectDefinition, rotation: ObjectRotation = 0) {
+    const { tileHeight } = getObjectTileSize(object, rotation);
+    if (object.anchor === 'bottom-left') {
+      return { x: 0, y: tileHeight - 1 };
+    }
+    return { x: 0, y: 0 };
+  }
+
+  function getObjectTileBounds(
+    object: ObjectDefinition,
+    placement: { col: number; row: number; rotation?: ObjectRotation },
+  ) {
+    const rotation = getPlacementRotation(placement);
+    const { tileWidth, tileHeight } = getObjectTileSize(object, rotation);
+    const anchor = getObjectAnchorOffset(object, rotation);
+    const startCol = placement.col - anchor.x;
+    const startRow = placement.row - anchor.y;
+    return {
+      startCol,
+      startRow,
+      endCol: startCol + tileWidth - 1,
+      endRow: startRow + tileHeight - 1,
+    };
+  }
+
+  function getObjectPixelBounds(
+    object: ObjectDefinition,
+    placement: { col: number; row: number; rotation?: ObjectRotation },
+  ) {
+    const rotation = getPlacementRotation(placement);
+    const { tileWidth, tileHeight } = getObjectTileSize(object, rotation);
+    const bounds = getObjectTileBounds(object, placement);
+    return {
+      ...bounds,
+      left: bounds.startCol * tileSize,
+      top: bounds.startRow * tileSize,
+      width: tileWidth * tileSize,
+      height: tileHeight * tileSize,
+    };
+  }
+
   const objectPreviewBounds = useMemo(() => {
     if (!hoverInfo || !activeObject) return null;
-    return getObjectPixelBounds(activeObject, { col: hoverInfo.col, row: hoverInfo.row });
-  }, [activeObject, hoverInfo, tileSize]);
+    return getObjectPixelBounds(activeObject, {
+      col: hoverInfo.col,
+      row: hoverInfo.row,
+      rotation: activeObjectRotation,
+    });
+  }, [activeObject, hoverInfo, tileSize, activeObjectRotation]);
 
   const objectPreviewValid = useMemo(() => {
     if (!objectPreviewBounds) return true;
@@ -1199,7 +1299,7 @@ const MapEditor = () => {
       if (!def) return 1;
       const category = (def as any).category;
       // Ground layer objects (render first/below)
-      if (category === 'terrain' || category === 'paths') return 0;
+      if (category === 'terrain' || category === 'paths' || category === 'tile-object') return 0;
       // Standing objects (render after/above)
       return 1;
     };
@@ -1215,8 +1315,8 @@ const MapEditor = () => {
       if (aZLayer !== bZLayer) return aZLayer - bZLayer;
       
       // Then sort by Y position (endRow)
-      const aBounds = getObjectTileBounds(aDef, a);
-      const bBounds = getObjectTileBounds(bDef, b);
+      const aBounds = getObjectTileBounds(aDef, { ...a, rotation: getPlacementRotation(a) });
+      const bBounds = getObjectTileBounds(bDef, { ...b, rotation: getPlacementRotation(b) });
       if (aBounds.endRow !== bBounds.endRow) return aBounds.endRow - bBounds.endRow;
       return aBounds.startCol - bBounds.startCol;
     });
@@ -1265,36 +1365,6 @@ const MapEditor = () => {
     }
     return `placed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   };
-
-  function getObjectAnchorOffset(object: ObjectDefinition) {
-    if (object.anchor === 'bottom-left') {
-      return { x: 0, y: object.tileHeight - 1 };
-    }
-    return { x: 0, y: 0 };
-  }
-
-  function getObjectTileBounds(object: ObjectDefinition, placement: { col: number; row: number }) {
-    const anchor = getObjectAnchorOffset(object);
-    const startCol = placement.col - anchor.x;
-    const startRow = placement.row - anchor.y;
-    return {
-      startCol,
-      startRow,
-      endCol: startCol + object.tileWidth - 1,
-      endRow: startRow + object.tileHeight - 1,
-    };
-  }
-
-  function getObjectPixelBounds(object: ObjectDefinition, placement: { col: number; row: number }) {
-    const bounds = getObjectTileBounds(object, placement);
-    return {
-      ...bounds,
-      left: bounds.startCol * tileSize,
-      top: bounds.startRow * tileSize,
-      width: object.tileWidth * tileSize,
-      height: object.tileHeight * tileSize,
-    };
-  }
 
   const saveStampFromSelection = () => {
     if (!selectionBounds) return;
@@ -1784,7 +1854,7 @@ const MapEditor = () => {
 
   const placeObjectAt = (row: number, col: number) => {
     if (!activeObject) return;
-    const bounds = getObjectTileBounds(activeObject, { col, row });
+    const bounds = getObjectTileBounds(activeObject, { col, row, rotation: activeObjectRotation });
     if (
       bounds.startCol < 0 ||
       bounds.startRow < 0 ||
@@ -1794,17 +1864,25 @@ const MapEditor = () => {
       return;
     }
     const isGroundObject =
-      (activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths';
+      (activeObject as any).category === 'terrain' ||
+      (activeObject as any).category === 'paths' ||
+      (activeObject as any).category === 'tile-object';
     setPlacedObjects((prev) => {
       if (isGroundObject) {
+        const allowOverlay = groundOverlayRef.current;
         const hasSame = prev.some((placement) => placement.col === col && placement.row === row && placement.objectId === activeObject.id);
         if (hasSame) return prev;
-        const filtered = prev.filter((placement) => {
-          if (placement.col !== col || placement.row !== row) return true;
-          const objDef = objectsById.get(placement.objectId);
-          const isGround = objDef?.category === 'terrain' || objDef?.category === 'paths';
-          return !isGround;
-        });
+        const filtered = allowOverlay
+          ? prev
+          : prev.filter((placement) => {
+              if (placement.col !== col || placement.row !== row) return true;
+              const objDef = objectsById.get(placement.objectId);
+              const isGround =
+                objDef?.category === 'terrain' ||
+                objDef?.category === 'paths' ||
+                objDef?.category === 'tile-object';
+              return !isGround;
+            });
         markHistoryDirty();
         return [
           ...filtered,
@@ -1813,6 +1891,7 @@ const MapEditor = () => {
             objectId: activeObject.id,
             col,
             row,
+            rotation: activeObjectRotation,
           },
         ];
       }
@@ -1824,6 +1903,7 @@ const MapEditor = () => {
           objectId: activeObject.id,
           col,
           row,
+          rotation: activeObjectRotation,
         },
       ];
     });
@@ -1837,7 +1917,7 @@ const MapEditor = () => {
         const placement = next[i];
         const objectDef = objectsById.get(placement.objectId);
         if (!objectDef) continue;
-        const bounds = getObjectTileBounds(objectDef, placement);
+        const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
         if (col >= bounds.startCol && col <= bounds.endCol && row >= bounds.startRow && row <= bounds.endRow) {
           markHistoryDirty();
           next.splice(i, 1);
@@ -1914,7 +1994,10 @@ const MapEditor = () => {
     const isGroundObject =
       tool === 'object' &&
       activeObject &&
-      ((activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths');
+      ((activeObject as any).category === 'terrain' ||
+        (activeObject as any).category === 'paths' ||
+        (activeObject as any).category === 'tile-object');
+    groundOverlayRef.current = Boolean(isGroundObject && event.shiftKey);
     dragToolRef.current = tool;
     setIsPointerDown(true);
     applyToolAt(row, col, tool);
@@ -1966,6 +2049,7 @@ const MapEditor = () => {
     const handlePointerUp = () => {
       setIsPointerDown(false);
       dragToolRef.current = null;
+      groundOverlayRef.current = false;
       setIsStampSelecting(false);
       setIsPaletteSelecting(false);
       setIsObjectPaletteSelecting(false);
@@ -1976,6 +2060,73 @@ const MapEditor = () => {
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [commitHistoryCapture]);
+
+  const buildSavePayload = useCallback(
+    (): SavedMapPayload => ({
+      version: MAP_SAVE_VERSION,
+      mapWidth: MAP_WIDTH,
+      mapHeight: MAP_HEIGHT,
+      tileset,
+      bgLayers: cloneLayers(bgLayers),
+      collisionLayer: cloneLayer(collisionLayer),
+      placedObjects: clonePlacedObjects(placedObjects),
+      animatedSprites: [...animatedSprites],
+    }),
+    [animatedSprites, bgLayers, collisionLayer, placedObjects, tileset],
+  );
+
+  const applySavedPayload = useCallback((payload: SavedMapPayload) => {
+    if (!payload) return;
+    if (payload.mapWidth !== MAP_WIDTH || payload.mapHeight !== MAP_HEIGHT) {
+      alert(
+        `Saved map size ${payload.mapWidth}×${payload.mapHeight} does not match current ${MAP_WIDTH}×${MAP_HEIGHT}.`,
+      );
+      return;
+    }
+    setTileset(payload.tileset ?? DEFAULT_TILESET);
+    setBgLayers(payload.bgLayers ?? createBlankLayers(DEFAULT_LAYER_COUNT, MAP_WIDTH, MAP_HEIGHT));
+    setCollisionLayer(payload.collisionLayer ?? createBlankLayer(MAP_WIDTH, MAP_HEIGHT));
+    setPlacedObjects(payload.placedObjects ?? []);
+    setAnimatedSprites(payload.animatedSprites ?? []);
+    setHistory({ past: [], future: [] });
+    pendingHistoryRef.current = null;
+    historyDirtyRef.current = false;
+    setActiveObjectRotation(0);
+  }, []);
+
+  const saveMapToLocal = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const payload = buildSavePayload();
+      window.localStorage.setItem(MAP_SAVE_STORAGE_KEY, JSON.stringify(payload));
+      alert('Map saved locally.');
+    } catch (error) {
+      console.error('Failed to save map:', error);
+      alert('Failed to save map.');
+    }
+  }, [buildSavePayload]);
+
+  const loadMapFromLocal = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(MAP_SAVE_STORAGE_KEY);
+    if (!raw) {
+      alert('No saved map found.');
+      return;
+    }
+    const shouldLoad = window.confirm('Load saved map? Unsaved changes will be lost.');
+    if (!shouldLoad) return;
+    try {
+      const parsed = JSON.parse(raw) as SavedMapPayload;
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid save data');
+      }
+      applySavedPayload(parsed);
+      alert('Map loaded.');
+    } catch (error) {
+      console.error('Failed to load map:', error);
+      alert('Failed to load map.');
+    }
+  }, [applySavedPayload]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1995,26 +2146,26 @@ const MapEditor = () => {
         if (!canRedo) return;
         event.preventDefault();
         redo();
+        return;
+      }
+      if (key === 'r' && activeMode === 'objects' && activeObject) {
+        const isGround =
+          activeObject.category === 'terrain' ||
+          activeObject.category === 'paths' ||
+          activeObject.category === 'tile-object';
+        if (isGround) return;
+        event.preventDefault();
+        setActiveObjectRotation((prev) => normalizeRotation(prev + (event.shiftKey ? -90 : 90)));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [activeMode, activeObject, canRedo, canUndo, redo, undo]);
 
   // Export map data
   const exportMap = () => {
-    // Generate object map from placements
-    const objectMapLayer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
-    // This is a simplified reconstruction; ideally we'd track the full object layer state
-    // But since placedObjects tracks explicit objects, we might want to rely on that.
-    // However, the engine expects `objmap` to be a dense int array for collision/rendering if used that way.
-    // In gentle.js, `objmap` is [ [row...] ].
-    // Let's assume we just want to export the collision layer as the object map for now,
-    // or if we have distinct object layers, export those.
-    // The current state has `collisionLayer`.
-    
     // Construct valid JS content matching data/gentle.js format
     const jsContent = `
 export const tilesetpath = "${tilesetUrl}";
@@ -2027,6 +2178,8 @@ export const tilesetpxh = ${tileset.pixelHeight};
 export const bgtiles = ${JSON.stringify(bgLayers)};
 
 export const objmap = ${JSON.stringify([collisionLayer])};
+
+export const placedobjects = ${JSON.stringify(placedObjects)};
 
 export const animatedsprites = ${JSON.stringify(animatedSprites)};
 
@@ -2338,24 +2491,25 @@ export const mapheight = ${MAP_HEIGHT};
       const contentHeight = mapPixelHeight * canvasScale;
 
       return (
-        <div 
-          ref={canvasContainerRef}
-          className="w-full h-full overflow-auto custom-scrollbar bg-[#a89070] relative"
-        >
-          {/* Main Map Content - Wrapped to fix scroll bounds for scaled content */}
-          <div style={{ width: contentWidth, height: contentHeight, position: 'relative', margin: 'auto' }}>
-            <div
-                className="relative origin-top-left"
-                style={{ 
-                    width: mapPixelWidth, 
-                    height: mapPixelHeight,
-                    transform: `scale(${canvasScale})`,
-                    transformOrigin: 'top left',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                }}
-            >
+        <div className="w-full h-full relative bg-[#a89070]">
+          <div
+            ref={canvasContainerRef}
+            className="absolute inset-0 overflow-auto custom-scrollbar"
+          >
+            {/* Main Map Content - Wrapped to fix scroll bounds for scaled content */}
+            <div style={{ width: contentWidth, height: contentHeight, position: 'relative', margin: 'auto' }}>
+              <div
+                  className="relative origin-top-left"
+                  style={{ 
+                      width: mapPixelWidth, 
+                      height: mapPixelHeight,
+                      transform: `scale(${canvasScale})`,
+                      transformOrigin: 'top left',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                  }}
+              >
              {/* Base Layers */}
              <div className="absolute inset-0">
                <div className="absolute inset-0 bg-[#d4c4a0] shadow-xl rounded" />
@@ -2419,23 +2573,28 @@ export const mapheight = ${MAP_HEIGHT};
                   {placedObjectsSorted.map((placement) => {
                     const objectDef = objectsById.get(placement.objectId);
                     if (!objectDef) return null;
-                    const bounds = getObjectPixelBounds(objectDef, placement);
+                    const placementRotation = getPlacementRotation(placement);
+                    const bounds = getObjectPixelBounds(objectDef, { ...placement, rotation: placementRotation });
                     const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
 
                     // For terrain/paths: force display to grid size (32px) regardless of source image size
-                    const isGroundTile = (objectDef as any).category === 'terrain' || (objectDef as any).category === 'paths';
-                    const objectPixelWidth = isGroundTile
+                    const isGroundTile =
+                      (objectDef as any).category === 'terrain' ||
+                      (objectDef as any).category === 'paths' ||
+                      (objectDef as any).category === 'tile-object';
+                    const baseWidth = isGroundTile
                       ? tileSize
                       : (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * ((objectDef as any).scale ?? 1.0);
-                    const objectPixelHeight = isGroundTile
+                    const baseHeight = isGroundTile
                       ? tileSize
                       : (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * ((objectDef as any).scale ?? 1.0);
+                    const rotatedSize = getRotatedSize(baseWidth, baseHeight, placementRotation);
 
                     // For ground tiles, no offset needed since they align to grid
                     const objectOffsetY = isGroundTile
                       ? 0
                       : (objectDef.imagePath && objectDef.anchor === 'bottom-left'
-                        ? Math.max(0, bounds.height - objectPixelHeight)
+                        ? Math.max(0, bounds.height - rotatedSize.height)
                         : 0);
                     return (
                       <div
@@ -2444,19 +2603,29 @@ export const mapheight = ${MAP_HEIGHT};
                         style={{
                           left: bounds.left,
                           top: bounds.top + objectOffsetY,
-                          width: objectPixelWidth,
-                          height: objectPixelHeight,
-                          backgroundImage: `url(${objectImageUrl})`,
-                          backgroundPosition: objectDef.imagePath
-                            ? '0px 0px'
-                            : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
-                          backgroundSize: objectDef.imagePath
-                            ? `${objectPixelWidth}px ${objectPixelHeight}px`
-                            : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                          backgroundRepeat: 'no-repeat',
-                          imageRendering: 'pixelated',
+                          width: rotatedSize.width,
+                          height: rotatedSize.height,
                         }}
-                      />
+                      >
+                        <div
+                          className="absolute"
+                          style={{
+                            width: baseWidth,
+                            height: baseHeight,
+                            backgroundImage: `url(${objectImageUrl})`,
+                            backgroundPosition: objectDef.imagePath
+                              ? '0px 0px'
+                              : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
+                            backgroundSize: objectDef.imagePath
+                              ? `${baseWidth}px ${baseHeight}px`
+                              : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+                            backgroundRepeat: 'no-repeat',
+                            imageRendering: 'pixelated',
+                            transformOrigin: 'top left',
+                            transform: getRotationTransform(baseWidth, baseHeight, placementRotation),
+                          }}
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -2499,21 +2668,46 @@ export const mapheight = ${MAP_HEIGHT};
 
              {/* Object Preview */}
              {activeTool === 'object' && activeObject && hoverInfo && (tilesetLoaded || activeObject.imagePath) && objectPreviewBounds && (() => {
-                const isGroundTile = (activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths';
-                const previewWidth = isGroundTile ? tileSize : objectPreviewBounds.width;
-                const previewHeight = isGroundTile ? tileSize : objectPreviewBounds.height;
-                const bgWidth = isGroundTile ? tileSize : (activeObject.pixelWidth ?? activeObject.tileWidth * tileSize);
-                const bgHeight = isGroundTile ? tileSize : (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize);
-                const bgOffsetY = isGroundTile ? 0 : (activeObject.anchor === 'bottom-left' ? Math.max(0, objectPreviewBounds.height - bgHeight) : 0);
+                const isGroundTile =
+                  (activeObject as any).category === 'terrain' ||
+                  (activeObject as any).category === 'paths' ||
+                  (activeObject as any).category === 'tile-object';
+                const previewScale =
+                  !isGroundTile && activeObject.imagePath
+                    ? ((activeObject as any).scale ?? 1.0)
+                    : 1.0;
+                const baseWidth = isGroundTile
+                  ? tileSize
+                  : (activeObject.pixelWidth ?? activeObject.tileWidth * tileSize) * previewScale;
+                const baseHeight = isGroundTile
+                  ? tileSize
+                  : (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize) * previewScale;
+                const rotatedSize = getRotatedSize(baseWidth, baseHeight, activeObjectRotation);
+                const previewWidth = objectPreviewBounds.width;
+                const previewHeight = objectPreviewBounds.height;
+                const previewOffsetY = isGroundTile
+                  ? 0
+                  : (activeObject.anchor === 'bottom-left'
+                    ? Math.max(0, objectPreviewBounds.height - rotatedSize.height)
+                    : 0);
 
                 return (
                   <div className="absolute pointer-events-none" style={{ left: objectPreviewBounds.left, top: objectPreviewBounds.top, width: previewWidth, height: previewHeight, opacity: objectPreviewValid ? 0.7 : 0.4 }}>
-                     <div className="absolute inset-0" style={{
-                       backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`,
-                       backgroundPosition: activeObject.imagePath ? `0px ${bgOffsetY}px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`,
-                       backgroundSize: activeObject.imagePath ? `${bgWidth}px ${bgHeight}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                       backgroundRepeat: 'no-repeat'
-                     }} />
+                     <div
+                       className="absolute"
+                       style={{
+                         top: previewOffsetY,
+                         width: baseWidth,
+                         height: baseHeight,
+                         backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`,
+                         backgroundPosition: activeObject.imagePath ? `0px 0px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`,
+                         backgroundSize: activeObject.imagePath ? `${baseWidth}px ${baseHeight}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+                         backgroundRepeat: 'no-repeat',
+                         transformOrigin: 'top left',
+                         transform: getRotationTransform(baseWidth, baseHeight, activeObjectRotation),
+                         imageRendering: 'pixelated',
+                       }}
+                     />
                      <div className={`absolute inset-0 border-2 ${objectPreviewValid ? 'border-emerald-300/70' : 'border-red-400/70'}`} />
                   </div>
                 );
@@ -2523,7 +2717,8 @@ export const mapheight = ${MAP_HEIGHT};
              {selectionBounds && (
                 <div className="absolute pointer-events-none border-2 border-cyan-400/80 bg-cyan-400/10" style={{ left: selectionBounds.minCol * tileSize, top: selectionBounds.minRow * tileSize, width: (selectionBounds.maxCol - selectionBounds.minCol + 1) * tileSize, height: (selectionBounds.maxRow - selectionBounds.minRow + 1) * tileSize }} />
              )}
-          </div>
+              </div>
+            </div>
           </div>
           
            {/* Hover Info Overlay - Floating in Canvas Area */}
@@ -2534,25 +2729,50 @@ export const mapheight = ${MAP_HEIGHT};
            </div>
 
            {/* Zoom Controls - Floating in Canvas Corner */}
-           <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-[#3b2a21]/95 px-3 py-2 rounded-lg border-2 border-[#6d4c30] shadow-lg z-40">
-              <button 
-                 onClick={() => setCanvasScale(s => Math.max(0.3, s - 0.1))}
-                 className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
-                 title="Zoom Out"
-              >−</button>
-              <span className="text-[#ffd93d] text-[10px] font-display font-bold min-w-[40px] text-center">
-                 {Math.round(canvasScale * 100)}%
-              </span>
-              <button 
-                 onClick={() => setCanvasScale(s => Math.min(2.0, s + 0.1))}
-                 className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
-                 title="Zoom In"
-              >+</button>
-              <button 
-                 onClick={() => setCanvasScale(0.7)}
-                 className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
-                 title="Reset Zoom"
-              >↺</button>
+           <div
+             className={`absolute bottom-3 right-3 z-40 ${
+               isZoomCollapsed
+                 ? 'bg-[#3b2a21]/95 px-2 py-1.5 rounded-lg border border-[#6d4c30] shadow-lg'
+                 : 'flex items-center gap-2 bg-[#3b2a21]/95 px-3 py-2 rounded-lg border-2 border-[#6d4c30] shadow-lg'
+             }`}
+           >
+             {isZoomCollapsed ? (
+               <button
+                 onClick={() => setIsZoomCollapsed(false)}
+                 className="text-[9px] text-[#f3e2b5] px-2 py-1 rounded bg-[#5a4030] border border-[#6d4c30] hover:bg-[#6d4c30]"
+                 title="Show zoom controls"
+               >
+                 ZOOM {Math.round(canvasScale * 100)}%
+               </button>
+             ) : (
+               <>
+                 <button 
+                    onClick={() => setCanvasScale(s => Math.max(0.3, s - 0.1))}
+                    className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                    title="Zoom Out"
+                 >−</button>
+                 <span className="text-[#ffd93d] text-[10px] font-display font-bold min-w-[40px] text-center">
+                    {Math.round(canvasScale * 100)}%
+                 </span>
+                 <button 
+                    onClick={() => setCanvasScale(s => Math.min(2.0, s + 0.1))}
+                    className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                    title="Zoom In"
+                 >+</button>
+                 <button 
+                    onClick={() => setCanvasScale(0.7)}
+                    className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
+                    title="Reset Zoom"
+                 >↺</button>
+                 <button
+                    onClick={() => setIsZoomCollapsed(true)}
+                    className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
+                    title="Minimize"
+                 >
+                   MIN
+                 </button>
+               </>
+             )}
            </div>
         </div>
     );
@@ -2633,7 +2853,9 @@ export const mapheight = ${MAP_HEIGHT};
                                 {[
                                    { id: 'nature', icon: '🌳', label: 'Nature' },
                                    { id: 'furniture', icon: '🪑', label: 'Furniture' },
-                                   { id: 'decorations', icon: '✨', label: 'Decorations' }
+                                   { id: 'decorations', icon: '✨', label: 'Decorations' },
+                                   { id: 'fences', icon: '🧱', label: 'Fences' },
+                                   { id: 'tile-object', icon: '🧩', label: 'Tile Objects' }
                                 ].map(cat => (
                                    <button
                                       key={cat.id}
@@ -2654,8 +2876,16 @@ export const mapheight = ${MAP_HEIGHT};
                          {/* Objects Grid - use filteredObjects which filters by activeSubCategory */}
                          <div className="grid grid-cols-3 gap-2">
                             {filteredObjects.length === 0 && (
-                                <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic">
-                                    No {activeSubCategory} found.
+                                <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic space-y-2">
+                                    <div>No {activeSubCategory} found.</div>
+                                    {tilesetObjectsForSet.length === 0 && (
+                                      <button
+                                        onClick={reloadAssets}
+                                        className="px-2 py-1 text-[8px] uppercase tracking-wide border border-[#6d4c30] bg-[#3b2a21] text-[#f3e2b5] rounded hover:bg-[#5a4030]"
+                                      >
+                                        Refresh Assets
+                                      </button>
+                                    )}
                                 </div>
                             )}
                             {filteredObjects.map(obj => {
@@ -2854,12 +3084,30 @@ export const mapheight = ${MAP_HEIGHT};
         <div style={{ gridArea: 'sidebar-right', alignSelf: 'start' }} className="flex flex-col pt-4 pl-2 w-[160px]">
             <StardewFrame className="p-3 w-full">
                 <div className="flex flex-col gap-1">
+                   <button 
+                        onClick={saveMapToLocal}
+                        className="bg-[#3b6b8f] border-2 border-[#26445c] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#4a7ca5] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        💾 <span>SAVE</span>
+                    </button>
+                    <button 
+                        onClick={loadMapFromLocal}
+                        className="bg-[#2f587a] border-2 border-[#1f3b52] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#3d6c94] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        📂 <span>LOAD</span>
+                    </button>
                    {/* Export Button */}
                     <button 
                         onClick={exportMap}
                         className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
                     >
                         💾 <span>EXPORT</span>
+                    </button>
+                    <button
+                        onClick={reloadAssets}
+                        className="bg-[#6b5a3b] border-2 border-[#4a3b26] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#7a6845] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        🔄 <span>REFRESH</span>
                     </button>
                     <button 
                         onClick={() => setShowAssetSlicer(true)}

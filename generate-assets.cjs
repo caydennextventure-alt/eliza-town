@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const TILESET_PATH = path.join(__dirname, 'public/assets/Tileset Asset');
 const OUTPUT_PATH = path.join(__dirname, 'public/assets/assets.json');
 
-const categories = ['terrain', 'nature', 'buildings', 'decorations', 'furniture', 'fences', 'paths'];
+const categories = ['terrain', 'nature', 'buildings', 'decorations', 'furniture', 'fences', 'paths', 'tile-object'];
 
 const categoryNames = {
   terrain: '地形',
@@ -14,7 +14,12 @@ const categoryNames = {
   decorations: '装饰',
   furniture: '家具',
   fences: '围栏',
-  paths: '道路'
+  paths: '道路',
+  'tile-object': '地面物件'
+};
+
+const categoryFolders = {
+  'tile-object': 'tile object'
 };
 
 function getImageDimensions(filePath) {
@@ -59,13 +64,13 @@ const assetsJson = {
 for (const cat of categories) {
   assetsJson.categories[cat] = {
     name: categoryNames[cat],
-    folder: cat
+    folder: categoryFolders[cat] ?? cat
   };
 }
 
 // Scan each category folder
 for (const cat of categories) {
-  const folderPath = path.join(TILESET_PATH, cat);
+  const folderPath = path.join(TILESET_PATH, categoryFolders[cat] ?? cat);
   if (!fs.existsSync(folderPath)) continue;
   
   const files = fs.readdirSync(folderPath)
@@ -77,12 +82,15 @@ for (const cat of categories) {
   for (const file of files) {
     const filePath = path.join(folderPath, file);
     const dims = getImageDimensions(filePath);
+    const folder = categoryFolders[cat] ?? cat;
+    const baseId = fileToId(file);
+    const id = cat === 'tile-object' ? `tile-object-${baseId}` : baseId;
     
     assetsJson.objects.push({
-      id: fileToId(file),
+      id,
       name: fileToName(file),
       category: cat,
-      image: `assets/Tileset Asset/${cat}/${file}`,
+      image: `assets/Tileset Asset/${folder}/${file}`,
       pixelWidth: dims.width,
       pixelHeight: dims.height
     });
