@@ -1,4 +1,3 @@
-import { } from 'react';
 import { Graphics } from '@pixi/react';
 import { Graphics as PixiGraphics } from 'pixi.js';
 
