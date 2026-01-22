@@ -133,7 +133,7 @@ export const debugCreatePlayers = internalMutation({
   handler: async (ctx, args) => {
     const { worldStatus } = await getDefaultWorld(ctx.db);
     for (let i = 0; i < args.numPlayers; i++) {
-      const inputId = await insertInput(ctx, worldStatus.worldId, 'join', {
+      const _inputId = await insertInput(ctx, worldStatus.worldId, 'join', {
         name: `Robot${i}`,
         description: `This player is a robot.`,
         character: `f${1 + (i % 8)}`,
@@ -177,7 +177,7 @@ export const testEmbedding = internalAction({
 
 export const testCompletion = internalAction({
   args: {},
-  handler: async (ctx, args) => {
+  handler: async (_ctx, _args) => {
     return await chatCompletion({
       messages: [
         { content: 'You are helpful', role: 'system' },
@@ -189,7 +189,7 @@ export const testCompletion = internalAction({
 
 export const testConvo = internalAction({
   args: {},
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     const a: any = (await startConversationMessage(
       ctx,
       'm1707m46wmefpejw1k50rqz7856qw3ew' as Id<'worlds'>,

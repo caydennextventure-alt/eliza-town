@@ -91,7 +91,7 @@ export function orientationDegrees(vector: Vector): number {
 }
 
 export function compressPath(densePath: PathComponent[]): Path {
-  const packed = densePath.map(packPathComponent);
+  const _packed = densePath.map(packPathComponent);
   if (densePath.length <= 2) {
     return densePath.map(packPathComponent);
   }

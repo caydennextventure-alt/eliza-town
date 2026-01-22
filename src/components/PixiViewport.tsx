@@ -1,7 +1,7 @@
 // Based on https://codepen.io/inlet/pen/yLVmPWv.
 // Copyright (c) 2018 Patrick Brouwer, distributed under the MIT license.
 
-import { PixiComponent, useApp } from '@pixi/react';
+import { PixiComponent } from '@pixi/react';
 import { Viewport } from 'pixi-viewport';
 import { Application } from 'pixi.js';
 import { MutableRefObject, ReactNode } from 'react';
@@ -20,7 +20,7 @@ type ViewportProps = {
 // https://davidfig.github.io/pixi-viewport/jsdoc/Viewport.html
 export default PixiComponent('Viewport', {
   create(props: ViewportProps) {
-    const { app, children, viewportRef, ...viewportProps } = props;
+    const { app, children: _children, viewportRef, ...viewportProps } = props;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
     const viewportOptions: any = {
       events: app.renderer.events,

@@ -1,7 +1,6 @@
 import { Graphics } from '@pixi/react';
 import { Graphics as PixiGraphics } from 'pixi.js';
 import { useCallback } from 'react';
-import { Doc } from '../../convex/_generated/dataModel';
 import { Player } from '../../convex/aiTown/player';
 import { unpackPathComponent } from '../../convex/util/types';
 

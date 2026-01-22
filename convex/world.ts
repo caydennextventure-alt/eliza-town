@@ -146,7 +146,7 @@ export const userStatus = query({
   args: {
     worldId: v.id('worlds'),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, _args) => {
     // const identity = await ctx.auth.getUserIdentity();
     // if (!identity) {
     //   return null;

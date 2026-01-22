@@ -3,11 +3,8 @@ import ReactModal from 'react-modal';
 import { useAction, useConvex, useQuery } from 'convex/react';
 import { ConvexError } from 'convex/values';
 import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
 import agentAvatar from '../../assets/ui/agent-avatar.svg';
-import { waitForInput } from '../hooks/sendInput';
 import { useCharacters } from '../lib/characterRegistry';
-import CharacterSelectGrid from './CharacterSelectGrid';
 
 const modalStyles = {
   overlay: {
@@ -46,7 +43,7 @@ type Props = {
   onCreateCharacter?: () => void;
 };
 
-export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }: Props) {
+export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter: _onCreateCharacter }: Props) {
   const { characters } = useCharacters();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -61,7 +58,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const userTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   
   const createElizaAgent = useAction(api.elizaAgent.actions.createElizaAgent);
-  const convex = useConvex();
+  const _convex = useConvex();
 
   const customCharacters = useMemo(() => {
     const filtered = characters.filter((character) => character.isCustom);

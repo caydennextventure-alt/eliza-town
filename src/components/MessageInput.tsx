@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { useMutation, useQuery } from 'convex/react';
-import { KeyboardEvent, useRef, useState } from 'react';
+import { KeyboardEvent, useRef } from 'react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { useSendInput } from '../hooks/sendInput';

@@ -24,8 +24,8 @@ const modalStyles = {
   },
 };
 
-const REQUIRED_WIDTH = 96;
-const REQUIRED_HEIGHT = 128;
+const _REQUIRED_WIDTH = 96;
+const _REQUIRED_HEIGHT = 128;
 const FRAME_WIDTH = 32;
 const FRAME_HEIGHT = 32;
 const FRAMES_PER_DIRECTION = 3;

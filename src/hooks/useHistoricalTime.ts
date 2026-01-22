@@ -8,7 +8,7 @@ export function useHistoricalTime(engineStatus?: Doc<'engines'>) {
   if (engineStatus) {
     timeManager.current.receive(engineStatus);
   }
-  const updateTime = (performanceNow: number) => {
+  const updateTime = (_performanceNow: number) => {
     // We don't need sub-millisecond precision for interpolation, so just use `Date.now()`.
     const now = Date.now();
     setHistoricalTime(timeManager.current.historicalServerTime(now));

@@ -9,7 +9,6 @@ import {
 } from 'react';
 import { AnimatedSprite as PixiAnimatedSprite, Container, Stage } from '@pixi/react';
 import { StardewFrame } from '../ui/stardew/StardewFrame';
-import { StardewButton } from '../ui/stardew/StardewButton';
 import { StardewCheckbox } from '../ui/stardew/StardewCheckbox';
 import { HangingSign } from '../ui/stardew/HangingSign';
 import { StardewTab } from '../ui/stardew/StardewTab';
@@ -129,7 +128,7 @@ type AutoStampOptions = {
   groundCoverage: number;
 };
 
-const CATEGORY_FILTERS: Array<{ id: TileCategoryFilter; label: string }> = [
+const _CATEGORY_FILTERS: Array<{ id: TileCategoryFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'terrain', label: 'Terrain' },
   { id: 'paths', label: 'Paths' },
@@ -272,10 +271,10 @@ const MapEditor = () => {
   const [tileset, setTileset] = useState<TilesetConfig>(() => DEFAULT_TILESET);
   const [tilesetOptions, setTilesetOptions] = useState<TilesetConfig[]>([DEFAULT_TILESET]);
   const [assetPacks, setAssetPacks] = useState<AssetPack[]>([]);
-  const [packLoadError, setPackLoadError] = useState<string | null>(null);
+  const [_packLoadError, setPackLoadError] = useState<string | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
   const [showCollision, setShowCollision] = useState(true); // Toggle collision overlay
-  const [showAnimatedSprites, setShowAnimatedSprites] = useState(true);
+  const [showAnimatedSprites, _setShowAnimatedSprites] = useState(true);
   const [tilesetLoaded, setTilesetLoaded] = useState(false);
   const [activeTool, setActiveTool] = useState<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object'>('brush');
   const [activeLayerIndex, setActiveLayerIndex] = useState(0);
@@ -286,12 +285,12 @@ const MapEditor = () => {
   const [bulkTagMode, setBulkTagMode] = useState(false);
   const [paletteSelection, setPaletteSelection] = useState<{ startId: number; endId: number } | null>(null);
   const [isPaletteSelecting, setIsPaletteSelecting] = useState(false);
-  const [autoLayerByTransparency, setAutoLayerByTransparency] = useState(true);
+  const [autoLayerByTransparency, _setAutoLayerByTransparency] = useState(true);
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [recentTiles, setRecentTiles] = useState<number[]>([]);
   const [recentObjects, setRecentObjects] = useState<string[]>([]);
   const [animatedSprites, setAnimatedSprites] = useState<MapAnimatedSprite[]>(() => INITIAL_ANIMATED_SPRITES);
-  const [tilesetLoadError, setTilesetLoadError] = useState<string | null>(null);
+  const [_tilesetLoadError, setTilesetLoadError] = useState<string | null>(null);
   const [transparentTiles, setTransparentTiles] = useState<boolean[]>([]);
   const [hiddenTiles, setHiddenTiles] = useState<boolean[]>([]);
   const [tilesetCategories, setTilesetCategories] = useState<Record<string, Record<number, TileCategory>>>(() => {
@@ -335,22 +334,22 @@ const MapEditor = () => {
     endCol: number;
   } | null>(null);
   const [stampNameDraft, setStampNameDraft] = useState('');
-  const [stampSkipEmpty, setStampSkipEmpty] = useState(true);
+  const [stampSkipEmpty, _setStampSkipEmpty] = useState(true);
   const [stampRotation, setStampRotation] = useState<StampRotation>(0);
   const [stampFlipX, setStampFlipX] = useState(false);
   const [stampFlipY, setStampFlipY] = useState(false);
-  const [editingStampId, setEditingStampId] = useState<string | null>(null);
-  const [stampRenameDraft, setStampRenameDraft] = useState('');
+  const [_editingStampId, setEditingStampId] = useState<string | null>(null);
+  const [_stampRenameDraft, setStampRenameDraft] = useState('');
   const [activeObjectId, setActiveObjectId] = useState<string | null>(null);
   const [activeObjectPackId, setActiveObjectPackId] = useState<string | null>(null);
   const [objectCaptureMode, setObjectCaptureMode] = useState(false);
   const [objectPaletteSelection, setObjectPaletteSelection] = useState<{ startId: number; endId: number } | null>(null);
   const [objectNameDraft, setObjectNameDraft] = useState('');
   const [objectAnchor, setObjectAnchor] = useState<ObjectAnchor>('bottom-left');
-  const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
-  const [objectRenameDraft, setObjectRenameDraft] = useState('');
+  const [_editingObjectId, setEditingObjectId] = useState<string | null>(null);
+  const [_objectRenameDraft, setObjectRenameDraft] = useState('');
   const [isObjectPaletteSelecting, setIsObjectPaletteSelecting] = useState(false);
-  const [showAutoStampOptions, setShowAutoStampOptions] = useState(false);
+  const [_showAutoStampOptions, _setShowAutoStampOptions] = useState(false);
   const [autoStampOptions, setAutoStampOptions] = useState<AutoStampOptions>({
     minTiles: 6,
     maxWidth: 16,
@@ -878,12 +877,12 @@ const MapEditor = () => {
     }
   };
 
-  const selectedTileCategory =
+  const _selectedTileCategory =
     selectedTileId !== null && selectedTileId >= 0
       ? tilesetCategoryAssignments[selectedTileId]
       : undefined;
 
-  const assignSelectedToCategory = (category: TileCategory | null) => {
+  const _assignSelectedToCategory = (category: TileCategory | null) => {
     if (selectedTileId === null || selectedTileId < 0) return;
     setTilesetCategories((prev) => {
       const next = { ...prev };
@@ -898,7 +897,7 @@ const MapEditor = () => {
     });
   };
 
-  const autoTagUsedTiles = () => {
+  const _autoTagUsedTiles = () => {
     if (usedTileStats.usedIds.length === 0) return;
     setTilesetCategories((prev) => {
       const next = { ...prev };
@@ -917,7 +916,7 @@ const MapEditor = () => {
     });
   };
 
-  const applyCategoryToSelection = (category: TileCategory | null) => {
+  const _applyCategoryToSelection = (category: TileCategory | null) => {
     if (paletteSelectionSet.size === 0) return;
     setTilesetCategories((prev) => {
       const next = { ...prev };
@@ -935,7 +934,7 @@ const MapEditor = () => {
     });
   };
 
-  const updateAutoStampOptions = (partial: Partial<AutoStampOptions>) => {
+  const _updateAutoStampOptions = (partial: Partial<AutoStampOptions>) => {
     setAutoStampOptions((prev) => ({ ...prev, ...partial }));
   };
 
@@ -990,7 +989,7 @@ const MapEditor = () => {
 
   const basePaletteTileIds = paletteMode === 'used' ? visibleUsedTileIds : visibleAllTileIds;
 
-  const categoryCounts = useMemo(() => {
+  const _categoryCounts = useMemo(() => {
     const counts: Record<TileCategoryFilter, number> = {
       all: basePaletteTileIds.length,
       terrain: 0,
@@ -1039,7 +1038,7 @@ const MapEditor = () => {
     return selected;
   }, [paletteSelectionBounds, tilesetCols, tilesetRows, hiddenTiles]);
 
-  const paletteSelectionCount = paletteSelectionSet.size;
+  const _paletteSelectionCount = paletteSelectionSet.size;
 
   const objectSelectionBounds = useMemo(() => {
     if (!objectPaletteSelection) return null;
@@ -1054,7 +1053,7 @@ const MapEditor = () => {
     return { minRow, maxRow, minCol, maxCol };
   }, [objectPaletteSelection, tilesetCols]);
 
-  const objectSelectionSet = useMemo(() => {
+  const _objectSelectionSet = useMemo(() => {
     if (!objectSelectionBounds) return new Set<number>();
     const selected = new Set<number>();
     for (let row = objectSelectionBounds.minRow; row <= objectSelectionBounds.maxRow; row += 1) {
@@ -1164,9 +1163,9 @@ const MapEditor = () => {
     return Array.from({ length: QUICKBAR_SLOTS }, (_, index) => available[index] ?? null);
   }, [recentObjects, objectsById]);
 
-  const showObjectPanel = activeMode === 'objects' || activeTool === 'object' || objectCaptureMode;
-  const showStampPanel = activeMode === 'prefabs' || activeTool === 'stamp' || stampCaptureMode;
-  const showTilePanel = activeTool !== 'object' || objectCaptureMode;
+  const _showObjectPanel = activeMode === 'objects' || activeTool === 'object' || objectCaptureMode;
+  const _showStampPanel = activeMode === 'prefabs' || activeTool === 'stamp' || stampCaptureMode;
+  const _showTilePanel = activeTool !== 'object' || objectCaptureMode;
 
   const getTopTileAt = (row: number, col: number) => {
     for (let i = bgLayers.length - 1; i >= 0; i -= 1) {
@@ -1227,7 +1226,7 @@ const MapEditor = () => {
     };
   }
 
-  const saveStampFromSelection = () => {
+  const _saveStampFromSelection = () => {
     if (!selectionBounds) return;
     const width = selectionBounds.maxCol - selectionBounds.minCol + 1;
     const height = selectionBounds.maxRow - selectionBounds.minRow + 1;
@@ -1258,7 +1257,7 @@ const MapEditor = () => {
     setStampNameDraft('');
   };
 
-  const saveObjectFromSelection = () => {
+  const _saveObjectFromSelection = () => {
     if (!objectSelectionBounds) return;
     const width = objectSelectionBounds.maxCol - objectSelectionBounds.minCol + 1;
     const height = objectSelectionBounds.maxRow - objectSelectionBounds.minRow + 1;
@@ -1289,7 +1288,7 @@ const MapEditor = () => {
     setObjectNameDraft('');
   };
 
-  const renameStamp = (stampId: string, nextName: string) => {
+  const _renameStamp = (stampId: string, nextName: string) => {
     const trimmed = nextName.trim();
     if (!trimmed) return;
     setTilesetStamps((prev) => {
@@ -1302,7 +1301,7 @@ const MapEditor = () => {
     });
   };
 
-  const renameObject = (objectId: string, nextName: string) => {
+  const _renameObject = (objectId: string, nextName: string) => {
     const trimmed = nextName.trim();
     if (!trimmed) return;
     setTilesetObjects((prev) => {
@@ -1325,7 +1324,7 @@ const MapEditor = () => {
     setActiveStampId((current) => (current === stampId ? null : current));
   };
 
-  const removeObjectDefinition = (objectId: string) => {
+  const _removeObjectDefinition = (objectId: string) => {
     const objectDef = objectsById.get(objectId);
     if (objectDef?.readonly) return;
     setTilesetObjects((prev) => {
@@ -1338,7 +1337,7 @@ const MapEditor = () => {
     setActiveObjectId((current) => (current === objectId ? null : current));
   };
 
-  const getStampPreviewData = (stamp: StampDefinition) => {
+  const _getStampPreviewData = (stamp: StampDefinition) => {
     const maxDimension = Math.max(stamp.width, stamp.height, 1);
     const previewTileSize = Math.max(
       6,
@@ -1395,7 +1394,7 @@ const MapEditor = () => {
     };
   };
 
-  const exportStamps = () => {
+  const _exportStamps = () => {
     const payload = {
       version: 1,
       tilesetId: tileset.id,
@@ -1413,7 +1412,7 @@ const MapEditor = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleStampImport = (event: ChangeEvent<HTMLInputElement>) => {
+  const _handleStampImport = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -1660,7 +1659,7 @@ const MapEditor = () => {
     return stamps;
   };
 
-  const extractStampsFromMap = () => {
+  const _extractStampsFromMap = () => {
     const stamps = buildAutoStampsFromMap(autoStampOptions);
     if (stamps.length === 0) {
       alert('No suitable stamp regions found on this map.');
@@ -1838,7 +1837,7 @@ const MapEditor = () => {
     }
   };
 
-  const handlePalettePointerDown = (event: ReactPointerEvent<HTMLDivElement>, tileId: number) => {
+  const _handlePalettePointerDown = (event: ReactPointerEvent<HTMLDivElement>, tileId: number) => {
     if (objectCaptureMode) {
       event.preventDefault();
       setObjectPaletteSelection({ startId: tileId, endId: tileId });
@@ -1851,7 +1850,7 @@ const MapEditor = () => {
     setIsPaletteSelecting(true);
   };
 
-  const handlePalettePointerEnter = (tileId: number) => {
+  const _handlePalettePointerEnter = (tileId: number) => {
     if (objectCaptureMode) {
       if (!isObjectPaletteSelecting) return;
       setObjectPaletteSelection((prev) => (prev ? { ...prev, endId: tileId } : { startId: tileId, endId: tileId }));
@@ -1897,7 +1896,7 @@ const MapEditor = () => {
   // Export map data
   const exportMap = () => {
     // Generate object map from placements
-    const objectMapLayer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
+    const _objectMapLayer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
     // This is a simplified reconstruction; ideally we'd track the full object layer state
     // But since placedObjects tracks explicit objects, we might want to rely on that.
     // However, the engine expects `objmap` to be a dense int array for collision/rendering if used that way.
@@ -1938,7 +1937,7 @@ export const mapheight = ${MAP_HEIGHT};
     alert("Map exported! Replace 'data/gentle.js' with this file.");
   };
 
-  const renderSidebar = () => {
+  const _renderSidebar = () => {
     return (
        <div className="flex-1 min-h-0 relative z-10 w-full h-full pt-6">
          <StardewFrame className="w-full h-full bg-[#8b6b4a] flex flex-col pt-8 pb-4 px-3" style={{ padding: '32px 12px 16px' }}>
@@ -2053,7 +2052,7 @@ export const mapheight = ${MAP_HEIGHT};
     /* -------------------------------------------------------------------------
    * RENDER: Top Toolbar
    * ----------------------------------------------------------------------- */
-  const renderToolbar = () => {
+  const _renderToolbar = () => {
     return (
       <div className="col-start-2 row-start-1 h-[72px] flex items-center relative z-20">
        <StardewFrame className="w-full h-full flex items-center justify-between px-4 py-2 gap-4">
@@ -2118,7 +2117,7 @@ export const mapheight = ${MAP_HEIGHT};
   /* -------------------------------------------------------------------------
    * RENDER: Right Panel (Options)
    * ----------------------------------------------------------------------- */
-  const renderRightPanel = () => {
+  const _renderRightPanel = () => {
     return (
        <div className="col-start-3 row-span-3 flex flex-col gap-4 h-full pt-10 pb-4"> 
           {/* Options Panel */}
@@ -2166,7 +2165,7 @@ export const mapheight = ${MAP_HEIGHT};
   /* -------------------------------------------------------------------------
    * RENDER: Bottom Bar
    * ----------------------------------------------------------------------- */
-  const renderBottomBar = () => {
+  const _renderBottomBar = () => {
     return (
         <div className="col-start-2 row-start-3 flex gap-4 h-[84px] p-2">
              <StardewFrame className="flex-1 flex items-center justify-center px-4">

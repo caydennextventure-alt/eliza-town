@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { agentId, conversationId, parseGameId } from './ids';
 import { Player, activity } from './player';
-import { conversationInputs, startConversation, leaveConversation, Conversation } from './conversation';
+import { conversationInputs, startConversation, leaveConversation } from './conversation';
 import { movePlayer } from './movement';
 import { inputHandler } from './inputHandler';
 import { point } from '../util/types';

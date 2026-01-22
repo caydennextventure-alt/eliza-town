@@ -127,7 +127,7 @@ export default function PlayerDetails({
   // const pendingSuffix = (inputName: string) =>
   //   [...inflightInputs.values()].find((i) => i.name === inputName) ? ' opacity-50' : '';
 
-  const pendingSuffix = (s: string) => '';
+  const pendingSuffix = (_s: string) => '';
   return (
     <div className="flex h-full flex-col gap-4 min-h-0">
       <div className="flex gap-4">

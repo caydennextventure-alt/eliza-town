@@ -22,6 +22,33 @@ const animations = {
     url: '/ai-town/assets/spritesheets/gentlewaterfall32.png',},
 };
 
+// Cache for parsed spritesheets to avoid duplicate texture cache entries
+const animationSpritesheetCache = new Map<string, PIXI.Spritesheet>();
+
+// Helper to create spritesheet data with unique frame names
+function createUniqueSpritesheetData(
+  originalData: PIXI.ISpritesheetData,
+  prefix: string
+): PIXI.ISpritesheetData {
+  return {
+    ...originalData,
+    frames: Object.fromEntries(
+      Object.entries(originalData.frames).map(([key, value]) => [
+        `${prefix}_${key}`,
+        value,
+      ])
+    ),
+    animations: originalData.animations
+      ? Object.fromEntries(
+          Object.entries(originalData.animations).map(([key, frames]) => [
+            key,
+            frames.map((frame: string) => `${prefix}_${frame}`),
+          ])
+        )
+      : undefined,
+  };
+}
+
 export const PixiStaticMap = PixiComponent('StaticMap', {
   create: (props: { map: WorldMap; [k: string]: any }) => {
     const map = props.map;
@@ -75,19 +102,21 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
       spritesBySheet.get(sheet)!.push(sprite);
     }
     for (const [sheet, sprites] of spritesBySheet.entries()) {
-      const animation = (animations as any)[sheet];
+      const animation = (animations as Record<string, { spritesheet: PIXI.ISpritesheetData; url: string }>)[sheet];
       if (!animation) {
         console.error('Could not find animation', sheet);
         continue;
       }
       const { spritesheet, url } = animation;
-      const texture = PIXI.BaseTexture.from(url, {
-        scaleMode: PIXI.SCALE_MODES.NEAREST,
-      });
-      const spriteSheet = new PIXI.Spritesheet(texture, spritesheet);
-      spriteSheet.parse().then(() => {
+
+      // Check if we already have this spritesheet cached
+      const cacheKey = `${url}_${sheet}`;
+      const cachedSheet = animationSpritesheetCache.get(cacheKey);
+
+      if (cachedSheet) {
+        // Use cached spritesheet
         for (const sprite of sprites) {
-          const pixiAnimation = spriteSheet.animations[sprite.animation];
+          const pixiAnimation = cachedSheet.animations[sprite.animation];
           if (!pixiAnimation) {
             console.error('Failed to load animation', sprite);
             continue;
@@ -102,14 +131,40 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
           container.addChild(pixiSprite);
           pixiSprite.play();
         }
-      });
+      } else {
+        // Create new spritesheet with unique frame names
+        const texture = PIXI.BaseTexture.from(url, {
+          scaleMode: PIXI.SCALE_MODES.NEAREST,
+        });
+        const uniqueSpritesheetData = createUniqueSpritesheetData(spritesheet, cacheKey);
+        const spriteSheet = new PIXI.Spritesheet(texture, uniqueSpritesheetData);
+        spriteSheet.parse().then(() => {
+          animationSpritesheetCache.set(cacheKey, spriteSheet);
+          for (const sprite of sprites) {
+            const pixiAnimation = spriteSheet.animations[sprite.animation];
+            if (!pixiAnimation) {
+              console.error('Failed to load animation', sprite);
+              continue;
+            }
+            const pixiSprite = new PIXI.AnimatedSprite(pixiAnimation);
+            pixiSprite.animationSpeed = 0.1;
+            pixiSprite.autoUpdate = true;
+            pixiSprite.x = sprite.x;
+            pixiSprite.y = sprite.y;
+            pixiSprite.width = sprite.w;
+            pixiSprite.height = sprite.h;
+            container.addChild(pixiSprite);
+            pixiSprite.play();
+          }
+        });
+      }
     }
 
     container.x = 0;
     container.y = 0;
 
     // Set the hit area manually to ensure `pointerdown` events are delivered to this container.
-    container.interactive = true;
+    container.eventMode = 'static';
     container.hitArea = new PIXI.Rectangle(
       0,
       0,

@@ -66,14 +66,21 @@ async function getRuntime(name: string, bio: string, personality: string[], agen
   const character: Character = {
     name,
     bio: [`${bio} Personality: ${personality.join(", ")}`],
-    system: `You are ${name}. ${bio}
+    system: `You are ${name}, a character living in AI Town. ${bio}
 
-Personality: ${personality.join(", ")}
+Your personality traits: ${personality.join(", ")}
 
-You are in AI Town. When making decisions, respond with JSON:
-{ "action": "ACTION_NAME", "params": {...}, "reason": "why" }
+BEHAVIOR GUIDELINES:
+- Be proactive and social - seek out conversations with nearby characters
+- If someone is close and available, CONVERSE with them
+- If alone, WANDER to explore and find others
+- Do ACTIVITY only when it fits your character
+- Use IDLE sparingly - prefer action
 
-Actions: MOVE, CONVERSE, ACTIVITY, SAY, LEAVE_CONVERSATION, WANDER, IDLE`,
+IMPORTANT: You MUST respond with ONLY a valid JSON object. No other text.
+Format: { "action": "ACTION_NAME", "params": {...}, "reason": "brief reason" }
+
+Valid actions: MOVE, CONVERSE, ACTIVITY, WANDER, IDLE`,
   };
   
   // Create and initialize the in-memory database adapter from official plugin
@@ -386,27 +393,66 @@ function buildPrompt(ctx: {
   conversationMessages?: Array<{ from: string; text: string }>;
   availableActions: TownActionType[];
 }): string {
-  const lines = [
-    `You are ${ctx.characterName} at (${ctx.position.x.toFixed(1)}, ${ctx.position.y.toFixed(1)}).`,
-    ctx.currentActivity ? `Currently: ${ctx.currentActivity}` : "",
-    "\n=== NEARBY ===",
-    ctx.nearbyAgents.length === 0 ? "No one nearby." : ctx.nearbyAgents.map(a => 
-      `- ${a.name} [${a.distance.toFixed(1)} away] ${a.isInConversation ? "(talking)" : a.activity || "(idle)"}`
-    ).join("\n"),
-  ];
+  const lines: string[] = [];
   
-  if (ctx.inConversation && ctx.conversationMessages?.length) {
-    lines.push("\n=== CONVERSATION ===");
-    lines.push(...ctx.conversationMessages.slice(-10).map(m => `${m.from}: "${m.text}"`));
-  } else if (ctx.recentMessages.length > 0) {
-    lines.push("\n=== OVERHEARD ===");
-    lines.push(...ctx.recentMessages.slice(-10).map(m => `${m.from}: "${m.text}"`));
+  // Current state
+  lines.push(`You are ${ctx.characterName} in AI Town at position (${ctx.position.x.toFixed(0)}, ${ctx.position.y.toFixed(0)}).`);
+  if (ctx.currentActivity) {
+    lines.push(`Currently doing: ${ctx.currentActivity}`);
   }
   
-  lines.push(`\n=== ACTIONS: ${ctx.availableActions.join(", ")} ===`);
-  lines.push(`Respond with JSON: { "action": "NAME", "params": {...}, "reason": "why" }`);
+  // Nearby agents - sort by distance
+  lines.push("\n=== NEARBY CHARACTERS ===");
+  if (ctx.nearbyAgents.length === 0) {
+    lines.push("No one nearby. Consider wandering to find others or doing an activity.");
+  } else {
+    const sorted = [...ctx.nearbyAgents].sort((a, b) => a.distance - b.distance);
+    sorted.forEach(a => {
+      const status = a.isInConversation ? "(in conversation)" : a.activity ? `(${a.activity})` : "(available)";
+      lines.push(`- ${a.name}: ${a.distance.toFixed(1)} tiles away ${status}`);
+    });
+    
+    // Encourage interaction with nearby available agents
+    const available = sorted.filter(a => !a.isInConversation);
+    if (available.length > 0 && available[0].distance < 5) {
+      lines.push(`\n${available[0].name} is close and available to talk!`);
+    }
+  }
   
-  return lines.filter(Boolean).join("\n");
+  // Recent messages
+  if (ctx.inConversation && ctx.conversationMessages?.length) {
+    lines.push("\n=== CURRENT CONVERSATION ===");
+    ctx.conversationMessages.slice(-8).forEach(m => lines.push(`${m.from}: "${m.text}"`));
+  } else if (ctx.recentMessages.length > 0) {
+    lines.push("\n=== OVERHEARD RECENTLY ===");
+    ctx.recentMessages.slice(-5).forEach(m => lines.push(`${m.from}: "${m.text}"`));
+  }
+  
+  // Action instructions
+  lines.push("\n=== YOUR DECISION ===");
+  lines.push(`Available actions: ${ctx.availableActions.join(", ")}`);
+  lines.push("");
+  lines.push("Action details:");
+  if (ctx.availableActions.includes("CONVERSE")) {
+    lines.push('- CONVERSE: Start talking to someone. params: { "target": "Name" }');
+  }
+  if (ctx.availableActions.includes("MOVE")) {
+    lines.push('- MOVE: Walk to a location. params: { "x": number, "y": number }');
+  }
+  if (ctx.availableActions.includes("WANDER")) {
+    lines.push('- WANDER: Explore randomly. params: {}');
+  }
+  if (ctx.availableActions.includes("ACTIVITY")) {
+    lines.push('- ACTIVITY: Do something. params: { "description": "what", "emoji": "🎯", "duration": 30 }');
+  }
+  if (ctx.availableActions.includes("IDLE")) {
+    lines.push('- IDLE: Stay put. params: {}');
+  }
+  
+  lines.push("");
+  lines.push('Respond with ONLY a JSON object: { "action": "ACTION_NAME", "params": {...}, "reason": "brief reason" }');
+  
+  return lines.join("\n");
 }
 
 function parseAction(response: string, available: TownActionType[]): TownAction {
