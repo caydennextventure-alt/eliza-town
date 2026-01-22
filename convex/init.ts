@@ -3,11 +3,14 @@ import { internal } from './_generated/api';
 import { DatabaseReader, MutationCtx, mutation } from './_generated/server';
 import { Descriptions } from '../data/characters';
 import * as map from '../data/gentle';
+import * as testMap from '../data/beginning_fields';
 import { insertInput } from './aiTown/insertInput';
 import { Id } from './_generated/dataModel';
 import { createEngine } from './aiTown/main';
 import { ENGINE_ACTION_DURATION } from './constants';
 import { detectMismatchedLLMProvider } from './util/llm';
+
+const TEST_MAP = false;
 
 const init = mutation({
   args: {
@@ -67,17 +70,20 @@ async function getOrCreateDefaultWorld(ctx: MutationCtx) {
     worldId: worldId,
   });
   worldStatus = (await ctx.db.get(worldStatusId))!;
+  
+  const mapData = TEST_MAP ? testMap : map;
+
   await ctx.db.insert('maps', {
     worldId,
-    width: map.mapwidth,
-    height: map.mapheight,
-    tileSetUrl: map.tilesetpath,
-    tileSetDimX: map.tilesetpxw,
-    tileSetDimY: map.tilesetpxh,
-    tileDim: map.tiledim,
-    bgTiles: map.bgtiles,
-    objectTiles: map.objmap,
-    animatedSprites: map.animatedsprites,
+    width: mapData.mapwidth,
+    height: mapData.mapheight,
+    tileSetUrl: mapData.tilesetpath,
+    tileSetDimX: mapData.tilesetpxw,
+    tileSetDimY: mapData.tilesetpxh,
+    tileDim: mapData.tiledim,
+    bgTiles: mapData.bgtiles,
+    objectTiles: mapData.objmap,
+    animatedSprites: mapData.animatedsprites,
   });
   await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
     worldId,

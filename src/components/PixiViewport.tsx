@@ -53,4 +53,7 @@ export default PixiComponent('Viewport', {
       }
     });
   },
+  willUnmount(viewport: Viewport) {
+    viewport.destroy({ children: true });
+  },
 });

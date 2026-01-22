@@ -1,210 +1,1509 @@
 {
-  "version": 1,
+  "version": 2,
+  "description": "Assets loaded from Tileset Asset folder, organized by category",
+  "basePath": "assets/Tileset Asset",
   "categories": {
     "terrain": {
       "name": "地形",
       "folder": "terrain"
     },
-    "paths": {
-      "name": "道路",
-      "folder": "paths"
+    "nature": {
+      "name": "自然",
+      "folder": "nature"
     },
     "buildings": {
       "name": "建筑",
       "folder": "buildings"
     },
-    "furniture": {
-      "name": "家具",
-      "folder": "furniture"
-    },
     "decorations": {
       "name": "装饰",
       "folder": "decorations"
     },
-    "nature": {
-      "name": "自然",
-      "folder": "nature"
+    "furniture": {
+      "name": "家具",
+      "folder": "furniture"
     },
     "fences": {
       "name": "围栏",
       "folder": "fences"
     },
-    "animated": {
-      "name": "动画",
-      "folder": "animated"
+    "paths": {
+      "name": "道路",
+      "folder": "paths"
     }
   },
   "objects": [
     {
+      "id": "brown-floor-1",
+      "name": "Brown Floor 1",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Brown-floor-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "brown-floor-2",
+      "name": "Brown Floor 2",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Brown-floor-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "dark-brown-floor-1",
+      "name": "Dark Brown Floor 1",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Dark-brown-floor-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "dark-brown-floor-2",
+      "name": "Dark Brown Floor 2",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Dark-brown-floor-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "rose-brown-floor-1",
+      "name": "Rose Brown Floor 1",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Rose-brown-floor-1.png",
+      "pixelWidth": 31,
+      "pixelHeight": 32
+    },
+    {
+      "id": "rose-brown-floor-2",
+      "name": "Rose Brown Floor 2",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Rose-brown-floor-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
       "id": "autumn-tree1",
-      "name": "Autumn Tree 1",
+      "name": "Autumn Tree1",
       "category": "nature",
-      "image": "assets/nature/Autumn_tree1.png",
+      "image": "assets/Tileset Asset/nature/Autumn_tree1.png",
       "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
+      "pixelHeight": 128
     },
     {
       "id": "autumn-tree2",
-      "name": "Autumn Tree 2",
+      "name": "Autumn Tree2",
       "category": "nature",
-      "image": "assets/nature/Autumn_tree2.png",
+      "image": "assets/Tileset Asset/nature/Autumn_tree2.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
     },
     {
       "id": "autumn-tree3",
-      "name": "Autumn Tree 3",
+      "name": "Autumn Tree3",
       "category": "nature",
-      "image": "assets/nature/Autumn_tree3.png",
+      "image": "assets/Tileset Asset/nature/Autumn_tree3.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
     },
     {
-      "id": "tree1",
-      "name": "Tree 1",
+      "id": "broken-tree1",
+      "name": "Broken Tree1",
       "category": "nature",
-      "image": "assets/nature/Tree1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
+      "image": "assets/Tileset Asset/nature/Broken_tree1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
     },
     {
-      "id": "tree2",
-      "name": "Tree 2",
+      "id": "broken-tree2",
+      "name": "Broken Tree2",
       "category": "nature",
-      "image": "assets/nature/Tree2.png",
+      "image": "assets/Tileset Asset/nature/Broken_tree2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "broken-tree3",
+      "name": "Broken Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Broken_tree3.png",
+      "pixelWidth": 48,
+      "pixelHeight": 48
+    },
+    {
+      "id": "broken-tree4",
+      "name": "Broken Tree4",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Broken_tree4.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
     },
     {
-      "id": "tree3",
-      "name": "Tree 3",
+      "id": "broken-tree5",
+      "name": "Broken Tree5",
       "category": "nature",
-      "image": "assets/nature/Tree3.png",
+      "image": "assets/Tileset Asset/nature/Broken_tree5.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "broken-tree6",
+      "name": "Broken Tree6",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Broken_tree6.png",
+      "pixelWidth": 16,
+      "pixelHeight": 16
+    },
+    {
+      "id": "broken-tree7",
+      "name": "Broken Tree7",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Broken_tree7.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "burned-tree1",
+      "name": "Burned Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Burned_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "burned-tree2",
+      "name": "Burned Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Burned_tree2.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
     },
     {
-      "id": "palm-tree1-1",
-      "name": "Palm Tree 1",
+      "id": "burned-tree3",
+      "name": "Burned Tree3",
       "category": "nature",
-      "image": "assets/nature/Palm_tree1_1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "palm-tree1-2",
-      "name": "Palm Tree 2",
-      "category": "nature",
-      "image": "assets/nature/Palm_tree1_2.png",
+      "image": "assets/Tileset Asset/nature/Burned_tree3.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "palm-tree2-1",
-      "name": "Palm Tree 3",
-      "category": "nature",
-      "image": "assets/nature/Palm_tree2_1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "moss-tree1",
-      "name": "Moss Tree 1",
-      "category": "nature",
-      "image": "assets/nature/Moss_tree1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "moss-tree2",
-      "name": "Moss Tree 2",
-      "category": "nature",
-      "image": "assets/nature/Moss_tree2.png",
-      "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "flower-tree1",
-      "name": "Flower Tree 1",
-      "category": "nature",
-      "image": "assets/nature/Flower_tree1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "flower-tree2",
-      "name": "Flower Tree 2",
-      "category": "nature",
-      "image": "assets/nature/Flower_tree2.png",
-      "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "fruit-tree1",
-      "name": "Fruit Tree 1",
-      "category": "nature",
-      "image": "assets/nature/Fruit_tree1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "fruit-tree2",
-      "name": "Fruit Tree 2",
-      "category": "nature",
-      "image": "assets/nature/Fruit_tree2.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "snow-tree1",
-      "name": "Snow Tree 1",
-      "category": "nature",
-      "image": "assets/nature/Snow_tree1.png",
-      "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
-    },
-    {
-      "id": "snow-tree2",
-      "name": "Snow Tree 2",
-      "category": "nature",
-      "image": "assets/nature/Snow_tree2.png",
-      "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
     },
     {
       "id": "christmas-tree1",
-      "name": "Christmas Tree 1",
+      "name": "Christmas Tree1",
       "category": "nature",
-      "image": "assets/nature/Christmas_tree1.png",
+      "image": "assets/Tileset Asset/nature/Christmas_tree1.png",
       "pixelWidth": 128,
-      "pixelHeight": 128,
-      "anchor": "bottom-left"
+      "pixelHeight": 128
     },
     {
       "id": "christmas-tree2",
-      "name": "Christmas Tree 2",
+      "name": "Christmas Tree2",
       "category": "nature",
-      "image": "assets/nature/Christmas_tree2.png",
+      "image": "assets/Tileset Asset/nature/Christmas_tree2.png",
       "pixelWidth": 64,
-      "pixelHeight": 64,
-      "anchor": "bottom-left"
+      "pixelHeight": 64
+    },
+    {
+      "id": "christmas-tree3",
+      "name": "Christmas Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Christmas_tree3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "flower-tree1",
+      "name": "Flower Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Flower_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "flower-tree2",
+      "name": "Flower Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Flower_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flower-tree3",
+      "name": "Flower Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Flower_tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "fruit-tree1",
+      "name": "Fruit Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Fruit_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "fruit-tree2",
+      "name": "Fruit Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Fruit_tree2.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "fruit-tree3",
+      "name": "Fruit Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Fruit_tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "moss-tree1",
+      "name": "Moss Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Moss_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "moss-tree2",
+      "name": "Moss Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Moss_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "moss-tree3",
+      "name": "Moss Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Moss_tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "palm-tree1-1",
+      "name": "Palm Tree1 1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree1_1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "palm-tree1-2",
+      "name": "Palm Tree1 2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree1_2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "palm-tree1-3",
+      "name": "Palm Tree1 3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree1_3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "palm-tree2-1",
+      "name": "Palm Tree2 1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree2_1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "palm-tree2-2",
+      "name": "Palm Tree2 2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree2_2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "palm-tree2-3",
+      "name": "Palm Tree2 3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Palm_tree2_3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "snow-christmass-tree1",
+      "name": "Snow Christmass Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_christmass_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "snow-christmass-tree2",
+      "name": "Snow Christmass Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_christmass_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "snow-christmass-tree3",
+      "name": "Snow Christmass Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_christmass_tree3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "snow-tree1",
+      "name": "Snow Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "snow-tree2",
+      "name": "Snow Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "snow-tree3",
+      "name": "Snow Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Snow_tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "tree1",
+      "name": "Tree1",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Tree1.png",
+      "pixelWidth": 128,
+      "pixelHeight": 128
+    },
+    {
+      "id": "tree2",
+      "name": "Tree2",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Tree2.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "tree3",
+      "name": "Tree3",
+      "category": "nature",
+      "image": "assets/Tileset Asset/nature/Tree3.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "building-13",
+      "name": "Building 13",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/building_13.png",
+      "pixelWidth": 124,
+      "pixelHeight": 248
+    },
+    {
+      "id": "building-18",
+      "name": "Building 18",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/building_18.png",
+      "pixelWidth": 128,
+      "pixelHeight": 144
+    },
+    {
+      "id": "building-19",
+      "name": "Building 19",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/building_19.png",
+      "pixelWidth": 160,
+      "pixelHeight": 144
+    },
+    {
+      "id": "building-2",
+      "name": "Building 2",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/building_2.png",
+      "pixelWidth": 160,
+      "pixelHeight": 180
+    },
+    {
+      "id": "building-3",
+      "name": "Building 3",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/building_3.png",
+      "pixelWidth": 258,
+      "pixelHeight": 254
+    },
+    {
+      "id": "deco-0",
+      "name": "Deco 0",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/Deco_0.png",
+      "pixelWidth": 24,
+      "pixelHeight": 34
+    },
+    {
+      "id": "deco-1",
+      "name": "Deco 1",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/Deco_1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 60
+    },
+    {
+      "id": "deco-12",
+      "name": "Deco 12",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/deco_12.png",
+      "pixelWidth": 60,
+      "pixelHeight": 84
+    },
+    {
+      "id": "deco-15",
+      "name": "Deco 15",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/deco_15.png",
+      "pixelWidth": 36,
+      "pixelHeight": 34
+    },
+    {
+      "id": "deco-16",
+      "name": "Deco 16",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/deco_16.png",
+      "pixelWidth": 36,
+      "pixelHeight": 34
+    },
+    {
+      "id": "deco-7",
+      "name": "Deco 7",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/deco_7.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "deco-9",
+      "name": "Deco 9",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/deco_9.png",
+      "pixelWidth": 60,
+      "pixelHeight": 84
+    },
+    {
+      "id": "furniture-6",
+      "name": "Furniture 6",
+      "category": "decorations",
+      "image": "assets/Tileset Asset/decorations/furniture_6.png",
+      "pixelWidth": 56,
+      "pixelHeight": 50
+    },
+    {
+      "id": "bookshelf-1",
+      "name": "Bookshelf 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Bookshelf-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "bookshelf-2",
+      "name": "Bookshelf 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Bookshelf-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "dark-wooden-bookshelf-1",
+      "name": "Dark Wooden Bookshelf 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Dark-wooden-bookshelf-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "dark-wooden-bookshelf-2",
+      "name": "Dark Wooden Bookshelf 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Dark-wooden-bookshelf-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "large-chair-1",
+      "name": "Large Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-chair-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 36
+    },
+    {
+      "id": "large-chair-2",
+      "name": "Large Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-chair-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 28
+    },
+    {
+      "id": "large-chair-3",
+      "name": "Large Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-chair-3.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "large-chair-4",
+      "name": "Large Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-chair-4.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "large-red-wooden-chair-1",
+      "name": "Large Red Wooden Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-red-wooden-chair-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 36
+    },
+    {
+      "id": "large-red-wooden-chair-2",
+      "name": "Large Red Wooden Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-red-wooden-chair-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 28
+    },
+    {
+      "id": "large-red-wooden-chair-3",
+      "name": "Large Red Wooden Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-red-wooden-chair-3.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "large-red-wooden-chair-4",
+      "name": "Large Red Wooden Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-red-wooden-chair-4.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "large-wooden-dark-chair-1",
+      "name": "Large Wooden Dark Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-wooden-dark-chair-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 36
+    },
+    {
+      "id": "large-wooden-dark-chair-2",
+      "name": "Large Wooden Dark Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-wooden-dark-chair-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 28
+    },
+    {
+      "id": "large-wooden-dark-chair-3",
+      "name": "Large Wooden Dark Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-wooden-dark-chair-3.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "large-wooden-dark-chair-4",
+      "name": "Large Wooden Dark Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Large-wooden-dark-chair-4.png",
+      "pixelWidth": 24,
+      "pixelHeight": 59
+    },
+    {
+      "id": "red-wooden-bookshelf-1",
+      "name": "Red Wooden Bookshelf 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Red-wooden-bookshelf-1.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "red-wooden-bookshelf-2",
+      "name": "Red Wooden Bookshelf 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Red-wooden-bookshelf-2.png",
+      "pixelWidth": 52,
+      "pixelHeight": 58
+    },
+    {
+      "id": "small-chair-1",
+      "name": "Small Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-chair-1.png",
+      "pixelWidth": 20,
+      "pixelHeight": 36
+    },
+    {
+      "id": "small-chair-2",
+      "name": "Small Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-chair-2.png",
+      "pixelWidth": 20,
+      "pixelHeight": 30
+    },
+    {
+      "id": "small-chair-3",
+      "name": "Small Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-chair-3.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "small-chair-4",
+      "name": "Small Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-chair-4.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "small-dark-wooden-chair-1",
+      "name": "Small Dark Wooden Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-dark-wooden-chair-1.png",
+      "pixelWidth": 20,
+      "pixelHeight": 36
+    },
+    {
+      "id": "small-dark-wooden-chair-2",
+      "name": "Small Dark Wooden Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-dark-wooden-chair-2.png",
+      "pixelWidth": 20,
+      "pixelHeight": 30
+    },
+    {
+      "id": "small-dark-wooden-chair-3",
+      "name": "Small Dark Wooden Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-dark-wooden-chair-3.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "small-dark-wooden-chair-4",
+      "name": "Small Dark Wooden Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-dark-wooden-chair-4.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "small-red-wooden-chair-1",
+      "name": "Small Red Wooden Chair 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-red-wooden-chair-1.png",
+      "pixelWidth": 20,
+      "pixelHeight": 36
+    },
+    {
+      "id": "small-red-wooden-chair-2",
+      "name": "Small Red Wooden Chair 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-red-wooden-chair-2.png",
+      "pixelWidth": 20,
+      "pixelHeight": 30
+    },
+    {
+      "id": "small-red-wooden-chair-3",
+      "name": "Small Red Wooden Chair 3",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-red-wooden-chair-3.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "small-red-wooden-chair-4",
+      "name": "Small Red Wooden Chair 4",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Small-red-wooden-chair-4.png",
+      "pixelWidth": 20,
+      "pixelHeight": 33
+    },
+    {
+      "id": "table-1",
+      "name": "Table 1",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Table-1.png",
+      "pixelWidth": 58,
+      "pixelHeight": 50
+    },
+    {
+      "id": "table-2",
+      "name": "Table 2",
+      "category": "furniture",
+      "image": "assets/Tileset Asset/furniture/Table-2.png",
+      "pixelWidth": 39,
+      "pixelHeight": 66
+    },
+    {
+      "id": "large-white-gate-1",
+      "name": "Large White Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-white-gate-1.png",
+      "pixelWidth": 42,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-white-gate-2",
+      "name": "Large White Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-white-gate-2.png",
+      "pixelWidth": 37,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-white-gate-3",
+      "name": "Large White Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-white-gate-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-white-gate-4",
+      "name": "Large White Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-white-gate-4.png",
+      "pixelWidth": 37,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-wooden-fence-1",
+      "name": "Large Wooden Fence 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-fence-1.png",
+      "pixelWidth": 36,
+      "pixelHeight": 25
+    },
+    {
+      "id": "large-wooden-fence-2",
+      "name": "Large Wooden Fence 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-fence-2.png",
+      "pixelWidth": 42,
+      "pixelHeight": 25
+    },
+    {
+      "id": "large-wooden-fence-3",
+      "name": "Large Wooden Fence 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-fence-3.png",
+      "pixelWidth": 36,
+      "pixelHeight": 25
+    },
+    {
+      "id": "large-wooden-fence-4",
+      "name": "Large Wooden Fence 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-fence-4.png",
+      "pixelWidth": 7,
+      "pixelHeight": 54
+    },
+    {
+      "id": "large-wooden-fence-5",
+      "name": "Large Wooden Fence 5",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-fence-5.png",
+      "pixelWidth": 7,
+      "pixelHeight": 56
+    },
+    {
+      "id": "large-wooden-gate-1",
+      "name": "Large Wooden Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-gate-1.png",
+      "pixelWidth": 43,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-wooden-gate-2",
+      "name": "Large Wooden Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-gate-2.png",
+      "pixelWidth": 37,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-wooden-gate-3",
+      "name": "Large Wooden Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-gate-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 39
+    },
+    {
+      "id": "large-wooden-gate-4",
+      "name": "Large Wooden Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Large-wooden-gate-4.png",
+      "pixelWidth": 37,
+      "pixelHeight": 39
+    },
+    {
+      "id": "white-gate-1",
+      "name": "White Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-gate-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23
+    },
+    {
+      "id": "white-gate-2",
+      "name": "White Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-gate-2.png",
+      "pixelWidth": 28,
+      "pixelHeight": 23
+    },
+    {
+      "id": "white-gate-3",
+      "name": "White Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-gate-3.png",
+      "pixelWidth": 24,
+      "pixelHeight": 23
+    },
+    {
+      "id": "white-gate-4",
+      "name": "White Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-gate-4.png",
+      "pixelWidth": 28,
+      "pixelHeight": 23
+    },
+    {
+      "id": "white-red-flower-gate-1",
+      "name": "White Red Flower Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-red-flower-gate-1.png",
+      "pixelWidth": 42,
+      "pixelHeight": 40
+    },
+    {
+      "id": "white-red-flower-gate-2",
+      "name": "White Red Flower Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-red-flower-gate-2.png",
+      "pixelWidth": 38,
+      "pixelHeight": 40
+    },
+    {
+      "id": "white-red-flower-gate-3",
+      "name": "White Red Flower Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-red-flower-gate-3.png",
+      "pixelWidth": 34,
+      "pixelHeight": 40
+    },
+    {
+      "id": "white-red-flower-gate-4",
+      "name": "White Red Flower Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-red-flower-gate-4.png",
+      "pixelWidth": 38,
+      "pixelHeight": 40
+    },
+    {
+      "id": "white-red-flower-gate-5",
+      "name": "White Red Flower Gate 5",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/White-red-flower-gate-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood--white-flower-gate-3",
+      "name": "Wood  White Flower Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood- white-flower-gate-3.png",
+      "pixelWidth": 38,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wood-red-flower-gate-1",
+      "name": "Wood Red Flower Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-red-flower-gate-1.png",
+      "pixelWidth": 42,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-red-flower-gate-2",
+      "name": "Wood Red Flower Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-red-flower-gate-2.png",
+      "pixelWidth": 38,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wood-red-flower-gate-3",
+      "name": "Wood Red Flower Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-red-flower-gate-3.png",
+      "pixelWidth": 38,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-red-flower-gate-4",
+      "name": "Wood Red Flower Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-red-flower-gate-4.png",
+      "pixelWidth": 34,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-red-flower-gate-5",
+      "name": "Wood Red Flower Gate 5",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-red-flower-gate-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-white-flower-gate-1",
+      "name": "Wood White Flower Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-white-flower-gate-1.png",
+      "pixelWidth": 42,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wood-white-flower-gate-2",
+      "name": "Wood White Flower Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-white-flower-gate-2.png",
+      "pixelWidth": 38,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wood-white-flower-gate-4",
+      "name": "Wood White Flower Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-white-flower-gate-4.png",
+      "pixelWidth": 34,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wood-white-flower-gate-5",
+      "name": "Wood White Flower Gate 5",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wood-white-flower-gate-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 41
+    },
+    {
+      "id": "wooden-fence-1",
+      "name": "Wooden Fence 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-fence-1.png",
+      "pixelWidth": 28,
+      "pixelHeight": 19
+    },
+    {
+      "id": "wooden-fence-2",
+      "name": "Wooden Fence 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-fence-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 19
+    },
+    {
+      "id": "wooden-fence-3",
+      "name": "Wooden Fence 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-fence-3.png",
+      "pixelWidth": 28,
+      "pixelHeight": 19
+    },
+    {
+      "id": "wooden-fence-4",
+      "name": "Wooden Fence 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-fence-4.png",
+      "pixelWidth": 7,
+      "pixelHeight": 39
+    },
+    {
+      "id": "wooden-fence-5",
+      "name": "Wooden Fence 5",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-fence-5.png",
+      "pixelWidth": 7,
+      "pixelHeight": 42
+    },
+    {
+      "id": "wooden-gate-1",
+      "name": "Wooden Gate 1",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-gate-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23
+    },
+    {
+      "id": "wooden-gate-2",
+      "name": "Wooden Gate 2",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-gate-2.png",
+      "pixelWidth": 28,
+      "pixelHeight": 23
+    },
+    {
+      "id": "wooden-gate-3",
+      "name": "Wooden Gate 3",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-gate-3.png",
+      "pixelWidth": 24,
+      "pixelHeight": 23
+    },
+    {
+      "id": "wooden-gate-4",
+      "name": "Wooden Gate 4",
+      "category": "fences",
+      "image": "assets/Tileset Asset/fences/Wooden-gate-4.png",
+      "pixelWidth": 28,
+      "pixelHeight": 23
+    },
+    {
+      "id": "dark-wooden-path-1",
+      "name": "Dark Wooden Path 1",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 30
+    },
+    {
+      "id": "dark-wooden-path-10",
+      "name": "Dark Wooden Path 10",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-10.png",
+      "pixelWidth": 34,
+      "pixelHeight": 27
+    },
+    {
+      "id": "dark-wooden-path-11",
+      "name": "Dark Wooden Path 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-11.png",
+      "pixelWidth": 36,
+      "pixelHeight": 33
+    },
+    {
+      "id": "dark-wooden-path-12",
+      "name": "Dark Wooden Path 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-12.png",
+      "pixelWidth": 35,
+      "pixelHeight": 26
+    },
+    {
+      "id": "dark-wooden-path-13",
+      "name": "Dark Wooden Path 13",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-13.png",
+      "pixelWidth": 30,
+      "pixelHeight": 32
+    },
+    {
+      "id": "dark-wooden-path-14",
+      "name": "Dark Wooden Path 14",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-14.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32
+    },
+    {
+      "id": "dark-wooden-path-15",
+      "name": "Dark Wooden Path 15",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-15.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32
+    },
+    {
+      "id": "dark-wooden-path-16",
+      "name": "Dark Wooden Path 16",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-16.png",
+      "pixelWidth": 30,
+      "pixelHeight": 36
+    },
+    {
+      "id": "dark-wooden-path-17",
+      "name": "Dark Wooden Path 17",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-17.png",
+      "pixelWidth": 19,
+      "pixelHeight": 35
+    },
+    {
+      "id": "dark-wooden-path-18",
+      "name": "Dark Wooden Path 18",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-18.png",
+      "pixelWidth": 20,
+      "pixelHeight": 34
+    },
+    {
+      "id": "dark-wooden-path-2",
+      "name": "Dark Wooden Path 2",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20
+    },
+    {
+      "id": "dark-wooden-path-3",
+      "name": "Dark Wooden Path 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20
+    },
+    {
+      "id": "dark-wooden-path-4",
+      "name": "Dark Wooden Path 4",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-4.png",
+      "pixelWidth": 36,
+      "pixelHeight": 30
+    },
+    {
+      "id": "dark-wooden-path-5",
+      "name": "Dark Wooden Path 5",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 20
+    },
+    {
+      "id": "dark-wooden-path-6",
+      "name": "Dark Wooden Path 6",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-6.png",
+      "pixelWidth": 35,
+      "pixelHeight": 19
+    },
+    {
+      "id": "dark-wooden-path-7",
+      "name": "Dark Wooden Path 7",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-7.png",
+      "pixelWidth": 32,
+      "pixelHeight": 28
+    },
+    {
+      "id": "dark-wooden-path-8",
+      "name": "Dark Wooden Path 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-8.png",
+      "pixelWidth": 32,
+      "pixelHeight": 35
+    },
+    {
+      "id": "dark-wooden-path-9",
+      "name": "Dark Wooden Path 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-9.png",
+      "pixelWidth": 32,
+      "pixelHeight": 24
+    },
+    {
+      "id": "wood-stairs-1",
+      "name": "Wood Stairs 1",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 32
+    },
+    {
+      "id": "wood-stairs-10",
+      "name": "Wood Stairs 10",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-10.png",
+      "pixelWidth": 23,
+      "pixelHeight": 39
+    },
+    {
+      "id": "wood-stairs-11",
+      "name": "Wood Stairs 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-11.png",
+      "pixelWidth": 23,
+      "pixelHeight": 39
+    },
+    {
+      "id": "wood-stairs-12",
+      "name": "Wood Stairs 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-12.png",
+      "pixelWidth": 24,
+      "pixelHeight": 39
+    },
+    {
+      "id": "wood-stairs-2",
+      "name": "Wood Stairs 2",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-stairs-3",
+      "name": "Wood Stairs 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 42
+    },
+    {
+      "id": "wood-stairs-4",
+      "name": "Wood Stairs 4",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-4.png",
+      "pixelWidth": 40,
+      "pixelHeight": 34
+    },
+    {
+      "id": "wood-stairs-5",
+      "name": "Wood Stairs 5",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-5.png",
+      "pixelWidth": 42,
+      "pixelHeight": 35
+    },
+    {
+      "id": "wood-stairs-6",
+      "name": "Wood Stairs 6",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-6.png",
+      "pixelWidth": 40,
+      "pixelHeight": 40
+    },
+    {
+      "id": "wood-stairs-7",
+      "name": "Wood Stairs 7",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-7.png",
+      "pixelWidth": 24,
+      "pixelHeight": 51
+    },
+    {
+      "id": "wood-stairs-8",
+      "name": "Wood Stairs 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-8.png",
+      "pixelWidth": 26,
+      "pixelHeight": 51
+    },
+    {
+      "id": "wood-stairs-9",
+      "name": "Wood Stairs 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-9.png",
+      "pixelWidth": 26,
+      "pixelHeight": 51
+    },
+    {
+      "id": "wooden-path-1",
+      "name": "Wooden Path 1",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-1.png",
+      "pixelWidth": 32,
+      "pixelHeight": 30
+    },
+    {
+      "id": "wooden-path-10",
+      "name": "Wooden Path 10",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-10.png",
+      "pixelWidth": 36,
+      "pixelHeight": 33
+    },
+    {
+      "id": "wooden-path-11",
+      "name": "Wooden Path 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-11.png",
+      "pixelWidth": 34,
+      "pixelHeight": 28
+    },
+    {
+      "id": "wooden-path-12",
+      "name": "Wooden Path 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-12.png",
+      "pixelWidth": 35,
+      "pixelHeight": 26
+    },
+    {
+      "id": "wooden-path-13",
+      "name": "Wooden Path 13",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-13.png",
+      "pixelWidth": 30,
+      "pixelHeight": 32
+    },
+    {
+      "id": "wooden-path-14",
+      "name": "Wooden Path 14",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-14.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32
+    },
+    {
+      "id": "wooden-path-15",
+      "name": "Wooden Path 15",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-15.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32
+    },
+    {
+      "id": "wooden-path-16",
+      "name": "Wooden Path 16",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-16.png",
+      "pixelWidth": 30,
+      "pixelHeight": 36
+    },
+    {
+      "id": "wooden-path-17",
+      "name": "Wooden Path 17",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-17.png",
+      "pixelWidth": 19,
+      "pixelHeight": 35
+    },
+    {
+      "id": "wooden-path-18",
+      "name": "Wooden Path 18",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-18.png",
+      "pixelWidth": 20,
+      "pixelHeight": 34
+    },
+    {
+      "id": "wooden-path-2",
+      "name": "Wooden Path 2",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20
+    },
+    {
+      "id": "wooden-path-3",
+      "name": "Wooden Path 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20
+    },
+    {
+      "id": "wooden-path-4",
+      "name": "Wooden Path 4",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-4.png",
+      "pixelWidth": 37,
+      "pixelHeight": 30
+    },
+    {
+      "id": "wooden-path-5",
+      "name": "Wooden Path 5",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 20
+    },
+    {
+      "id": "wooden-path-6",
+      "name": "Wooden Path 6",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-6.png",
+      "pixelWidth": 35,
+      "pixelHeight": 19
+    },
+    {
+      "id": "wooden-path-7",
+      "name": "Wooden Path 7",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-7.png",
+      "pixelWidth": 32,
+      "pixelHeight": 36
+    },
+    {
+      "id": "wooden-path-8",
+      "name": "Wooden Path 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-8.png",
+      "pixelWidth": 32,
+      "pixelHeight": 27
+    },
+    {
+      "id": "wooden-path-9",
+      "name": "Wooden Path 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-9.png",
+      "pixelWidth": 32,
+      "pixelHeight": 27
+    },
+    {
+      "id": "path-36",
+      "name": "Path 36",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/path_36.png",
+      "pixelWidth": 33,
+      "pixelHeight": 18
+    },
+    {
+      "id": "path-37",
+      "name": "Path 37",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/path_37.png",
+      "pixelWidth": 18,
+      "pixelHeight": 33
+    },
+    {
+      "id": "path-38",
+      "name": "Path 38",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/path_38.png",
+      "pixelWidth": 34,
+      "pixelHeight": 33
+    },
+    {
+      "id": "path-39",
+      "name": "Path 39",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/path_39.png",
+      "pixelWidth": 33,
+      "pixelHeight": 34
     }
   ]
 }

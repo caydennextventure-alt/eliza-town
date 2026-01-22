@@ -13,6 +13,7 @@ import { StardewButton } from '../ui/stardew/StardewButton';
 import { StardewCheckbox } from '../ui/stardew/StardewCheckbox';
 import { HangingSign } from '../ui/stardew/HangingSign';
 import { StardewTab } from '../ui/stardew/StardewTab';
+import { AssetSlicer } from './AssetSlicer';
 import { BaseTexture, SCALE_MODES, Spritesheet, type ISpritesheetData } from 'pixi.js';
 // Map editor starts with an empty canvas; tilesets are supplied via packs.
 import * as campfire from '../../data/animations/campfire.json';
@@ -78,6 +79,7 @@ type PackObject = {
   pixelWidth: number;
   pixelHeight: number;
   anchor?: ObjectAnchor;
+  category?: string;
 };
 
 type AssetPack = {
@@ -111,6 +113,7 @@ type ObjectDefinition = {
   pixelHeight?: number;
   packId?: string;
   packName?: string;
+  category?: string;
   readonly?: boolean;
 };
 
@@ -269,6 +272,7 @@ const PixiAnimatedSpritesLayer = ({ sprites }: { sprites: MapAnimatedSprite[] })
 };
 
 const MapEditor = () => {
+  const [showAssetSlicer, setShowAssetSlicer] = useState(false);
   const [tileset, setTileset] = useState<TilesetConfig>(() => DEFAULT_TILESET);
   const [tilesetOptions, setTilesetOptions] = useState<TilesetConfig[]>([DEFAULT_TILESET]);
   const [assetPacks, setAssetPacks] = useState<AssetPack[]>([]);
@@ -276,10 +280,13 @@ const MapEditor = () => {
   const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
   const [showCollision, setShowCollision] = useState(true); // Toggle collision overlay
   const [showAnimatedSprites, setShowAnimatedSprites] = useState(true);
+  const [showObjects, setShowObjects] = useState(true); // Toggle placed objects visibility
+  const [canvasScale, setCanvasScale] = useState(0.7); // Zoom level (0.3 - 2.0)
   const [tilesetLoaded, setTilesetLoaded] = useState(false);
   const [activeTool, setActiveTool] = useState<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object'>('brush');
   const [activeLayerIndex, setActiveLayerIndex] = useState(0);
-  const [activeMode, setActiveMode] = useState<EditorMode>('terrain');
+  const [activeMode, setActiveMode] = useState<EditorMode>('objects');
+  const [activeSubCategory, setActiveSubCategory] = useState<string>('terrain'); // Default to terrain
   const [lastTileMode, setLastTileMode] = useState<EditorMode>('terrain');
   const [paletteMode, setPaletteMode] = useState<'used' | 'all'>('all');
   const [activeCategory, setActiveCategory] = useState<TileCategoryFilter>('all');
@@ -342,7 +349,7 @@ const MapEditor = () => {
   const [editingStampId, setEditingStampId] = useState<string | null>(null);
   const [stampRenameDraft, setStampRenameDraft] = useState('');
   const [activeObjectId, setActiveObjectId] = useState<string | null>(null);
-  const [activeObjectPackId, setActiveObjectPackId] = useState<string | null>(null);
+  // activeObjectPackId removed - we now load objects from all packs
   const [objectCaptureMode, setObjectCaptureMode] = useState(false);
   const [objectPaletteSelection, setObjectPaletteSelection] = useState<{ startId: number; endId: number } | null>(null);
   const [objectNameDraft, setObjectNameDraft] = useState('');
@@ -385,37 +392,9 @@ const MapEditor = () => {
     const loadPacks = async () => {
       try {
         setPackLoadError(null);
-        const indexUrl = resolveAssetPath(PACK_INDEX_PATH);
-        const indexResponse = await fetch(indexUrl);
-        if (!indexResponse.ok) {
-          throw new Error(`Pack index not found: ${indexUrl}`);
-        }
-        const indexData = await indexResponse.json();
-        const entries = Array.isArray(indexData?.packs) ? indexData.packs : [];
-        const packs = await Promise.all(
-          entries.map(async (entry: { id?: string; name?: string; path?: string }) => {
-            if (!entry?.path) return null;
-            const packUrl = resolveAssetPath(entry.path);
-            const response = await fetch(packUrl);
-            if (!response.ok) {
-              throw new Error(`Pack failed to load: ${packUrl}`);
-            }
-            const packData = await response.json();
-            const id = String(packData?.id ?? entry.id ?? '').trim();
-            if (!id) return null;
-            const name = String(packData?.name ?? entry.name ?? id);
-            const tileset = packData?.tileset as PackTileset | undefined;
-            const objects = Array.isArray(packData?.objects) ? (packData.objects as PackObject[]) : undefined;
-            return {
-              id,
-              name,
-              tileset,
-              objects,
-            } as AssetPack;
-          }),
-        );
         
-        // Also load from assets.json (category-based system)
+        // ONLY load from assets.json (Tileset Asset folder)
+        // Skip old pack index loading to avoid extra objects
         let categoryObjects: PackObject[] = [];
         try {
           const assetsUrl = resolveAssetPath(ASSETS_JSON_PATH);
@@ -423,14 +402,21 @@ const MapEditor = () => {
           if (assetsResponse.ok) {
             const assetsData = await assetsResponse.json();
             if (Array.isArray(assetsData?.objects)) {
-              categoryObjects = assetsData.objects.map((obj: any) => ({
-                id: obj.id,
-                name: obj.name,
-                image: obj.image,
-                pixelWidth: obj.pixelWidth ?? 64,
-                pixelHeight: obj.pixelHeight ?? 64,
-                anchor: obj.anchor ?? 'bottom-left',
-              }));
+              categoryObjects = assetsData.objects.map((obj: any) => {
+                // Calculate scale to normalize to 32px baseline if not provided
+                const maxDim = Math.max(obj.pixelWidth ?? 64, obj.pixelHeight ?? 64);
+                const autoScale = obj.scale ?? (32 / maxDim); // Normalize to 32px visual size
+                return {
+                  id: obj.id,
+                  name: obj.name,
+                  image: obj.image,
+                  pixelWidth: obj.pixelWidth ?? 64,
+                  pixelHeight: obj.pixelHeight ?? 64,
+                  anchor: obj.anchor ?? 'bottom-left',
+                  category: obj.category,
+                  scale: autoScale, // Normalized scale
+                };
+              });
             }
           }
         } catch (e) {
@@ -439,12 +425,12 @@ const MapEditor = () => {
         
         if (!active) return;
         
-        // Create a virtual pack for category-based objects
-        const allPacks = packs.filter((pack): pack is AssetPack => Boolean(pack));
+        // Create a single pack from assets.json only
+        const allPacks: AssetPack[] = [];
         if (categoryObjects.length > 0) {
           allPacks.push({
-            id: 'category-assets',
-            name: 'Assets',
+            id: 'tileset-assets',
+            name: 'Tileset Assets',
             objects: categoryObjects,
           });
         }
@@ -507,22 +493,7 @@ const MapEditor = () => {
     [assetPacks],
   );
 
-  useEffect(() => {
-    if (objectPacks.length === 0) {
-      if (activeObjectPackId !== null) {
-        setActiveObjectPackId(null);
-      }
-      return;
-    }
-    if (!activeObjectPackId || !objectPacks.some((pack) => pack.id === activeObjectPackId)) {
-      setActiveObjectPackId(objectPacks[0].id);
-    }
-  }, [objectPacks, activeObjectPackId]);
-
-  const activeObjectPack = useMemo(() => {
-    if (objectPacks.length === 0) return null;
-    return objectPacks.find((pack) => pack.id === activeObjectPackId) ?? objectPacks[0];
-  }, [objectPacks, activeObjectPackId]);
+  // Pack switching effect removed - we now load all objects from all packs
 
   const tileSize = tileset.tileDim;
   const tilesetCols = Math.floor(tileset.pixelWidth / tileSize);
@@ -600,33 +571,38 @@ const MapEditor = () => {
     [tilesetObjects, tileset.id],
   );
   const builtinObjectsForSet = useMemo(() => {
-    if (!activeObjectPack?.objects || activeObjectPack.objects.length === 0) return [];
-    return activeObjectPack.objects
-      .filter((source) => source?.id && source?.image)
-      .map((source) => {
-      const pixelWidth = Number(source.pixelWidth) || tileSize;
-      const pixelHeight = Number(source.pixelHeight) || tileSize;
-      const tileWidth = Math.max(1, Math.ceil(pixelWidth / tileSize));
-      const tileHeight = Math.max(1, Math.ceil(pixelHeight / tileSize));
-      const normalizedName = source.name.replace(/(\D)(\d)/g, '$1 $2');
-      return {
-        id: source.id,
-        name: normalizedName,
-        tilesetId: tileset.id,
-        tileX: 0,
-        tileY: 0,
-        tileWidth,
-        tileHeight,
-        anchor: source.anchor ?? ('bottom-left' as ObjectAnchor),
-        imagePath: source.image,
-        pixelWidth,
-        pixelHeight,
-        packId: activeObjectPack.id,
-        packName: activeObjectPack.name,
-        readonly: true,
-      };
-    });
-  }, [activeObjectPack, tileSize, tileset.id]);
+    // Load objects from ALL packs that have objects
+    const allObjects: ObjectDefinition[] = [];
+    for (const pack of objectPacks) {
+      if (!pack.objects || pack.objects.length === 0) continue;
+      for (const source of pack.objects) {
+        if (!source?.id || !source?.image) continue;
+        const pixelWidth = Number(source.pixelWidth) || tileSize;
+        const pixelHeight = Number(source.pixelHeight) || tileSize;
+        const tileWidth = Math.max(1, Math.ceil(pixelWidth / tileSize));
+        const tileHeight = Math.max(1, Math.ceil(pixelHeight / tileSize));
+        const normalizedName = source.name.replace(/(\D)(\d)/g, '$1 $2');
+        allObjects.push({
+          id: source.id,
+          name: normalizedName,
+          tilesetId: tileset.id,
+          tileX: 0,
+          tileY: 0,
+          tileWidth,
+          tileHeight,
+          anchor: source.anchor ?? ('bottom-left' as ObjectAnchor),
+          imagePath: source.image,
+          pixelWidth,
+          pixelHeight,
+          packId: pack.id,
+          packName: pack.name,
+          category: source.category,
+          readonly: true,
+        });
+      }
+    }
+    return allObjects;
+  }, [objectPacks, tileSize, tileset.id]);
   const tilesetObjectsForSet = useMemo(
     () => [...builtinObjectsForSet, ...userObjectsForSet],
     [builtinObjectsForSet, userObjectsForSet],
@@ -1142,10 +1118,29 @@ const MapEditor = () => {
 
   const placedObjectsSorted = useMemo(() => {
     const list = [...placedObjects];
+    
+    // Helper to determine zLayer: terrain/paths are ground (0), other objects are standing (1)
+    const getZLayer = (objectId: string): number => {
+      const def = objectsById.get(objectId);
+      if (!def) return 1;
+      const category = (def as any).category;
+      // Ground layer objects (render first/below)
+      if (category === 'terrain' || category === 'paths') return 0;
+      // Standing objects (render after/above)
+      return 1;
+    };
+    
     list.sort((a, b) => {
       const aDef = objectsById.get(a.objectId);
       const bDef = objectsById.get(b.objectId);
       if (!aDef || !bDef) return 0;
+      
+      // First sort by zLayer (ground tiles before standing objects)
+      const aZLayer = getZLayer(a.objectId);
+      const bZLayer = getZLayer(b.objectId);
+      if (aZLayer !== bZLayer) return aZLayer - bZLayer;
+      
+      // Then sort by Y position (endRow)
       const aBounds = getObjectTileBounds(aDef, a);
       const bBounds = getObjectTileBounds(bDef, b);
       if (aBounds.endRow !== bBounds.endRow) return aBounds.endRow - bBounds.endRow;
@@ -1938,44 +1933,50 @@ export const mapheight = ${MAP_HEIGHT};
     alert("Map exported! Replace 'data/gentle.js' with this file.");
   };
 
+
+
+  const filteredObjects = useMemo(() => {
+    if (activeMode !== 'objects') return [];
+    
+    // If we are in "Buildings" sub-cat, only show buildings
+    if (activeSubCategory === 'buildings') {
+       return tilesetObjectsForSet.filter(obj => obj.category === 'buildings');
+    }
+
+    // Otherwise show other props based on activeSubCategory
+    return tilesetObjectsForSet.filter(obj => 
+        // If category matches activeSubCategory
+        (obj.category === activeSubCategory) ||
+        // Fallback: if object has no category, maybe show it in 'nature' or 'props'?
+        (!obj.category && activeSubCategory === 'nature') 
+    );
+  }, [tilesetObjectsForSet, activeMode, activeSubCategory]);
+
   const renderSidebar = () => {
     return (
        <div className="flex-1 min-h-0 relative z-10 w-full h-full pt-6">
          <StardewFrame className="w-full h-full bg-[#8b6b4a] flex flex-col pt-8 pb-4 px-3" style={{ padding: '32px 12px 16px' }}>
            <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar space-y-3">
             
-            {/* Tileset Selector - Minimalist */}
-            <div className="mb-2">
-              <select
-                value={tileset.id}
-                onChange={(event) => handleTilesetChange(event.target.value)}
-                className="w-full bg-[#5a4030] border-2 border-[#6d4c30] text-[10px] px-2 py-1 rounded text-[#f3e2b5] font-display uppercase tracking-wide opacity-80 hover:opacity-100 transition-opacity"
-              >
-                {tilesetOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Tileset Selector Removed */}
 
             {/* Mode-Specific Content */}
             {activeMode === 'prefabs' ? (
               /* Stamp/Prop Panel */
               <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                     <button onClick={() => setStampCaptureMode(p => !p)} className={`text-[10px] px-2 py-1 border-2 text-[#f3e2b5] rounded uppercase ${stampCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
+                     <button onClick={() => setStampCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${stampCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
                        {stampCaptureMode ? 'Creating...' : 'New Stamp'}
                      </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-3 gap-1">
                    {tilesetStampsForSet.map(stamp => (
                       <button 
                         key={stamp.id} 
                         onClick={() => { setActiveStampId(stamp.id); applyMode('prefabs'); }}
-                        className={`p-2 bg-[#3b2a21] rounded border-2 text-center group relative ${activeStampId === stamp.id ? 'border-[#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
+                        className={`p-1 bg-[#3b2a21] rounded border-2 text-center group relative ${activeStampId === stamp.id ? 'border-[#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
                       >
-                         <span className="text-[9px] text-[#f3e2b5] block truncate">{stamp.name}</span>
+                         <span className="text-[8px] text-[#f3e2b5] block truncate">{stamp.name}</span>
                          <div className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-[8px] text-red-300 cursor-pointer" onClick={(e) => { e.stopPropagation(); removeStamp(stamp.id); }}>x</span>
                          </div>
@@ -1984,28 +1985,58 @@ export const mapheight = ${MAP_HEIGHT};
                   </div>
               </div>
             ) : activeMode === 'objects' ? (
-              /* Object Panel */
+              /* Object Panel with Sub-Category Tabs */
               <div className="flex flex-col gap-2">
+                   {/* Sub-Category Tabs (Only if not buildings) */}
+                   {activeSubCategory !== 'buildings' && (
+                       <div className="flex flex-wrap gap-1 mb-2 px-1">
+                          {['nature', 'furniture', 'decorations', 'fences'].map(cat => (
+                             <button
+                                key={cat}
+                                onClick={() => setActiveSubCategory(cat)}
+                                className={`flex-1 text-[8px] py-1 border-b-2 uppercase tracking-tight transition-colors ${
+                                    activeSubCategory === cat 
+                                    ? 'text-[#f3e2b5] border-[#ffd93d] font-bold' 
+                                    : 'text-[#a88b6a] border-transparent hover:text-[#d4b078]'
+                                }`}
+                             >
+                                {cat}
+                             </button>
+                          ))}
+                       </div>
+                   )}
+
                    <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                     <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[10px] px-2 py-1 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
-                       {objectCaptureMode ? 'Creating...' : 'New Object'}
-                     </button>
+                     {activeSubCategory !== 'buildings' && (
+                        <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
+                            {objectCaptureMode ? 'Creating...' : 'New Object'}
+                        </button>
+                     )}
                   </div>
-                   <div className="grid grid-cols-2 gap-1">
-                      {tilesetObjectsForSet.map(obj => {
+
+                   <div className="grid grid-cols-3 gap-2">
+                      {filteredObjects.length === 0 && (
+                          <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic">
+                              No {activeSubCategory} found.
+                          </div>
+                      )}
+                      
+                      {filteredObjects.map(obj => {
                          const preview = getObjectPreviewData(obj);
                          return (
                            <div key={obj.id} 
                                 onClick={() => selectObjectId(obj.id)}
-                                className={`aspect-square bg-[#3b2a21] rounded border-2 relative cursor-pointer group ${activeObjectId === obj.id ? 'border-[#ffd93d] shadow-[0_0_8px_#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
+                                className={`aspect-square bg-[#3b2a21] rounded border-2 relative cursor-pointer group flex items-center justify-center overflow-hidden ${activeObjectId === obj.id ? 'border-[#ffd93d] shadow-[0_0_8px_#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
                            >
                                <div 
-                                  className="absolute inset-2 bg-no-repeat bg-center"
+                                  className="bg-no-repeat shrink-0"
                                   style={{
+                                      width: preview.width,
+                                      height: preview.height,
                                       backgroundImage: `url(${preview.imageUrl})`,
                                       backgroundPosition: preview.backgroundPosition,
                                       backgroundSize: preview.backgroundSize,
-                                      transform: 'scale(0.8)'
+                                      imageRendering: 'pixelated'
                                   }}
                                />
                                <span className="absolute bottom-0 w-full text-center text-[8px] bg-black/50 text-white truncate px-0.5">{obj.name}</span>
@@ -2017,8 +2048,7 @@ export const mapheight = ${MAP_HEIGHT};
             ) : (
               /* Terrain / Path Panel (Tile Grid) */
               <div className="flex flex-col gap-2">
-                 {/* Filter Tabs if needed, or just show all */}
-                 <div className="grid gap-[1px]" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${tileSize}px, 1fr))` }}>
+                 <div className="grid gap-[3px] auto-rows-auto" style={{ gridTemplateColumns: `repeat(3, 1fr)` }}>
                     {paletteTileIds.map(tileId => {
                        const { sx, sy } = getTilePos(tileId);
                        const isSelected = selectedTileId === tileId;
@@ -2050,7 +2080,7 @@ export const mapheight = ${MAP_HEIGHT};
     );
   };
 
-    /* -------------------------------------------------------------------------
+  /* -------------------------------------------------------------------------
    * RENDER: Top Toolbar
    * ----------------------------------------------------------------------- */
   const renderToolbar = () => {
@@ -2059,23 +2089,45 @@ export const mapheight = ${MAP_HEIGHT};
        <StardewFrame className="w-full h-full flex items-center justify-between px-4 py-2 gap-4">
            {/* Wooden Tabs Section */}
            <div className="flex items-center gap-1">
-               {[
-                 { label: 'TERRAIN', mode: 'terrain' as EditorMode, category: 'all' as TileCategoryFilter },
-                 { label: 'PATHS', mode: 'paths' as EditorMode, category: 'paths' as TileCategoryFilter },
-                 { label: 'PROPS', mode: 'prefabs' as EditorMode, category: null },
-                 { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null }
-               ].map((tab) => (
-                  <StardewTab
-                    key={tab.label}
-                    label={tab.label}
-                    isActive={activeMode === tab.mode}
-                    onClick={() => {
-                       applyMode(tab.mode);
-                       if (tab.category) setActiveCategory(tab.category);
-                    }}
-                    className="flex-shrink-0"
-                  />
-               ))}
+               <div className="relative">
+                    <StardewTab
+                        label="TERRAIN"
+                        isActive={activeMode === 'terrain'}
+                        onClick={() => { applyMode('terrain'); setActiveCategory('all'); }}
+                        className="flex-shrink-0 scale-90 origin-center"
+                    />
+               </div>
+               <div className="relative">
+                    <StardewTab
+                        label="PATHS"
+                        isActive={activeMode === 'paths'}
+                        onClick={() => { applyMode('paths'); setActiveCategory('paths'); }}
+                        className="flex-shrink-0 scale-90 origin-center"
+                    />
+               </div>
+               <div className="relative">
+                    <StardewTab
+                        label="PROPS"
+                        // Active if objects mode AND not buildings sub-cat
+                        isActive={activeMode === 'objects' && activeSubCategory !== 'buildings'}
+                        onClick={() => { 
+                            applyMode('objects'); 
+                            setActiveSubCategory('nature'); // Default to nature
+                        }}
+                        className="flex-shrink-0 scale-90 origin-center"
+                    />
+               </div>
+               <div className="relative">
+                    <StardewTab
+                        label="BUILDINGS"
+                        isActive={activeMode === 'objects' && activeSubCategory === 'buildings'}
+                        onClick={() => { 
+                            applyMode('objects'); 
+                            setActiveSubCategory('buildings'); 
+                        }}
+                        className="flex-shrink-0 scale-90 origin-center"
+                    />
+               </div>
            </div>
 
            {/* Tool Icons Section */}
@@ -2246,24 +2298,14 @@ export const mapheight = ${MAP_HEIGHT};
                    )}
                 </div>
              </StardewFrame>
-             <StardewFrame className="w-auto flex items-center px-6 gap-4">
-                 <div className="flex items-center gap-1 ml-2 bg-[#3b2a21] p-1 rounded border border-[#5a4030]">
-                    <span className="text-[#f6e2b0] text-[10px] uppercase font-bold px-1 font-display">Layer</span>
-                    <button onClick={() => setActiveLayerIndex(0)} className={`px-2 py-0.5 text-[10px] border-2 rounded font-display transition-colors ${activeLayerIndex === 0 ? 'bg-[#8b6b4a] border-[#ffd93d] text-[#fff2c4]' : 'bg-[#5a4030] border-[#6d4c30] text-[#a88b6a] hover:bg-[#6d4c30]'}`}>Base</button>
-                    <button onClick={() => setActiveLayerIndex(1)} className={`px-2 py-0.5 text-[10px] border-2 rounded font-display transition-colors ${activeLayerIndex === 1 ? 'bg-[#8b6b4a] border-[#ffd93d] text-[#fff2c4]' : 'bg-[#5a4030] border-[#6d4c30] text-[#a88b6a] hover:bg-[#6d4c30]'}`}>Overlay</button>
-                 </div>
-                 <div className="text-[#f6e2b0]/60 text-[10px] font-display">
-                    Map: {MAP_WIDTH}x{MAP_HEIGHT}
-                 </div>
-             </StardewFrame>
         </div>
     );
   };
 
   const renderCanvas = () => {
       // Dimensions of the scaled content
-      const contentWidth = mapPixelWidth * 0.7;
-      const contentHeight = mapPixelHeight * 0.7;
+      const contentWidth = mapPixelWidth * canvasScale;
+      const contentHeight = mapPixelHeight * canvasScale;
 
       return (
         <div 
@@ -2277,7 +2319,7 @@ export const mapheight = ${MAP_HEIGHT};
                 style={{ 
                     width: mapPixelWidth, 
                     height: mapPixelHeight,
-                    transform: 'scale(0.7)',
+                    transform: `scale(${canvasScale})`,
                     transformOrigin: 'top left',
                     position: 'absolute',
                     top: 0,
@@ -2328,15 +2370,18 @@ export const mapheight = ${MAP_HEIGHT};
              </div>
 
              {/* Placed Objects */}
-             {placedObjectsSorted.length > 0 && (
+             {showObjects && placedObjectsSorted.length > 0 && (
                 <div className="absolute inset-0 pointer-events-none">
                   {placedObjectsSorted.map((placement) => {
                     const objectDef = objectsById.get(placement.objectId);
                     if (!objectDef) return null;
                     const bounds = getObjectPixelBounds(objectDef, placement);
                     const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
-                    const objectPixelWidth = objectDef.pixelWidth ?? objectDef.tileWidth * tileSize;
-                    const objectPixelHeight = objectDef.pixelHeight ?? objectDef.tileHeight * tileSize;
+                    
+                    // Apply scale for normalized sizing (32px baseline)
+                    const objectScale = (objectDef as any).scale ?? 1.0;
+                    const objectPixelWidth = (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * objectScale;
+                    const objectPixelHeight = (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * objectScale;
                     const objectOffsetY =
                       objectDef.imagePath && objectDef.anchor === 'bottom-left'
                         ? Math.max(0, bounds.height - objectPixelHeight)
@@ -2347,12 +2392,12 @@ export const mapheight = ${MAP_HEIGHT};
                         className="absolute"
                         style={{
                           left: bounds.left,
-                          top: bounds.top,
-                          width: bounds.width,
-                          height: bounds.height,
+                          top: bounds.top + objectOffsetY,
+                          width: objectPixelWidth,
+                          height: objectPixelHeight,
                           backgroundImage: `url(${objectImageUrl})`,
                           backgroundPosition: objectDef.imagePath
-                            ? `0px ${objectOffsetY}px`
+                            ? '0px 0px'
                             : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
                           backgroundSize: objectDef.imagePath
                             ? `${objectPixelWidth}px ${objectPixelHeight}px`
@@ -2418,8 +2463,30 @@ export const mapheight = ${MAP_HEIGHT};
            {/* Hover Info Overlay - Floating in Canvas Area */}
            <div className="fixed bottom-4 right-4 bg-black/80 text-[#f6e2b0] px-3 py-1.5 rounded-md pointer-events-none z-50 text-[10px] border border-[#5a4030] shadow shadow-black/50 font-mono">
               {hoverInfo
-                ? `X ${hoverInfo.col} Y ${hoverInfo.row} | ${activeLayerIndex === 0 ? 'Base' : 'Overlay'} | Tool ${activeToolLabel}`
-                : `Hover to inspect | ${activeLayerIndex === 0 ? 'Base' : 'Overlay'} | ${activeToolLabel}`}
+                ? `X ${hoverInfo.col} Y ${hoverInfo.row} | ${activeToolLabel}`
+                : `Hover to inspect | ${activeToolLabel}`}
+           </div>
+
+           {/* Zoom Controls - Floating in Canvas Corner */}
+           <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-[#3b2a21]/95 px-3 py-2 rounded-lg border-2 border-[#6d4c30] shadow-lg z-40">
+              <button 
+                 onClick={() => setCanvasScale(s => Math.max(0.3, s - 0.1))}
+                 className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                 title="Zoom Out"
+              >−</button>
+              <span className="text-[#ffd93d] text-[10px] font-display font-bold min-w-[40px] text-center">
+                 {Math.round(canvasScale * 100)}%
+              </span>
+              <button 
+                 onClick={() => setCanvasScale(s => Math.min(2.0, s + 0.1))}
+                 className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                 title="Zoom In"
+              >+</button>
+              <button 
+                 onClick={() => setCanvasScale(0.7)}
+                 className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
+                 title="Reset Zoom"
+              >↺</button>
            </div>
         </div>
     );
@@ -2467,20 +2534,7 @@ export const mapheight = ${MAP_HEIGHT};
             <StardewFrame className="w-full h-full flex flex-col pt-4 pb-2 px-2" >
                <div className="flex-1 min-h-0 w-full h-full overflow-hidden rounded-sm relative"> {/* overflow-hidden to clip content to frame */}
                  <div className="absolute inset-0 overflow-y-auto overflow-x-hidden custom-scrollbar px-2 py-1"> {/* Scroll container with padding */}
-                  {/* Tileset Selector */}
-                  <div className="mb-2">
-                    <select
-                      value={tileset.id}
-                      onChange={(event) => handleTilesetChange(event.target.value)}
-                      className="w-full bg-[#5a4030] border-2 border-[#6d4c30] text-[9px] px-1 py-1 rounded text-[#f3e2b5] font-display uppercase tracking-wide opacity-80 hover:opacity-100 transition-opacity"
-                    >
-                      {tilesetOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Tileset Selector removed - no longer needed */}
 
                   {/* Mode Content */}
                   {activeMode === 'prefabs' ? (
@@ -2507,13 +2561,38 @@ export const mapheight = ${MAP_HEIGHT};
                     </div>
                   ) : activeMode === 'objects' ? (
                     <div className="flex flex-col gap-2">
-                         <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                           <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
-                             {objectCaptureMode ? 'Creating...' : 'New Object'}
-                           </button>
-                        </div>
+                         {/* Sub-Category Pills (icon-only, cleaner design) */}
+                         {activeSubCategory !== 'buildings' && (
+                             <div className="flex items-center justify-center gap-2 mb-3">
+                                {[
+                                   { id: 'nature', icon: '🌳', label: 'Nature' },
+                                   { id: 'furniture', icon: '🪑', label: 'Furniture' },
+                                   { id: 'decorations', icon: '✨', label: 'Decorations' }
+                                ].map(cat => (
+                                   <button
+                                      key={cat.id}
+                                      onClick={() => setActiveSubCategory(cat.id)}
+                                      title={cat.label}
+                                      className={`w-9 h-9 rounded-full flex items-center justify-center text-base transition-all ${
+                                          activeSubCategory === cat.id 
+                                          ? 'bg-[#ffd93d] border-2 border-[#e8b030] shadow-lg scale-110' 
+                                          : 'bg-[#5a4030] border-2 border-[#6d4c30] hover:bg-[#6d4c30] hover:scale-105'
+                                      }`}
+                                   >
+                                      {cat.icon}
+                                   </button>
+                                ))}
+                             </div>
+                         )}
+
+                         {/* Objects Grid - use filteredObjects which filters by activeSubCategory */}
                          <div className="grid grid-cols-3 gap-2">
-                            {tilesetObjectsForSet.map(obj => {
+                            {filteredObjects.length === 0 && (
+                                <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic">
+                                    No {activeSubCategory} found.
+                                </div>
+                            )}
+                            {filteredObjects.map(obj => {
                                const preview = getObjectPreviewData(obj);
                                return (
                                  <div key={obj.id} 
@@ -2579,18 +2658,23 @@ export const mapheight = ${MAP_HEIGHT};
                  <StardewFrame className="flex items-center px-4 h-full" >
                      <div className="flex items-center gap-2">
                          {[
-                           { label: 'TERRAIN', mode: 'terrain' as EditorMode, category: 'all' as TileCategoryFilter },
-                           { label: 'PATHS', mode: 'paths' as EditorMode, category: 'paths' as TileCategoryFilter },
-                           { label: 'PROPS', mode: 'prefabs' as EditorMode, category: null },
-                           { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null }
+                           { label: 'TERRAIN', mode: 'objects' as EditorMode, category: null, subCategory: 'terrain' },
+                           { label: 'PATHS', mode: 'objects' as EditorMode, category: null, subCategory: 'paths' },
+                           { label: 'PROPS', mode: 'objects' as EditorMode, category: null, subCategory: 'nature' },
+                           { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null, subCategory: 'buildings' }
                          ].map((tab) => (
                             <div key={tab.label} className="relative">
                                 <StardewTab
                                   label={tab.label}
-                                  isActive={activeMode === tab.mode}
+                                  isActive={
+                                    tab.subCategory 
+                                      ? activeMode === tab.mode && activeSubCategory === tab.subCategory
+                                      : activeMode === tab.mode
+                                  }
                                   onClick={() => {
                                      applyMode(tab.mode);
                                      if (tab.category) setActiveCategory(tab.category);
+                                     if (tab.subCategory) setActiveSubCategory(tab.subCategory);
                                   }}
                                   className="flex-shrink-0 scale-90 origin-center"
                                 />
@@ -2605,9 +2689,9 @@ export const mapheight = ${MAP_HEIGHT};
                  <StardewFrame className="flex items-center justify-center px-3 h-full w-full" >
                       <div className="flex items-center gap-1.5 justify-center w-full">
                          {[
-                          { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png' },
-                          { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png' },
-                          { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png' },
+                          { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png', tooltip: '🖌️ Brush (B)\nPaint tiles on the map' },
+                          { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png', tooltip: '🧹 Eraser (E)\nRemove tiles from the map' },
+                          { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png', tooltip: '📦 Stamp (S)\nPlace saved prefab patterns' },
                         ].map((tool) => (
                           <button
                             key={tool.id}
@@ -2621,7 +2705,7 @@ export const mapheight = ${MAP_HEIGHT};
                                 ? 'bg-[#e8d4b0] border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] scale-100 z-10'  // Active: Inset/Pressed
                                 : 'bg-[#e8d4b0] border-2 border-[#8b6b4a] shadow-[inset_0_-2px_0_rgba(0,0,0,0.2),0_2px_0_rgba(0,0,0,0.2)] hover:bg-[#ffe6b5] hover:-translate-y-0.5' // Inactive: Raised
                             }`}
-                            title={tool.id.toUpperCase()}
+                            title={tool.tooltip}
                           >
                             <img
                               src={tool.icon}
@@ -2733,63 +2817,65 @@ export const mapheight = ${MAP_HEIGHT};
             Area: sidebar-right
             Responsive Width: min-content or fixed
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-right', alignSelf: 'end' }} className="flex flex-col justify-end h-full pl-2 w-[180px]">
-
-            <StardewFrame className="p-4 w-full" >
-                <div className="flex flex-col gap-2">
-                   {/* Export Button moved here */}
-                   <button 
+        <div style={{ gridArea: 'sidebar-right', alignSelf: 'start' }} className="flex flex-col pt-4 pl-2 w-[160px]">
+            <StardewFrame className="p-3 w-full">
+                <div className="flex flex-col gap-1">
+                   {/* Export Button */}
+                    <button 
                         onClick={exportMap}
-                        className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-2 rounded text-[10px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider mb-2 w-full"
+                        className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
                     >
-                        EXPORT
+                        💾 <span>EXPORT</span>
                     </button>
-                    <div className="h-0.5 bg-[#6d4c30] w-full mb-2 opacity-30" />
+                    <button 
+                        onClick={() => setShowAssetSlicer(true)}
+                        className="bg-[#8b4513] border-2 border-[#5d2f0d] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#a0522d] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        ✂️ <span>SLICE</span>
+                    </button>
+                    
+                    <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide grid overlay">
                       <StardewCheckbox 
                         label="GRID" 
                         checked={showCollision} 
                         onChange={setShowCollision}
-                        className="scale-90 origin-left"
+                        className="scale-70 origin-left"
                       />
                    </label>
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide placed objects">
                       <StardewCheckbox 
                         label="OBJ" 
-                        checked={activeMode === 'objects'} 
-                        onChange={() => applyMode('objects')}
-                        className="scale-90 origin-left"
+                        checked={showObjects} 
+                        onChange={setShowObjects}
+                        className="scale-70 origin-left"
                       />
                    </label>
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide animated sprites">
                        <StardewCheckbox 
-                        label="BGM" 
-                        checked={true} 
-                        onChange={() => {}}
-                        className="scale-90 origin-left"
+                        label="ANIM" 
+                        checked={showAnimatedSprites} 
+                        onChange={setShowAnimatedSprites}
+                        className="scale-70 origin-left"
                       />
                    </label>
                    
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
-                       <StardewCheckbox 
-                        label="SFX" 
-                        checked={false} 
-                        onChange={() => {}}
-                        className="opacity-50 scale-90 origin-left"
-                      />
-                   </label>
+                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
+                   
+                   <div className="text-[#8b6b4a] text-[8px] font-display text-center">
+                      {MAP_WIDTH}×{MAP_HEIGHT}
+                   </div>
                  </div>
-
             </StardewFrame>
-             <div className="mt-1 text-center">
-                 <div className="text-[#8b6b4a] text-[8px] font-display font-bold">{MAP_WIDTH}x{MAP_HEIGHT}</div>
-             </div>
         </div>
 
       </div>
+      {showAssetSlicer && (
+        <AssetSlicer onClose={() => setShowAssetSlicer(false)} />
+      )}
     </div>
   );
 };
