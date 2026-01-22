@@ -1,5 +1,5 @@
 import { HistoricalTimeManager } from '@/hooks/useHistoricalTime';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import uPlot, { AlignedData, Options } from 'uplot';
 
 const MAX_DATA_POINTS = 10000;
@@ -115,7 +115,7 @@ export function DebugTimeManager(props: {
   let statusNode: React.ReactNode | null = null;
   if (timeManager.latestEngineStatus) {
     const status = timeManager.latestEngineStatus;
-    let statusMsg = status.running ? 'Running' : 'Stopped';
+    const statusMsg = status.running ? 'Running' : 'Stopped';
     statusNode = (
       <div style={{ fontSize: '12px', paddingTop: '8px' }}>
         <p>Generation number: {status.generationNumber}</p>
@@ -149,7 +149,7 @@ export function DebugTimeManager(props: {
 }
 
 // D3's Tableau10
-export const COLORS = (
+const _COLORS = (
   '4e79a7f28e2ce1575976b7b259a14fedc949af7aa1ff9da79c755fbab0ab'.match(/.{6}/g) as string[]
 ).map((x) => `#${x}`);
 

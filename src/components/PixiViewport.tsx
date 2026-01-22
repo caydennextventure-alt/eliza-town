@@ -1,12 +1,12 @@
 // Based on https://codepen.io/inlet/pen/yLVmPWv.
 // Copyright (c) 2018 Patrick Brouwer, distributed under the MIT license.
 
-import { PixiComponent, useApp } from '@pixi/react';
+import { PixiComponent } from '@pixi/react';
 import { Viewport } from 'pixi-viewport';
 import { Application } from 'pixi.js';
 import { MutableRefObject, ReactNode } from 'react';
 
-export type ViewportProps = {
+type ViewportProps = {
   app: Application;
   viewportRef?: MutableRefObject<Viewport | undefined>;
 
@@ -20,13 +20,14 @@ export type ViewportProps = {
 // https://davidfig.github.io/pixi-viewport/jsdoc/Viewport.html
 export default PixiComponent('Viewport', {
   create(props: ViewportProps) {
-    const { app, children, viewportRef, ...viewportProps } = props;
-    const viewport = new Viewport({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const { app, children: _children, viewportRef, ...viewportProps } = props;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    const viewportOptions: any = {
       events: app.renderer.events,
       passiveWheel: false,
       ...viewportProps,
-    });
+    };
+    const viewport = new Viewport(viewportOptions);
     if (viewportRef) {
       viewportRef.current = viewport;
     }

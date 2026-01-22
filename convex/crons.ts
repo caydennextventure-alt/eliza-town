@@ -39,7 +39,7 @@ const TablesToVacuum: TableNames[] = [
 
 export const vacuumOldEntries = internalMutation({
   args: {},
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     const before = Date.now() - VACUUM_MAX_AGE;
     for (const tableName of TablesToVacuum) {
       console.log(`Checking ${tableName}...`);

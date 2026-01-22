@@ -1,4 +1,3 @@
-import { v } from 'convex/values';
 import { internalQuery } from '../_generated/server';
 import { playerId } from '../aiTown/ids';
 

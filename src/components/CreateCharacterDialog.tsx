@@ -24,8 +24,8 @@ const modalStyles = {
   },
 };
 
-const REQUIRED_WIDTH = 96;
-const REQUIRED_HEIGHT = 128;
+const _REQUIRED_WIDTH = 96;
+const _REQUIRED_HEIGHT = 128;
 const FRAME_WIDTH = 32;
 const FRAME_HEIGHT = 32;
 const FRAMES_PER_DIRECTION = 3;
@@ -383,7 +383,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
         <div className="border-t border-gray-800 pt-4 mt-6">
            <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Your Characters</h3>
            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-              {mySprites.map((sprite) => (
+              {mySprites.map((sprite: { spriteId: string; displayName: string; textureUrl: string | null; frameWidth: number; frameHeight: number }) => (
                 <div key={sprite.spriteId} className="flex items-center gap-3 bg-gray-800/50 p-2 rounded border border-gray-700">
                   <div
                     className="shrink-0 bg-gray-900 w-8 h-8 rounded overflow-hidden relative"

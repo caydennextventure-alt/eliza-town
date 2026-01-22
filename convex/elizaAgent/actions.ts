@@ -1,128 +1,165 @@
-import { action } from '../_generated/server';
-import { v } from 'convex/values';
-import { internal } from '../_generated/api';
-import { api } from '../_generated/api';
-import { Id } from '../_generated/dataModel';
+/**
+ * ElizaOS Actions for AI Town
+ *
+ * This module provides the public API for ElizaOS agent interactions.
+ * ALL agent logic uses ElizaOS - NO direct chatCompletion calls.
+ */
 
-const ELIZA_SERVER = process.env.ELIZA_SERVER_URL || 'https://fliza-agent-production.up.railway.app';
+"use node";
 
+import { action, internalAction } from "../_generated/server";
+import { v } from "convex/values";
+import { internal } from "../_generated/api";
+
+// Re-export types from elizaRuntime
+export type { TownAction, TownActionType } from "./elizaRuntime";
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface ElizaCharacter {
+  name: string;
+  bio: string[];
+  personality: string[];
+  systemPrompt: string;
+  goals?: string[];
+  quirks?: string[];
+}
+
+export interface AgentContext {
+  agentId: string;
+  playerId: string;
+  character: ElizaCharacter;
+  position: { x: number; y: number };
+  nearbyAgents: NearbyAgent[];
+  recentMessages: ChatMessage[];
+  currentActivity?: string;
+  currentConversation?: ConversationContext;
+  worldTime: number;
+  lastDecision?: string;
+}
+
+export interface NearbyAgent {
+  id: string;
+  name: string;
+  position: { x: number; y: number };
+  distance: number;
+  activity?: string;
+  isInConversation: boolean;
+}
+
+export interface ChatMessage {
+  from: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface ConversationContext {
+  conversationId: string;
+  participants: string[];
+  recentMessages: ChatMessage[];
+}
+
+export type AgentDecision =
+  | { type: "move"; x: number; y: number; reason: string }
+  | { type: "activity"; description: string; emoji: string; duration: number; reason: string }
+  | { type: "converse"; targetName: string; targetId: string; greeting: string }
+  | { type: "say"; text: string }
+  | { type: "leave_conversation"; reason: string }
+  | { type: "wander"; reason: string }
+  | { type: "idle"; reason: string };
+
+// =============================================================================
+// Public Actions (ALL use ElizaOS)
+// =============================================================================
+
+/**
+ * Create a new ElizaOS agent with character configuration
+ */
 export const createElizaAgent = action({
   args: {
-    worldId: v.id('worlds'),
+    worldId: v.id("worlds"),
+    playerId: v.string(),
     name: v.string(),
-    character: v.string(),
-    identity: v.string(), // Maps to bio
-    plan: v.string(),
-    personality: v.array(v.string()), // ['Friendly', 'Curious']
+    bio: v.string(),
+    personality: v.array(v.string()),
   },
-  handler: async (ctx, args): Promise<{ inputId: Id<"inputs"> | string; elizaAgentId: string }> => {
-    // 1. Create in ElizaOS
-    console.log(`Creating Eliza Agent [${args.name}] at ${ELIZA_SERVER}...`);
+  handler: async (ctx, args): Promise<{ success: boolean; name: string; agentId: string }> => {
+    const agentId = await ctx.runMutation(internal.elizaAgent.mutations.createAgent, {
+      worldId: args.worldId,
+      playerId: args.playerId,
+      name: args.name,
+      bio: args.bio,
+      personality: args.personality,
+    });
     
-    try {
-      // Create character JSON object (minimal required fields)
-      const characterConfig = {
-          name: args.name,
-          bio: [args.identity],
-          adjectives: args.personality,
-          system: `You are ${args.name}. Your plan is to ${args.plan}.`,
-      };
-
-      console.log('Sending JSON request to ElizaOS...');
-
-      const res = await fetch(`${ELIZA_SERVER}/api/agents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterJson: characterConfig }),
-      });
-      
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`ElizaOS error (${res.status}): ${text}`);
-      }
-      
-      const data = await res.json();
-      let elizaAgentId = data.id || data.data?.id; 
-      
-      if (!elizaAgentId && data.success && data.data) {
-         elizaAgentId = data.data.id;
-      }
-      
-      // If still finding it... sometimes it's an array?
-      if (!elizaAgentId && Array.isArray(data)) {
-        elizaAgentId = data[0]?.id;
-      }
-      
-      if (!elizaAgentId) {
-          console.error("ElizaOS Response:", data);
-          throw new Error("Failed to parse Eliza Agent ID from response");
-      }
-      
-      console.log(`Eliza Agent created: ${elizaAgentId}`);
-
-      // 2. Create game player using existing API
-      // We use api.world.createAgent to create the character in the game engine
-      // casting to any to avoid circular type inference issues
-      const inputId: any = await ctx.runMutation(api.world.createAgent, {
-         worldId: args.worldId,
-         name: args.name,
-         character: args.character,
-         identity: args.identity,
-         plan: args.plan,
-      });
-      
-      // 3. Save Mapping
-      // We can't link playerId yet as it's created asynchronously by the engine.
-      // We map by name/worldId for now, or just store the record.
-      await ctx.runMutation(internal.elizaAgent.mutations.saveMapping, {
-         worldId: args.worldId,
-         name: args.name, 
-         elizaAgentId,
-         bio: args.identity,
-         personality: args.personality,
-         // playerId Left undefined for now, to be linked later if needed
-      });
-      
-      return { inputId, elizaAgentId };
-    } catch (e: any) {
-        console.error("Create Eliza Agent Failed", e);
-        throw new Error("Failed to create Eliza Agent: " + e.message);
-    }
+    return { success: true, name: args.name, agentId: agentId as string };
   },
 });
 
-export const sendMessage = action({
-  args: {
-    elizaAgentId: v.string(),
-    message: v.string(),
-    senderId: v.string(),
-    conversationId: v.string(),
+/**
+ * Test action - uses ElizaOS to make a decision
+ */
+export const testDecision = action({
+  args: {},
+  handler: async (ctx): Promise<{ response: string }> => {
+    // Use ElizaOS runtime for test decision
+    const decision = await ctx.runAction(internal.elizaAgent.elizaRuntime.makeAgentDecision, {
+      agentId: "test-agent",
+      playerId: "test-player",
+      worldId: "test-world" as never, // Type hack for test
+      characterName: "TestBot",
+      characterBio: "A curious character in AI Town for testing.",
+      characterPersonality: ["curious", "friendly"],
+      position: { x: 25, y: 25 },
+      nearbyAgents: [
+        { id: "alice-1", name: "Alice", position: { x: 27, y: 25 }, distance: 2, isInConversation: false }
+      ],
+      recentMessages: [],
+      currentActivity: undefined,
+      inConversation: false,
+      conversationMessages: undefined,
+    });
+    
+    return { response: JSON.stringify(decision) };
   },
-  handler: async (ctx, args) => {
-    const res = await fetch(
-      `${ELIZA_SERVER}/api/agents/${args.elizaAgentId}/message`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: args.message, 
-          userId: args.senderId,
-          roomId: args.conversationId,
-        }),
-      }
+});
+
+// =============================================================================
+// Chat Response (delegates to ElizaOS runtime)
+// =============================================================================
+
+export const generateResponse = internalAction({
+  args: {
+    playerId: v.string(),
+    conversationHistory: v.array(
+      v.object({
+        from: v.string(),
+        text: v.string(),
+        timestamp: v.number(),
+      })
+    ),
+    lastMessage: v.object({
+      from: v.string(),
+      text: v.string(),
+      timestamp: v.number(),
+    }),
+  },
+  handler: async (ctx, args): Promise<string> => {
+    const elizaAgent = await ctx.runQuery(
+      internal.elizaAgent.queries.getByPlayerId,
+      { playerId: args.playerId }
     );
-    
-    if (!res.ok) {
-         console.error("Eliza Chat Error", await res.text());
-         return null; 
-    }
-    
-    const data = await res.json();
-    console.log("Eliza Response:", data);
-    
-    if (Array.isArray(data) && data.length > 0) {
-        return data[0].text;
-    }
-    return null;
+
+    // Use ElizaOS runtime (NO chatCompletion)
+    return await ctx.runAction(internal.elizaAgent.elizaRuntime.generateChatResponse, {
+      agentId: elizaAgent?._id?.toString() || args.playerId,
+      characterName: elizaAgent?.name || "Agent",
+      characterBio: elizaAgent?.bio || "A friendly character",
+      characterPersonality: elizaAgent?.personality || ["friendly", "curious"],
+      conversationHistory: args.conversationHistory.map(m => ({ from: m.from, text: m.text })),
+      lastMessage: { from: args.lastMessage.from, text: args.lastMessage.text },
+    });
   },
 });

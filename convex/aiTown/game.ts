@@ -11,7 +11,8 @@ import { World, serializedWorld } from './world';
 import { WorldMap, serializedWorldMap } from './worldMap';
 import { PlayerDescription, serializedPlayerDescription } from './playerDescription';
 import { Location, locationFields, playerLocation } from './location';
-import { runAgentOperation } from './agent';
+import { runAgentOperation, tickAgent } from './agent';
+import { tickConversation } from './conversation';
 import { GameId, IdTypes, allocGameId } from './ids';
 import { InputArgs, InputNames, inputs } from './inputs';
 import {
@@ -185,10 +186,10 @@ export class Game extends AbstractGame {
       player.tickPosition(this, now);
     }
     for (const conversation of this.world.conversations.values()) {
-      conversation.tick(this, now);
+      tickConversation(conversation, this, now);
     }
     for (const agent of this.world.agents.values()) {
-      agent.tick(this, now);
+      tickAgent(agent, this, now);
     }
 
     // Save each player's location into the history buffer at the end of

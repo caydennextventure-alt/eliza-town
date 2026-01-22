@@ -31,7 +31,7 @@ export function Messages({
   });
   const descriptionByPlayerId = useMemo(() => {
     return new Map(
-      (descriptions?.playerDescriptions ?? []).map((description) => [
+      (descriptions?.playerDescriptions ?? []).map((description: { playerId: string; name: string }) => [
         description.playerId,
         description,
       ]),
@@ -39,7 +39,7 @@ export function Messages({
   }, [descriptions]);
   let currentlyTyping = conversation.kind === 'active' ? conversation.doc.isTyping : undefined;
   if (messages !== undefined && currentlyTyping) {
-    if (messages.find((m) => m.messageUuid === currentlyTyping!.messageUuid)) {
+    if (messages.find((m: { messageUuid: string }) => m.messageUuid === currentlyTyping!.messageUuid)) {
       currentlyTyping = undefined;
     }
   }
@@ -74,7 +74,7 @@ export function Messages({
   if (messages.length === 0 && !inConversationWithMe) {
     return null;
   }
-  const messageNodes: { time: number; node: React.ReactNode }[] = messages.map((m) => {
+  const messageNodes: { time: number; node: React.ReactNode }[] = messages.map((m: { _id: string; author: string; authorName?: string; text: string; _creationTime: number; messageUuid: string }) => {
     const authorName = descriptionByPlayerId.get(m.author)?.name ?? m.authorName ?? 'Unknown';
     const node = (
       <div key={`text-${m._id}`} className="leading-tight mb-6">
@@ -91,7 +91,7 @@ export function Messages({
     );
     return { node, time: m._creationTime };
   });
-  const lastMessageTs = messages.map((m) => m._creationTime).reduce((a, b) => Math.max(a, b), 0);
+  const lastMessageTs = messages.map((m: { _creationTime: number }) => m._creationTime).reduce((a: number, b: number) => Math.max(a, b), 0);
 
   const membershipNodes: typeof messageNodes = [];
   if (conversation.kind === 'active') {

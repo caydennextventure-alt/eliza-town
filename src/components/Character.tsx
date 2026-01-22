@@ -3,6 +3,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatedSprite, Container, Graphics, Text } from '@pixi/react';
 import * as PIXI from 'pixi.js';
 
+// Cache for parsed spritesheets to avoid duplicate texture cache entries
+const spritesheetCache = new Map<string, Spritesheet>();
+
 export const Character = ({
   textureUrl,
   spritesheetData,
@@ -40,17 +43,44 @@ export const Character = ({
   const [spriteSheet, setSpriteSheet] = useState<Spritesheet>();
   useEffect(() => {
     const parseSheet = async () => {
+      // Check if we already have this spritesheet cached
+      const cached = spritesheetCache.get(textureUrl);
+      if (cached) {
+        setSpriteSheet(cached);
+        return;
+      }
+
+      // Create spritesheet data with unique frame names prefixed by textureUrl
+      const uniqueSpritesheetData: ISpritesheetData = {
+        ...spritesheetData,
+        frames: Object.fromEntries(
+          Object.entries(spritesheetData.frames).map(([key, value]) => [
+            `${textureUrl}_${key}`,
+            value,
+          ])
+        ),
+        animations: spritesheetData.animations
+          ? Object.fromEntries(
+              Object.entries(spritesheetData.animations).map(([key, frames]) => [
+                key,
+                frames.map((frame) => `${textureUrl}_${frame}`),
+              ])
+            )
+          : undefined,
+      };
+
       const sheet = new Spritesheet(
         BaseTexture.from(textureUrl, {
           scaleMode: PIXI.SCALE_MODES.NEAREST,
         }),
-        spritesheetData,
+        uniqueSpritesheetData,
       );
       await sheet.parse();
+      spritesheetCache.set(textureUrl, sheet);
       setSpriteSheet(sheet);
     };
     void parseSheet();
-  }, []);
+  }, [textureUrl, spritesheetData]);
 
   // The first "left" is "right" but reflected.
   const roundedOrientation = Math.floor(orientation / 90);
@@ -67,24 +97,24 @@ export const Character = ({
 
   if (!spriteSheet) return null;
 
-  let blockOffset = { x: 0, y: 0 };
+  let _blockOffset = { x: 0, y: 0 };
   switch (roundedOrientation) {
     case 2:
-      blockOffset = { x: -20, y: 0 };
+      _blockOffset = { x: -20, y: 0 };
       break;
     case 0:
-      blockOffset = { x: 20, y: 0 };
+      _blockOffset = { x: 20, y: 0 };
       break;
     case 3:
-      blockOffset = { x: 0, y: -20 };
+      _blockOffset = { x: 0, y: -20 };
       break;
     case 1:
-      blockOffset = { x: 0, y: 20 };
+      _blockOffset = { x: 0, y: 20 };
       break;
   }
 
   return (
-    <Container x={x} y={y} interactive={true} pointerdown={onClick} cursor="pointer">
+    <Container x={x} y={y} eventMode="static" pointerdown={onClick} cursor="pointer">
       {isThinking && (
         // TODO: We'll eventually have separate assets for thinking and speech animations.
         <Text x={-20} y={-10} scale={{ x: -0.8, y: 0.8 }} text={'💭'} anchor={{ x: 0.5, y: 0.5 }} />

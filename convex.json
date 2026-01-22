@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/convex",
+  "node": {
+    "esbuildOptions": {
+      "alias": {
+        "fast-redact": "./convex/stubs/fastRedact.js",
+        "pdfjs-dist": "./convex/stubs/pdfjsStub.js",
+        "@langchain/core": "./convex/stubs/langchainStub.js",
+        "@langchain/textsplitters": "./convex/stubs/langchainStub.js"
+      }
+    }
+  }
+}

@@ -4,9 +4,7 @@ import { useAction, useConvex, useQuery } from 'convex/react';
 import { ConvexError } from 'convex/values';
 import { api } from '../../convex/_generated/api';
 import agentAvatar from '../../assets/ui/agent-avatar.svg';
-import { waitForInput } from '../hooks/sendInput';
 import { useCharacters } from '../lib/characterRegistry';
-import CharacterSelectGrid from './CharacterSelectGrid';
 
 const modalStyles = {
   overlay: {
@@ -45,7 +43,7 @@ type Props = {
   onCreateCharacter?: () => void;
 };
 
-export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }: Props) {
+export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter: _onCreateCharacter }: Props) {
   const { characters } = useCharacters();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -60,7 +58,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const userTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   
   const createElizaAgent = useAction(api.elizaAgent.actions.createElizaAgent);
-  const convex = useConvex();
+  const _convex = useConvex();
 
   const customCharacters = useMemo(() => {
     const filtered = characters.filter((character) => character.isCustom);
@@ -127,29 +125,25 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     setIsCreating(true);
     
     try {
-      const result = await createElizaAgent({
+      // Create ElizaOS agent configuration
+      // The agent will be linked to a player when they spawn
+      await createElizaAgent({
         worldId,
+        playerId: selectedId || `custom-${Date.now()}`,
         name: name.trim(),
-        character: selectedId,
-        identity: identity.trim(),
-        plan: plan.trim(),
+        bio: identity.trim() + (plan.trim() ? ` Goals: ${plan.trim()}` : ''),
         personality,
       });
       
-      const { inputId } = result;
-      
-      await waitForInput(convex, inputId, {
-        timeoutMs: 15000,
-        timeoutMessage: 'World is still processing. Try again in a moment.',
-      });
-      
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       if (error instanceof ConvexError) {
-        setError(error.data);
+        setError(error.data as string);
+      } else if (error instanceof Error) {
+        setError(error.message ?? 'Failed to create agent.');
       } else {
-        setError(error?.message ?? 'Failed to create agent.');
+        setError('Failed to create agent.');
       }
     } finally {
       setIsCreating(false);

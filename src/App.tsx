@@ -1,7 +1,5 @@
 import Game from './components/Game.tsx';
 import { ToastContainer } from 'react-toastify';
-import a16zImg from '../assets/a16z.png';
-import convexImg from '../assets/convex.svg';
 import starImg from '../assets/star.svg';
 import helpImg from '../assets/help.svg';
 import closeImg from '../assets/close.svg';
@@ -12,7 +10,6 @@ import { useState, useEffect } from 'react';
 import ReactModal from 'react-modal';
 import MusicButton from './ui/buttons/MusicButton.tsx';
 import Button from './ui/buttons/Button.tsx';
-import PoweredByConvex from './components/PoweredByConvex.tsx';
 import MapEditor from './components/MapEditor.tsx';
 import CreateCharacterDialog from './components/CreateCharacterDialog.tsx';
 import CreateAgentDialog from './components/CreateAgentDialog.tsx';

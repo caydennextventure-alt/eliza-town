@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/main.tsx",
+    "convex/**/*.ts",
+    "scripts/**/*.{ts,js,cjs,mjs}",
+    "data/**/*.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "convex/**/*.ts",
+    "scripts/**/*.{ts,js,cjs,mjs}",
+    "data/**/*.ts"
+  ],
+  "ignore": [
+    "eliza/**",
+    "convex/_generated/**",
+    "convex/stubs/**"
+  ],
+  "ignoreDependencies": [
+    "@types/*",
+    "prettier"
+  ],
+  "vite": {
+    "entry": ["vite.config.ts"]
+  },
+  "jest": {
+    "entry": ["jest.config.ts", "jest.e2e.config.ts"]
+  }
+}

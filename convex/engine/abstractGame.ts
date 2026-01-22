@@ -16,7 +16,7 @@ export abstract class AbstractGame {
   abstract tick(now: number): void;
 
   // Optional callback at the beginning of each step.
-  beginStep(now: number) {}
+  beginStep(_now: number) {}
   abstract saveStep(ctx: ActionCtx, engineUpdate: EngineUpdate): Promise<void>;
 
   async runStep(ctx: ActionCtx, now: number) {

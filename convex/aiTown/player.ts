@@ -11,6 +11,7 @@ import {
 import { pointsEqual, pathPosition } from '../util/geometry';
 import { Game } from './game';
 import { stopPlayer, findRoute, blocked, movePlayer } from './movement';
+import { stopConversation } from './conversation';
 import { inputHandler } from './inputHandler';
 import { characters } from '../../data/characters';
 import { PlayerDescription } from './playerDescription';
@@ -253,7 +254,7 @@ export class Player {
       c.participants.has(this.id),
     );
     if (conversation) {
-      conversation.stop(game, now);
+      stopConversation(conversation, game, now);
     }
     game.world.players.delete(this.id);
   }

@@ -1,5 +1,6 @@
 import { ConvexError, v } from 'convex/values';
 import { internalMutation, mutation, query, MutationCtx } from './_generated/server';
+import { Id } from './_generated/dataModel';
 import { characters } from '../data/characters';
 import { insertInput } from './aiTown/insertInput';
 import { InputArgs, InputNames } from './aiTown/inputs';
@@ -145,7 +146,7 @@ export const userStatus = query({
   args: {
     worldId: v.id('worlds'),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, _args) => {
     // const identity = await ctx.auth.getUserIdentity();
     // if (!identity) {
     //   return null;
