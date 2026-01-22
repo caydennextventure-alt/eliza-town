@@ -18,7 +18,8 @@ const CATEGORY_MAP = {
     'furniture': 'furniture',
     'paths': 'paths', // Assuming these are props for now
     'nature': 'nature',
-    'fences': 'fences'
+    'fences': 'fences',
+    'tile object': 'terrain' // Tile decoration objects for terrain
 };
 
 async function updateAssets() {

@@ -66,6 +66,94 @@
       "pixelHeight": 32
     },
     {
+      "id": "flooring-01",
+      "name": "Flooring 01",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_01.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-11",
+      "name": "Flooring 11",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_11.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-12",
+      "name": "Flooring 12",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_12.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-22",
+      "name": "Flooring 22",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_22.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-28",
+      "name": "Flooring 28",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_28.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-31",
+      "name": "Flooring 31",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_31.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-42",
+      "name": "Flooring 42",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_42.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-44",
+      "name": "Flooring 44",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_44.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-50",
+      "name": "Flooring 50",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_50.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-52",
+      "name": "Flooring 52",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_52.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
+      "id": "flooring-55",
+      "name": "Flooring 55",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/terrain/Flooring_55.png",
+      "pixelWidth": 64,
+      "pixelHeight": 64
+    },
+    {
       "id": "rose-brown-floor-1",
       "name": "Rose Brown Floor 1",
       "category": "terrain",
@@ -1098,30 +1186,6 @@
       "pixelHeight": 30
     },
     {
-      "id": "dark-wooden-path-10",
-      "name": "Dark Wooden Path 10",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-10.png",
-      "pixelWidth": 34,
-      "pixelHeight": 27
-    },
-    {
-      "id": "dark-wooden-path-11",
-      "name": "Dark Wooden Path 11",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-11.png",
-      "pixelWidth": 36,
-      "pixelHeight": 33
-    },
-    {
-      "id": "dark-wooden-path-12",
-      "name": "Dark Wooden Path 12",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-12.png",
-      "pixelWidth": 35,
-      "pixelHeight": 26
-    },
-    {
       "id": "dark-wooden-path-13",
       "name": "Dark Wooden Path 13",
       "category": "paths",
@@ -1134,14 +1198,6 @@
       "name": "Dark Wooden Path 14",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Dark-wooden-path-14.png",
-      "pixelWidth": 20,
-      "pixelHeight": 32
-    },
-    {
-      "id": "dark-wooden-path-15",
-      "name": "Dark Wooden Path 15",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-15.png",
       "pixelWidth": 20,
       "pixelHeight": 32
     },
@@ -1162,26 +1218,10 @@
       "pixelHeight": 35
     },
     {
-      "id": "dark-wooden-path-18",
-      "name": "Dark Wooden Path 18",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-18.png",
-      "pixelWidth": 20,
-      "pixelHeight": 34
-    },
-    {
       "id": "dark-wooden-path-2",
       "name": "Dark Wooden Path 2",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Dark-wooden-path-2.png",
-      "pixelWidth": 32,
-      "pixelHeight": 20
-    },
-    {
-      "id": "dark-wooden-path-3",
-      "name": "Dark Wooden Path 3",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-3.png",
       "pixelWidth": 32,
       "pixelHeight": 20
     },
@@ -1194,44 +1234,12 @@
       "pixelHeight": 30
     },
     {
-      "id": "dark-wooden-path-5",
-      "name": "Dark Wooden Path 5",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-5.png",
-      "pixelWidth": 34,
-      "pixelHeight": 20
-    },
-    {
       "id": "dark-wooden-path-6",
       "name": "Dark Wooden Path 6",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Dark-wooden-path-6.png",
       "pixelWidth": 35,
       "pixelHeight": 19
-    },
-    {
-      "id": "dark-wooden-path-7",
-      "name": "Dark Wooden Path 7",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-7.png",
-      "pixelWidth": 32,
-      "pixelHeight": 28
-    },
-    {
-      "id": "dark-wooden-path-8",
-      "name": "Dark Wooden Path 8",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-8.png",
-      "pixelWidth": 32,
-      "pixelHeight": 35
-    },
-    {
-      "id": "dark-wooden-path-9",
-      "name": "Dark Wooden Path 9",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Dark-wooden-path-9.png",
-      "pixelWidth": 32,
-      "pixelHeight": 24
     },
     {
       "id": "wood-stairs-1",
@@ -1250,38 +1258,6 @@
       "pixelHeight": 39
     },
     {
-      "id": "wood-stairs-11",
-      "name": "Wood Stairs 11",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-11.png",
-      "pixelWidth": 23,
-      "pixelHeight": 39
-    },
-    {
-      "id": "wood-stairs-12",
-      "name": "Wood Stairs 12",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-12.png",
-      "pixelWidth": 24,
-      "pixelHeight": 39
-    },
-    {
-      "id": "wood-stairs-2",
-      "name": "Wood Stairs 2",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-2.png",
-      "pixelWidth": 32,
-      "pixelHeight": 40
-    },
-    {
-      "id": "wood-stairs-3",
-      "name": "Wood Stairs 3",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-3.png",
-      "pixelWidth": 32,
-      "pixelHeight": 42
-    },
-    {
       "id": "wood-stairs-4",
       "name": "Wood Stairs 4",
       "category": "paths",
@@ -1290,43 +1266,11 @@
       "pixelHeight": 34
     },
     {
-      "id": "wood-stairs-5",
-      "name": "Wood Stairs 5",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-5.png",
-      "pixelWidth": 42,
-      "pixelHeight": 35
-    },
-    {
-      "id": "wood-stairs-6",
-      "name": "Wood Stairs 6",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-6.png",
-      "pixelWidth": 40,
-      "pixelHeight": 40
-    },
-    {
       "id": "wood-stairs-7",
       "name": "Wood Stairs 7",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Wood-stairs-7.png",
       "pixelWidth": 24,
-      "pixelHeight": 51
-    },
-    {
-      "id": "wood-stairs-8",
-      "name": "Wood Stairs 8",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-8.png",
-      "pixelWidth": 26,
-      "pixelHeight": 51
-    },
-    {
-      "id": "wood-stairs-9",
-      "name": "Wood Stairs 9",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wood-stairs-9.png",
-      "pixelWidth": 26,
       "pixelHeight": 51
     },
     {
@@ -1338,43 +1282,11 @@
       "pixelHeight": 30
     },
     {
-      "id": "wooden-path-10",
-      "name": "Wooden Path 10",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-10.png",
-      "pixelWidth": 36,
-      "pixelHeight": 33
-    },
-    {
-      "id": "wooden-path-11",
-      "name": "Wooden Path 11",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-11.png",
-      "pixelWidth": 34,
-      "pixelHeight": 28
-    },
-    {
-      "id": "wooden-path-12",
-      "name": "Wooden Path 12",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-12.png",
-      "pixelWidth": 35,
-      "pixelHeight": 26
-    },
-    {
       "id": "wooden-path-13",
       "name": "Wooden Path 13",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Wooden-path-13.png",
       "pixelWidth": 30,
-      "pixelHeight": 32
-    },
-    {
-      "id": "wooden-path-14",
-      "name": "Wooden Path 14",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-14.png",
-      "pixelWidth": 20,
       "pixelHeight": 32
     },
     {
@@ -1402,26 +1314,10 @@
       "pixelHeight": 35
     },
     {
-      "id": "wooden-path-18",
-      "name": "Wooden Path 18",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-18.png",
-      "pixelWidth": 20,
-      "pixelHeight": 34
-    },
-    {
       "id": "wooden-path-2",
       "name": "Wooden Path 2",
       "category": "paths",
       "image": "assets/Tileset Asset/paths/Wooden-path-2.png",
-      "pixelWidth": 32,
-      "pixelHeight": 20
-    },
-    {
-      "id": "wooden-path-3",
-      "name": "Wooden Path 3",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-3.png",
       "pixelWidth": 32,
       "pixelHeight": 20
     },
@@ -1440,38 +1336,6 @@
       "image": "assets/Tileset Asset/paths/Wooden-path-5.png",
       "pixelWidth": 34,
       "pixelHeight": 20
-    },
-    {
-      "id": "wooden-path-6",
-      "name": "Wooden Path 6",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-6.png",
-      "pixelWidth": 35,
-      "pixelHeight": 19
-    },
-    {
-      "id": "wooden-path-7",
-      "name": "Wooden Path 7",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-7.png",
-      "pixelWidth": 32,
-      "pixelHeight": 36
-    },
-    {
-      "id": "wooden-path-8",
-      "name": "Wooden Path 8",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-8.png",
-      "pixelWidth": 32,
-      "pixelHeight": 27
-    },
-    {
-      "id": "wooden-path-9",
-      "name": "Wooden Path 9",
-      "category": "paths",
-      "image": "assets/Tileset Asset/paths/Wooden-path-9.png",
-      "pixelWidth": 32,
-      "pixelHeight": 27
     },
     {
       "id": "path-36",
@@ -1504,6 +1368,438 @@
       "image": "assets/Tileset Asset/paths/path_39.png",
       "pixelWidth": 33,
       "pixelHeight": 34
+    },
+    {
+      "id": "asset_0",
+      "name": "asset 0",
+      "category": "buildings",
+      "image": "assets/Tileset Asset/buildings/asset_0.png",
+      "pixelWidth": 133,
+      "pixelHeight": 130,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-10",
+      "name": "Dark wooden path 10",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-10.png",
+      "pixelWidth": 34,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-11",
+      "name": "Dark wooden path 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-11.png",
+      "pixelWidth": 36,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-12",
+      "name": "Dark wooden path 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-12.png",
+      "pixelWidth": 35,
+      "pixelHeight": 26,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-15",
+      "name": "Dark wooden path 15",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-15.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-18",
+      "name": "Dark wooden path 18",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-18.png",
+      "pixelWidth": 20,
+      "pixelHeight": 34,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-3",
+      "name": "Dark wooden path 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-5",
+      "name": "Dark wooden path 5",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-5.png",
+      "pixelWidth": 34,
+      "pixelHeight": 20,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-7",
+      "name": "Dark wooden path 7",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-7.png",
+      "pixelWidth": 32,
+      "pixelHeight": 28,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-8",
+      "name": "Dark wooden path 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-8.png",
+      "pixelWidth": 32,
+      "pixelHeight": 35,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "dark-wooden-path-9",
+      "name": "Dark wooden path 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Dark-wooden-path-9.png",
+      "pixelWidth": 32,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-11",
+      "name": "Wood stairs 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-11.png",
+      "pixelWidth": 23,
+      "pixelHeight": 39,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-12",
+      "name": "Wood stairs 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-12.png",
+      "pixelWidth": 24,
+      "pixelHeight": 39,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-2",
+      "name": "Wood stairs 2",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-2.png",
+      "pixelWidth": 32,
+      "pixelHeight": 40,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-3",
+      "name": "Wood stairs 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-5",
+      "name": "Wood stairs 5",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-5.png",
+      "pixelWidth": 42,
+      "pixelHeight": 35,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-6",
+      "name": "Wood stairs 6",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-6.png",
+      "pixelWidth": 40,
+      "pixelHeight": 40,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-8",
+      "name": "Wood stairs 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-8.png",
+      "pixelWidth": 26,
+      "pixelHeight": 51,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wood-stairs-9",
+      "name": "Wood stairs 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wood-stairs-9.png",
+      "pixelWidth": 26,
+      "pixelHeight": 51,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-10",
+      "name": "Wooden path 10",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-10.png",
+      "pixelWidth": 36,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-11",
+      "name": "Wooden path 11",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-11.png",
+      "pixelWidth": 34,
+      "pixelHeight": 28,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-12",
+      "name": "Wooden path 12",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-12.png",
+      "pixelWidth": 35,
+      "pixelHeight": 26,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-14",
+      "name": "Wooden path 14",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-14.png",
+      "pixelWidth": 20,
+      "pixelHeight": 32,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-18",
+      "name": "Wooden path 18",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-18.png",
+      "pixelWidth": 20,
+      "pixelHeight": 34,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-3",
+      "name": "Wooden path 3",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-3.png",
+      "pixelWidth": 32,
+      "pixelHeight": 20,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-6",
+      "name": "Wooden path 6",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-6.png",
+      "pixelWidth": 35,
+      "pixelHeight": 19,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-7",
+      "name": "Wooden path 7",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-7.png",
+      "pixelWidth": 32,
+      "pixelHeight": 36,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-8",
+      "name": "Wooden path 8",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-8.png",
+      "pixelWidth": 32,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "wooden-path-9",
+      "name": "Wooden path 9",
+      "category": "paths",
+      "image": "assets/Tileset Asset/paths/Wooden-path-9.png",
+      "pixelWidth": 32,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_10",
+      "name": "asset 10",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_10.png",
+      "pixelWidth": 14,
+      "pixelHeight": 14,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_11",
+      "name": "asset 11",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_11.png",
+      "pixelWidth": 24,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_12",
+      "name": "asset 12",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_12.png",
+      "pixelWidth": 21,
+      "pixelHeight": 18,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_13",
+      "name": "asset 13",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_13.png",
+      "pixelWidth": 20,
+      "pixelHeight": 19,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_14",
+      "name": "asset 14",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_14.png",
+      "pixelWidth": 19,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_19",
+      "name": "asset 19",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_19.png",
+      "pixelWidth": 34,
+      "pixelHeight": 43,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_20",
+      "name": "asset 20",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_20.png",
+      "pixelWidth": 18,
+      "pixelHeight": 21,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_21",
+      "name": "asset 21",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_21.png",
+      "pixelWidth": 25,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_22",
+      "name": "asset 22",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_22.png",
+      "pixelWidth": 20,
+      "pixelHeight": 26,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_24",
+      "name": "asset 24",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_24.png",
+      "pixelWidth": 26,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_26",
+      "name": "asset 26",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_26.png",
+      "pixelWidth": 42,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_27",
+      "name": "asset 27",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_27.png",
+      "pixelWidth": 34,
+      "pixelHeight": 36,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_28",
+      "name": "asset 28",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_28.png",
+      "pixelWidth": 40,
+      "pixelHeight": 47,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_29",
+      "name": "asset 29",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_29.png",
+      "pixelWidth": 32,
+      "pixelHeight": 34,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_31",
+      "name": "asset 31",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_31.png",
+      "pixelWidth": 31,
+      "pixelHeight": 32,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_32",
+      "name": "asset 32",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_32.png",
+      "pixelWidth": 27,
+      "pixelHeight": 26,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_33",
+      "name": "asset 33",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_33.png",
+      "pixelWidth": 27,
+      "pixelHeight": 27,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_34",
+      "name": "asset 34",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_34.png",
+      "pixelWidth": 23,
+      "pixelHeight": 19,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "asset_9",
+      "name": "asset 9",
+      "category": "terrain",
+      "image": "assets/Tileset Asset/tile object/asset_9.png",
+      "pixelWidth": 24,
+      "pixelHeight": 20,
+      "anchor": "bottom-left"
     }
   ]
 }

@@ -124,6 +124,12 @@ type PlacedObject = {
   row: number;
 };
 
+type EditorSnapshot = {
+  bgLayers: number[][][];
+  collisionLayer: number[][];
+  placedObjects: PlacedObject[];
+};
+
 type AutoStampOptions = {
   minTiles: number;
   maxWidth: number;
@@ -161,6 +167,7 @@ const OBJECT_STORAGE_KEY = 'ai-town.tilesetObjects.v1';
 const AUTO_STAMP_STORAGE_KEY = 'ai-town.tilesetAutoStamps.v1';
 const AUTO_STAMP_LIMIT = 12;
 const STAMP_PREVIEW_MAX_SIZE = 64;
+const HISTORY_LIMIT = 100;
 const TILESET_BASE_URL = import.meta.env.BASE_URL ?? '/';
 const TILESET_BASE_PATH = TILESET_BASE_URL.endsWith('/') ? TILESET_BASE_URL : `${TILESET_BASE_URL}/`;
 
@@ -177,6 +184,10 @@ const createBlankLayer = (width: number, height: number) =>
 
 const createBlankLayers = (count: number, width: number, height: number) =>
   Array.from({ length: count }, () => createBlankLayer(width, height));
+
+const cloneLayer = (layer: number[][]) => layer.map((column) => [...column]);
+const cloneLayers = (layers: number[][][]) => layers.map((layer) => layer.map((column) => [...column]));
+const clonePlacedObjects = (objects: PlacedObject[]) => objects.map((obj) => ({ ...obj }));
 
 const DEFAULT_TILESET: TilesetConfig = {
   id: 'starter',
@@ -295,6 +306,14 @@ const MapEditor = () => {
   const [isPaletteSelecting, setIsPaletteSelecting] = useState(false);
   const [autoLayerByTransparency, setAutoLayerByTransparency] = useState(true);
   const [isPointerDown, setIsPointerDown] = useState(false);
+  const [history, setHistory] = useState<{ past: EditorSnapshot[]; future: EditorSnapshot[] }>({
+    past: [],
+    future: [],
+  });
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+  const pendingHistoryRef = useRef<EditorSnapshot | null>(null);
+  const historyDirtyRef = useRef(false);
   const [recentTiles, setRecentTiles] = useState<number[]>([]);
   const [recentObjects, setRecentObjects] = useState<string[]>([]);
   const [animatedSprites, setAnimatedSprites] = useState<MapAnimatedSprite[]>(() => INITIAL_ANIMATED_SPRITES);
@@ -512,6 +531,73 @@ const MapEditor = () => {
     createBlankLayer(MAP_WIDTH, MAP_HEIGHT),
   );
 
+  const createSnapshot = useCallback(
+    (): EditorSnapshot => ({
+      bgLayers: cloneLayers(bgLayers),
+      collisionLayer: cloneLayer(collisionLayer),
+      placedObjects: clonePlacedObjects(placedObjects),
+    }),
+    [bgLayers, collisionLayer, placedObjects],
+  );
+
+  const beginHistoryCapture = useCallback(() => {
+    if (pendingHistoryRef.current) return;
+    pendingHistoryRef.current = createSnapshot();
+    historyDirtyRef.current = false;
+  }, [createSnapshot]);
+
+  const markHistoryDirty = useCallback(() => {
+    if (!pendingHistoryRef.current) return;
+    historyDirtyRef.current = true;
+  }, []);
+
+  const commitHistoryCapture = useCallback(() => {
+    if (pendingHistoryRef.current && historyDirtyRef.current) {
+      setHistory((prev) => ({
+        past: [...prev.past, pendingHistoryRef.current!].slice(-HISTORY_LIMIT),
+        future: [],
+      }));
+    }
+    pendingHistoryRef.current = null;
+    historyDirtyRef.current = false;
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.past.length === 0) return prev;
+      const previous = prev.past[prev.past.length - 1];
+      const rest = prev.past.slice(0, -1);
+      const current = createSnapshot();
+      pendingHistoryRef.current = null;
+      historyDirtyRef.current = false;
+      setBgLayers(previous.bgLayers);
+      setCollisionLayer(previous.collisionLayer);
+      setPlacedObjects(previous.placedObjects);
+      return {
+        past: rest,
+        future: [current, ...prev.future],
+      };
+    });
+  }, [createSnapshot]);
+
+  const redo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.future.length === 0) return prev;
+      const next = prev.future[0];
+      const rest = prev.future.slice(1);
+      const current = createSnapshot();
+      pendingHistoryRef.current = null;
+      historyDirtyRef.current = false;
+      setBgLayers(next.bgLayers);
+      setCollisionLayer(next.collisionLayer);
+      setPlacedObjects(next.placedObjects);
+      return {
+        past: [...prev.past, current].slice(-HISTORY_LIMIT),
+        future: rest,
+      };
+    });
+  }, [createSnapshot]);
+
   const usedTileStats = useMemo(() => {
     const counts = new Map<number, number>();
     for (const layer of bgLayers) {
@@ -579,8 +665,13 @@ const MapEditor = () => {
         if (!source?.id || !source?.image) continue;
         const pixelWidth = Number(source.pixelWidth) || tileSize;
         const pixelHeight = Number(source.pixelHeight) || tileSize;
-        const tileWidth = Math.max(1, Math.ceil(pixelWidth / tileSize));
-        const tileHeight = Math.max(1, Math.ceil(pixelHeight / tileSize));
+
+        // For terrain/paths, always use 1x1 tile grid regardless of pixel size
+        // This ensures 64x64 terrain tiles align to single grid cells
+        const isGroundTile = source.category === 'terrain' || source.category === 'paths';
+        const tileWidth = isGroundTile ? 1 : Math.max(1, Math.ceil(pixelWidth / tileSize));
+        const tileHeight = isGroundTile ? 1 : Math.max(1, Math.ceil(pixelHeight / tileSize));
+
         const normalizedName = source.name.replace(/(\D)(\d)/g, '$1 $2');
         allObjects.push({
           id: source.id,
@@ -931,23 +1022,6 @@ const MapEditor = () => {
       setLastTileMode(mode);
     }
   }, []);
-
-  const activateTileTool = useCallback((tool: 'brush' | 'eraser' | 'eyedropper') => {
-    if (activeMode === 'objects' || activeMode === 'prefabs') {
-      const preset = MODE_PRESETS.find((item) => item.id === lastTileMode);
-      if (preset) {
-        setActiveMode(preset.id);
-        if (preset.category) {
-          setActiveCategory(preset.category);
-          setPaletteMode('all');
-        }
-        if (typeof preset.layer === 'number') {
-          setActiveLayerIndex(preset.layer);
-        }
-      }
-    }
-    setActiveTool(tool);
-  }, [activeMode, lastTileMode]);
 
   const allTileIds = useMemo(
     () => Array.from({ length: tilesetRows * tilesetCols }, (_, index) => index),
@@ -1683,6 +1757,7 @@ const MapEditor = () => {
     if (col + stampSize.width > MAP_WIDTH || row + stampSize.height > MAP_HEIGHT) {
       return;
     }
+    markHistoryDirty();
     setBgLayers((prev) => {
       const next = prev.map((layer) => layer.map((column) => [...column]));
       const layerCount = Math.min(activeStamp.layers.length, next.length);
@@ -1718,15 +1793,40 @@ const MapEditor = () => {
     ) {
       return;
     }
-    setPlacedObjects((prev) => [
-      ...prev,
-      {
-        id: createPlacedObjectId(),
-        objectId: activeObject.id,
-        col,
-        row,
-      },
-    ]);
+    const isGroundObject =
+      (activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths';
+    setPlacedObjects((prev) => {
+      if (isGroundObject) {
+        const hasSame = prev.some((placement) => placement.col === col && placement.row === row && placement.objectId === activeObject.id);
+        if (hasSame) return prev;
+        const filtered = prev.filter((placement) => {
+          if (placement.col !== col || placement.row !== row) return true;
+          const objDef = objectsById.get(placement.objectId);
+          const isGround = objDef?.category === 'terrain' || objDef?.category === 'paths';
+          return !isGround;
+        });
+        markHistoryDirty();
+        return [
+          ...filtered,
+          {
+            id: createPlacedObjectId(),
+            objectId: activeObject.id,
+            col,
+            row,
+          },
+        ];
+      }
+      markHistoryDirty();
+      return [
+        ...prev,
+        {
+          id: createPlacedObjectId(),
+          objectId: activeObject.id,
+          col,
+          row,
+        },
+      ];
+    });
     pushRecentObject(activeObject.id);
   };
 
@@ -1739,6 +1839,7 @@ const MapEditor = () => {
         if (!objectDef) continue;
         const bounds = getObjectTileBounds(objectDef, placement);
         if (col >= bounds.startCol && col <= bounds.endCol && row >= bounds.startRow && row <= bounds.endRow) {
+          markHistoryDirty();
           next.splice(i, 1);
           break;
         }
@@ -1771,6 +1872,7 @@ const MapEditor = () => {
       const targetLayer = prev[activeLayerIndex];
       if (!targetLayer?.[col]) return prev;
       if (targetLayer[col][row] === tileIdToPlace) return prev;
+      markHistoryDirty();
       const next = prev.map((layer, layerIndex) => {
         if (layerIndex !== activeLayerIndex) return layer;
         const nextLayer = layer.map((column) => [...column]);
@@ -1791,6 +1893,7 @@ const MapEditor = () => {
     col: number,
   ) => {
     event.preventDefault();
+    if (event.button !== 0) return;
     if (stampCaptureMode) {
       setStampSelection({ startRow: row, startCol: col, endRow: row, endCol: col });
       setIsStampSelecting(true);
@@ -1804,15 +1907,18 @@ const MapEditor = () => {
       tileLayerIndex: layerIndex,
       collisionValue: collisionLayer[col]?.[row] ?? -1,
     });
-    if (activeTool === 'object' && event.button === 2) {
-      removeObjectAt(row, col);
-      return;
+    const tool = activeTool;
+    if (tool !== 'eyedropper') {
+      beginHistoryCapture();
     }
-    const tool = event.button === 2 ? 'eraser' : activeTool;
+    const isGroundObject =
+      tool === 'object' &&
+      activeObject &&
+      ((activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths');
     dragToolRef.current = tool;
     setIsPointerDown(true);
     applyToolAt(row, col, tool);
-    if (tool === 'eyedropper' || tool === 'stamp' || tool === 'object') {
+    if (tool === 'eyedropper' || tool === 'stamp' || (tool === 'object' && !isGroundObject)) {
       dragToolRef.current = null;
       setIsPointerDown(false);
     }
@@ -1863,12 +1969,13 @@ const MapEditor = () => {
       setIsStampSelecting(false);
       setIsPaletteSelecting(false);
       setIsObjectPaletteSelecting(false);
+      commitHistoryCapture();
     };
     window.addEventListener('pointerup', handlePointerUp);
     return () => {
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, []);
+  }, [commitHistoryCapture]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1877,11 +1984,18 @@ const MapEditor = () => {
       const tag = target?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
       const key = event.key.toLowerCase();
-      if (key === 'b') activateTileTool('brush');
-      if (key === 'e') activateTileTool('eraser');
-      if (key === 'i') activateTileTool('eyedropper');
-      if (key === 's') applyMode('prefabs');
-      if (key === 'o') applyMode('objects');
+      const isMeta = event.metaKey || event.ctrlKey;
+      if (isMeta && key === 'z' && !event.shiftKey) {
+        if (!canUndo) return;
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (isMeta && (key === 'y' || (key === 'z' && event.shiftKey))) {
+        if (!canRedo) return;
+        event.preventDefault();
+        redo();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -2081,90 +2195,6 @@ export const mapheight = ${MAP_HEIGHT};
   };
 
   /* -------------------------------------------------------------------------
-   * RENDER: Top Toolbar
-   * ----------------------------------------------------------------------- */
-  const renderToolbar = () => {
-    return (
-      <div className="col-start-2 row-start-1 h-[72px] flex items-center relative z-20">
-       <StardewFrame className="w-full h-full flex items-center justify-between px-4 py-2 gap-4">
-           {/* Wooden Tabs Section */}
-           <div className="flex items-center gap-1">
-               <div className="relative">
-                    <StardewTab
-                        label="TERRAIN"
-                        isActive={activeMode === 'terrain'}
-                        onClick={() => { applyMode('terrain'); setActiveCategory('all'); }}
-                        className="flex-shrink-0 scale-90 origin-center"
-                    />
-               </div>
-               <div className="relative">
-                    <StardewTab
-                        label="PATHS"
-                        isActive={activeMode === 'paths'}
-                        onClick={() => { applyMode('paths'); setActiveCategory('paths'); }}
-                        className="flex-shrink-0 scale-90 origin-center"
-                    />
-               </div>
-               <div className="relative">
-                    <StardewTab
-                        label="PROPS"
-                        // Active if objects mode AND not buildings sub-cat
-                        isActive={activeMode === 'objects' && activeSubCategory !== 'buildings'}
-                        onClick={() => { 
-                            applyMode('objects'); 
-                            setActiveSubCategory('nature'); // Default to nature
-                        }}
-                        className="flex-shrink-0 scale-90 origin-center"
-                    />
-               </div>
-               <div className="relative">
-                    <StardewTab
-                        label="BUILDINGS"
-                        isActive={activeMode === 'objects' && activeSubCategory === 'buildings'}
-                        onClick={() => { 
-                            applyMode('objects'); 
-                            setActiveSubCategory('buildings'); 
-                        }}
-                        className="flex-shrink-0 scale-90 origin-center"
-                    />
-               </div>
-           </div>
-
-           {/* Tool Icons Section */}
-           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#4a3022] rounded-lg border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
-               {[
-                { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png' },
-                { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png' },
-                { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png' },
-              ].map((tool) => (
-                <button
-                  key={tool.id}
-                  onClick={() => {
-                    if (tool.id === 'stamp') applyMode('prefabs');
-                    else activateTileTool(tool.id as any);
-                  }}
-                  className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm ${
-                    (tool.id === 'stamp' && activeMode === 'prefabs') ||
-                    activeTool === tool.id
-                      ? 'bg-[#e8d4b0] border-2 border-[#ffd93d] shadow-[0_0_8px_rgba(255,217,61,0.5)] scale-110 z-10'
-                      : 'bg-[#8b6b4a] border-2 border-[#5a3a2a] hover:bg-[#d4b078] hover:-translate-y-0.5'
-                  }`}
-                  title={tool.id.toUpperCase()}
-                >
-                  <img
-                    src={tool.icon}
-                    alt={tool.id}
-                    className="w-7 h-7 rendering-pixelated drop-shadow-sm"
-                  />
-                </button>
-              ))}
-           </div>
-       </StardewFrame>
-      </div>
-    );
-  };
-
-  /* -------------------------------------------------------------------------
    * RENDER: Right Panel (Options)
    * ----------------------------------------------------------------------- */
   /* -------------------------------------------------------------------------
@@ -2326,25 +2356,29 @@ export const mapheight = ${MAP_HEIGHT};
                     left: 0,
                 }}
             >
-             {/* Base Layers */}         <div
-               className="absolute inset-0 bg-[#d4c4a0] border-2 border-[#8b6b4a] shadow-xl rounded"
-               style={{
-                 display: 'grid',
-                 gridTemplateColumns: `repeat(${MAP_WIDTH}, ${tileSize}px)`,
-               }}
-             >
-                {/* BG Layers */}
-                {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
-                  Array.from({ length: MAP_WIDTH }).map((_, cIndex) => {
-                    const hasTile = bgLayers.some((layer) => (layer[cIndex]?.[rIndex] ?? -1) >= 0);
-                    return (
+             {/* Base Layers */}
+             <div className="absolute inset-0">
+               <div className="absolute inset-0 bg-[#d4c4a0] shadow-xl rounded" />
+               <div
+                 className="absolute inset-0"
+                 onContextMenu={(event) => event.preventDefault()}
+                 style={{
+                   display: 'grid',
+                   gridTemplateColumns: `repeat(${MAP_WIDTH}, ${tileSize}px)`,
+                   touchAction: 'none',
+                 }}
+               >
+                  {/* BG Layers */}
+                  {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
+                    Array.from({ length: MAP_WIDTH }).map((_, cIndex) => (
                       <div
                         key={`${rIndex}-${cIndex}`}
                         onPointerDown={(event) => handlePointerDown(event, rIndex, cIndex)}
                         onPointerEnter={() => handlePointerEnter(rIndex, cIndex)}
-                        className={`border hover:border-[#ffd93d] hover:shadow-[0_0_8px_rgba(255,217,61,0.5)] cursor-crosshair relative transition-all duration-75 ${
-                          hasTile ? 'border-[#8b6b4a]/20' : 'border-[#8b6b4a]/40'
-                        }`}
+                        onPointerMove={() => {
+                          if (isPointerDown) handlePointerEnter(rIndex, cIndex);
+                        }}
+                        className="cursor-crosshair relative transition-all duration-75 hover:ring-2 hover:ring-[#ffd93d] hover:shadow-[0_0_8px_rgba(255,217,61,0.5)]"
                         style={{ width: tileSize, height: tileSize }}
                       >
                          {bgLayers.map((layer, layerIndex) => {
@@ -2364,9 +2398,19 @@ export const mapheight = ${MAP_HEIGHT};
                            );
                          })}
                       </div>
-                    );
-                  })
-                )}
+                    ))
+                  )}
+               </div>
+               <div
+                 className="absolute inset-0 pointer-events-none rounded"
+                 style={{
+                   backgroundImage:
+                     'linear-gradient(to right, var(--stardew-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--stardew-grid) 1px, transparent 1px)',
+                   backgroundSize: `${tileSize}px ${tileSize}px`,
+                   backgroundPosition: '0 0',
+                 }}
+               />
+               <div className="absolute inset-0 pointer-events-none border-2 border-[#8b6b4a] rounded" />
              </div>
 
              {/* Placed Objects */}
@@ -2377,15 +2421,22 @@ export const mapheight = ${MAP_HEIGHT};
                     if (!objectDef) return null;
                     const bounds = getObjectPixelBounds(objectDef, placement);
                     const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
-                    
-                    // Apply scale for normalized sizing (32px baseline)
-                    const objectScale = (objectDef as any).scale ?? 1.0;
-                    const objectPixelWidth = (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * objectScale;
-                    const objectPixelHeight = (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * objectScale;
-                    const objectOffsetY =
-                      objectDef.imagePath && objectDef.anchor === 'bottom-left'
+
+                    // For terrain/paths: force display to grid size (32px) regardless of source image size
+                    const isGroundTile = (objectDef as any).category === 'terrain' || (objectDef as any).category === 'paths';
+                    const objectPixelWidth = isGroundTile
+                      ? tileSize
+                      : (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * ((objectDef as any).scale ?? 1.0);
+                    const objectPixelHeight = isGroundTile
+                      ? tileSize
+                      : (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * ((objectDef as any).scale ?? 1.0);
+
+                    // For ground tiles, no offset needed since they align to grid
+                    const objectOffsetY = isGroundTile
+                      ? 0
+                      : (objectDef.imagePath && objectDef.anchor === 'bottom-left'
                         ? Math.max(0, bounds.height - objectPixelHeight)
-                        : 0;
+                        : 0);
                     return (
                       <div
                         key={placement.id}
@@ -2403,6 +2454,7 @@ export const mapheight = ${MAP_HEIGHT};
                             ? `${objectPixelWidth}px ${objectPixelHeight}px`
                             : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
                           backgroundRepeat: 'no-repeat',
+                          imageRendering: 'pixelated',
                         }}
                       />
                     );
@@ -2446,12 +2498,26 @@ export const mapheight = ${MAP_HEIGHT};
              )}
 
              {/* Object Preview */}
-             {activeTool === 'object' && activeObject && hoverInfo && (tilesetLoaded || activeObject.imagePath) && objectPreviewBounds && (
-                <div className="absolute pointer-events-none" style={{ left: objectPreviewBounds.left, top: objectPreviewBounds.top, width: objectPreviewBounds.width, height: objectPreviewBounds.height, opacity: objectPreviewValid ? 0.7 : 0.4 }}>
-                   <div className="absolute inset-0" style={{ backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`, backgroundPosition: activeObject.imagePath ? `0px ${activeObject.anchor === 'bottom-left' ? Math.max(0, objectPreviewBounds.height - (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize)) : 0}px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`, backgroundSize: activeObject.imagePath ? `${(activeObject.pixelWidth ?? activeObject.tileWidth * tileSize)}px ${(activeObject.pixelHeight ?? activeObject.tileHeight * tileSize)}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`, backgroundRepeat: 'no-repeat' }} />
-                   <div className={`absolute inset-0 border-2 ${objectPreviewValid ? 'border-emerald-300/70' : 'border-red-400/70'}`} />
-                </div>
-             )}
+             {activeTool === 'object' && activeObject && hoverInfo && (tilesetLoaded || activeObject.imagePath) && objectPreviewBounds && (() => {
+                const isGroundTile = (activeObject as any).category === 'terrain' || (activeObject as any).category === 'paths';
+                const previewWidth = isGroundTile ? tileSize : objectPreviewBounds.width;
+                const previewHeight = isGroundTile ? tileSize : objectPreviewBounds.height;
+                const bgWidth = isGroundTile ? tileSize : (activeObject.pixelWidth ?? activeObject.tileWidth * tileSize);
+                const bgHeight = isGroundTile ? tileSize : (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize);
+                const bgOffsetY = isGroundTile ? 0 : (activeObject.anchor === 'bottom-left' ? Math.max(0, objectPreviewBounds.height - bgHeight) : 0);
+
+                return (
+                  <div className="absolute pointer-events-none" style={{ left: objectPreviewBounds.left, top: objectPreviewBounds.top, width: previewWidth, height: previewHeight, opacity: objectPreviewValid ? 0.7 : 0.4 }}>
+                     <div className="absolute inset-0" style={{
+                       backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`,
+                       backgroundPosition: activeObject.imagePath ? `0px ${bgOffsetY}px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`,
+                       backgroundSize: activeObject.imagePath ? `${bgWidth}px ${bgHeight}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+                       backgroundRepeat: 'no-repeat'
+                     }} />
+                     <div className={`absolute inset-0 border-2 ${objectPreviewValid ? 'border-emerald-300/70' : 'border-red-400/70'}`} />
+                  </div>
+                );
+             })()}
 
              {/* Selection Bounds */}
              {selectionBounds && (
@@ -2684,39 +2750,7 @@ export const mapheight = ${MAP_HEIGHT};
                  </StardewFrame>
              </div>
 
-             {/* Header Right: Tools (Matches Sidebar Right width effectively) */}
-             <div className="h-fit pl-1 w-fit">
-                 <StardewFrame className="flex items-center justify-center px-3 h-full w-full" >
-                      <div className="flex items-center gap-1.5 justify-center w-full">
-                         {[
-                          { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png', tooltip: '🖌️ Brush (B)\nPaint tiles on the map' },
-                          { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png', tooltip: '🧹 Eraser (E)\nRemove tiles from the map' },
-                          { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png', tooltip: '📦 Stamp (S)\nPlace saved prefab patterns' },
-                        ].map((tool) => (
-                          <button
-                            key={tool.id}
-                            onClick={() => {
-                              if (tool.id === 'stamp') applyMode('prefabs');
-                              else activateTileTool(tool.id as any);
-                            }}
-                            className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm ${
-                              (tool.id === 'stamp' && activeMode === 'prefabs') ||
-                              activeTool === tool.id
-                                ? 'bg-[#e8d4b0] border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] scale-100 z-10'  // Active: Inset/Pressed
-                                : 'bg-[#e8d4b0] border-2 border-[#8b6b4a] shadow-[inset_0_-2px_0_rgba(0,0,0,0.2),0_2px_0_rgba(0,0,0,0.2)] hover:bg-[#ffe6b5] hover:-translate-y-0.5' // Inactive: Raised
-                            }`}
-                            title={tool.tooltip}
-                          >
-                            <img
-                              src={tool.icon}
-                              alt={tool.id}
-                              className="w-5 h-5 rendering-pixelated drop-shadow-sm"
-                            />
-                          </button>
-                        ))}
-                     </div>
-                 </StardewFrame>
-             </div>
+             {/* Tools removed for simplified workflow */}
         </div>
 
         {/* --------------------------------------------------------------------------
