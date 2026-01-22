@@ -1,3 +1,11 @@
+/**
+ * Agent Operations - ElizaOS-Powered
+ * 
+ * This module handles all agent autonomous behavior using ElizaOS.
+ * Every decision (movement, activities, conversations) is made by ElizaOS.
+ * NO random behavior - all choices are character-driven and context-aware.
+ */
+
 import { v } from 'convex/values';
 import { internalAction } from '../_generated/server';
 import { WorldMap, serializedWorldMap } from './worldMap';
@@ -10,10 +18,15 @@ import {
 } from '../agent/conversation';
 import { assertNever } from '../util/assertNever';
 import { serializedAgent } from './agent';
-import { ACTIVITIES, ACTIVITY_COOLDOWN, CONVERSATION_COOLDOWN } from '../constants';
+import { CONVERSATION_COOLDOWN } from '../constants';
 import { api, internal } from '../_generated/api';
 import { sleep } from '../util/sleep';
 import { serializedPlayer } from './player';
+import type { AgentDecision } from '../elizaAgent/actions';
+
+// =============================================================================
+// Remember Conversation (unchanged - uses existing memory system)
+// =============================================================================
 
 export const agentRememberConversation = internalAction({
   args: {
@@ -48,6 +61,10 @@ export const agentRememberConversation = internalAction({
     }
   },
 });
+
+// =============================================================================
+// Generate Message (uses ElizaOS for chat)
+// =============================================================================
 
 export const agentGenerateMessage = internalAction({
   args: {
@@ -110,6 +127,10 @@ export const agentGenerateMessage = internalAction({
   },
 });
 
+// =============================================================================
+// Agent Do Something - ELIZA OS POWERED
+// =============================================================================
+
 export const agentDoSomething = internalAction({
   args: {
     worldId: v.id('worlds'),
@@ -120,79 +141,240 @@ export const agentDoSomething = internalAction({
     operationId: v.string(),
   },
   handler: async (ctx, args) => {
-    const { player, agent } = args;
+    const { player, agent, otherFreePlayers } = args;
     const map = new WorldMap(args.map);
     const now = Date.now();
-    // Don't try to start a new conversation if we were just in one.
+
+    // Cooldown checks
     const justLeftConversation =
       agent.lastConversation && now < agent.lastConversation + CONVERSATION_COOLDOWN;
-    // Don't try again if we recently tried to find someone to invite.
     const recentlyAttemptedInvite =
       agent.lastInviteAttempt && now < agent.lastInviteAttempt + CONVERSATION_COOLDOWN;
-    const recentActivity = player.activity && now < player.activity.until + ACTIVITY_COOLDOWN;
-    // Decide whether to do an activity or wander somewhere.
-    if (!player.pathfinding) {
-      if (recentActivity || justLeftConversation) {
-        await sleep(Math.random() * 1000);
-        await ctx.runMutation(api.aiTown.main.sendInput, {
-          worldId: args.worldId,
-          name: 'finishDoSomething',
-          args: {
-            operationId: args.operationId,
-            agentId: agent.id,
-            destination: wanderDestination(map),
-          },
-        });
-        return;
-      } else {
-        // TODO: have LLM choose the activity & emoji
-        const activity = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
-        await sleep(Math.random() * 1000);
-        await ctx.runMutation(api.aiTown.main.sendInput, {
-          worldId: args.worldId,
-          name: 'finishDoSomething',
-          args: {
-            operationId: args.operationId,
-            agentId: agent.id,
-            activity: {
-              description: activity.description,
-              emoji: activity.emoji,
-              until: Date.now() + activity.duration,
-            },
-          },
-        });
-        return;
-      }
-    }
-    const invitee =
-      justLeftConversation || recentlyAttemptedInvite
-        ? undefined
-        : await ctx.runQuery(internal.aiTown.agent.findConversationCandidate, {
-            now,
-            worldId: args.worldId,
-            player: args.player,
-            otherFreePlayers: args.otherFreePlayers,
-          });
 
-    // TODO: We hit a lot of OCC errors on sending inputs in this file. It's
-    // easy for them to get scheduled at the same time and line up in time.
-    await sleep(Math.random() * 1000);
-    await ctx.runMutation(api.aiTown.main.sendInput, {
+    // Build context for ElizaOS
+    const nearbyAgents = otherFreePlayers.map((p) => ({
+      id: p.id,
+      name: p.id, // Will be resolved to actual name by the query
+      position: { x: p.position.x, y: p.position.y },
+      distance: Math.sqrt(
+        Math.pow(p.position.x - player.position.x, 2) +
+        Math.pow(p.position.y - player.position.y, 2)
+      ),
+      activity: p.activity?.description,
+      isInConversation: false, // These are free players, so not in conversation
+    }));
+
+    // Get recent world activity (messages)
+    const recentMessages = await ctx.runQuery(internal.aiTown.agentOperations.getRecentWorldMessages, {
       worldId: args.worldId,
-      name: 'finishDoSomething',
-      args: {
-        operationId: args.operationId,
-        agentId: args.agent.id,
-        invitee,
-      },
+      limit: 10,
     });
+
+    try {
+      // Ask ElizaOS what to do
+      const decision: AgentDecision = await ctx.runAction(internal.elizaAgent.actions.askWhatToDo, {
+        agentId: agent.id,
+        playerId: player.id,
+        worldId: args.worldId,
+        position: { x: player.position.x, y: player.position.y },
+        nearbyAgents,
+        recentMessages,
+        currentActivity: player.activity?.description,
+        inConversation: false,
+        conversationId: undefined,
+        conversationParticipants: undefined,
+        conversationMessages: undefined,
+      });
+
+      console.log(`[ElizaOS] Agent ${agent.id} decision:`, decision.type);
+
+      // Process the decision
+      await sleep(Math.random() * 1000);
+
+      switch (decision.type) {
+        case 'move': {
+          // ElizaOS chose a specific destination
+          await ctx.runMutation(api.aiTown.main.sendInput, {
+            worldId: args.worldId,
+            name: 'finishDoSomething',
+            args: {
+              operationId: args.operationId,
+              agentId: agent.id,
+              destination: {
+                x: Math.max(1, Math.min(map.width - 2, Math.round(decision.x))),
+                y: Math.max(1, Math.min(map.height - 2, Math.round(decision.y))),
+              },
+            },
+          });
+          break;
+        }
+
+        case 'activity': {
+          // ElizaOS chose an activity
+          await ctx.runMutation(api.aiTown.main.sendInput, {
+            worldId: args.worldId,
+            name: 'finishDoSomething',
+            args: {
+              operationId: args.operationId,
+              agentId: agent.id,
+              activity: {
+                description: decision.description,
+                emoji: decision.emoji,
+                until: Date.now() + decision.duration * 1000,
+              },
+            },
+          });
+          break;
+        }
+
+        case 'converse': {
+          // ElizaOS wants to start a conversation
+          if (justLeftConversation || recentlyAttemptedInvite) {
+            // On cooldown, just wander instead
+            await ctx.runMutation(api.aiTown.main.sendInput, {
+              worldId: args.worldId,
+              name: 'finishDoSomething',
+              args: {
+                operationId: args.operationId,
+                agentId: agent.id,
+                destination: wanderDestination(map),
+              },
+            });
+          } else {
+            // Find the target player
+            const targetPlayer = otherFreePlayers.find((p) => p.id === decision.targetId);
+            await ctx.runMutation(api.aiTown.main.sendInput, {
+              worldId: args.worldId,
+              name: 'finishDoSomething',
+              args: {
+                operationId: args.operationId,
+                agentId: agent.id,
+                invitee: targetPlayer?.id,
+              },
+            });
+          }
+          break;
+        }
+
+        case 'wander': {
+          // ElizaOS chose to wander
+          await ctx.runMutation(api.aiTown.main.sendInput, {
+            worldId: args.worldId,
+            name: 'finishDoSomething',
+            args: {
+              operationId: args.operationId,
+              agentId: agent.id,
+              destination: wanderDestination(map),
+            },
+          });
+          break;
+        }
+
+        case 'idle':
+        default: {
+          // ElizaOS chose to stay idle - wander slowly
+          await ctx.runMutation(api.aiTown.main.sendInput, {
+            worldId: args.worldId,
+            name: 'finishDoSomething',
+            args: {
+              operationId: args.operationId,
+              agentId: agent.id,
+              destination: wanderDestination(map),
+            },
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      // Fallback on error - just wander
+      console.error(`[ElizaOS] Decision error for agent ${agent.id}:`, error);
+      await sleep(Math.random() * 1000);
+      await ctx.runMutation(api.aiTown.main.sendInput, {
+        worldId: args.worldId,
+        name: 'finishDoSomething',
+        args: {
+          operationId: args.operationId,
+          agentId: agent.id,
+          destination: wanderDestination(map),
+        },
+      });
+    }
   },
 });
 
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
 function wanderDestination(worldMap: WorldMap) {
-  // Wander someonewhere at least one tile away from the edge.
+  // Wander somewhere at least one tile away from the edge.
   return {
     x: 1 + Math.floor(Math.random() * (worldMap.width - 2)),
     y: 1 + Math.floor(Math.random() * (worldMap.height - 2)),
   };
 }
+
+// =============================================================================
+// Internal Queries for Context
+// =============================================================================
+
+import { internalQuery } from '../_generated/server';
+
+export const getRecentWorldMessages = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Get recent messages from the world
+    const messages = await ctx.db
+      .query('messages')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .order('desc')
+      .take(args.limit);
+
+    // Get player names for the messages
+    const world = await ctx.db.get(args.worldId);
+    const playerNames = new Map<string, string>();
+
+    if (world) {
+      for (const player of world.players) {
+        const desc = await ctx.db
+          .query('playerDescriptions')
+          .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', player.id))
+          .first();
+        if (desc) {
+          playerNames.set(player.id, desc.name);
+        }
+      }
+    }
+
+    return messages.reverse().map((m) => ({
+      from: playerNames.get(m.author) || m.author,
+      text: m.text,
+      timestamp: m._creationTime,
+    }));
+  },
+});
+
+export const getAgentPlayerNames = internalQuery({
+  args: {
+    worldId: v.id('worlds'),
+    playerIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const names: Record<string, string> = {};
+
+    for (const playerId of args.playerIds) {
+      const desc = await ctx.db
+        .query('playerDescriptions')
+        .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', playerId))
+        .first();
+      if (desc) {
+        names[playerId] = desc.name;
+      }
+    }
+
+    return names;
+  },
+});

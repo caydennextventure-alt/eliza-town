@@ -1,5 +1,6 @@
 import { ConvexError, v } from 'convex/values';
 import { internalMutation, mutation, query, MutationCtx } from './_generated/server';
+import { Id } from './_generated/dataModel';
 import { characters } from '../data/characters';
 import { insertInput } from './aiTown/insertInput';
 import { InputArgs, InputNames } from './aiTown/inputs';

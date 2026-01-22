@@ -1,3 +1,10 @@
+/**
+ * Game Component
+ *
+ * Main game view. AI agents are powered by ElizaOS running in the Convex backend.
+ * Agents automatically pause when no users are connected to save LLM costs.
+ */
+
 import { useState } from 'react';
 import PixiGame from './PixiGame.tsx';
 
@@ -29,14 +36,23 @@ export default function Game() {
   const game = useServerGame(worldId);
 
   // Send a periodic heartbeat to our world to keep it alive.
+  // This also signals to the backend that users are connected.
   useWorldHeartbeat();
 
   const worldState = useQuery(api.world.worldState, worldId ? { worldId } : 'skip');
   const { historicalTime, timeManager } = useHistoricalTime(worldState?.engine);
 
   if (!worldId || !engineId || !game) {
-    return null;
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <p>Loading AI Town...</p>
+        </div>
+      </div>
+    );
   }
+
   return (
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
@@ -54,7 +70,7 @@ export default function Game() {
             />
           </ConvexProvider>
         </Stage>
-        
+
         {/* Right-side overlay for Player Details */}
         <div className="absolute top-0 right-0 z-10 h-full w-80 lg:w-96 p-4 flex flex-col pointer-events-auto overflow-hidden">
           <PlayerDetails
@@ -64,6 +80,12 @@ export default function Game() {
             playerId={selectedElement?.id}
             setSelectedElement={setSelectedElement}
           />
+        </div>
+
+        {/* ElizaOS Status Badge */}
+        <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-sm text-white/90 flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+          <span>AI Agents powered by ElizaOS</span>
         </div>
       </div>
     </>

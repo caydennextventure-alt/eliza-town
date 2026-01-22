@@ -39,7 +39,7 @@ type CharacterRegistryEntry = {
   spriteId: string;
   displayName: string;
   textureUrl: string | null;
-  portraitUrl?: string | null;
+  portraitUrl: string | null;
   frameWidth: number;
   frameHeight: number;
   framesPerDirection: number;
@@ -70,15 +70,12 @@ export const useCharacters = () => {
       isCustom: false,
     }));
     const custom = (customSprites ?? [])
-      .filter(
-        (sprite): sprite is CharacterRegistryEntry & { textureUrl: string } =>
-          typeof sprite.textureUrl === 'string' && sprite.textureUrl.length > 0,
-      )
+      .filter((sprite) => typeof sprite.textureUrl === 'string' && sprite.textureUrl.length > 0)
       .map((sprite): CharacterDefinition => ({
         name: sprite.spriteId,
         displayName: sprite.displayName,
-        textureUrl: sprite.textureUrl,
-        portraitUrl: sprite.portraitUrl ?? sprite.textureUrl,
+        textureUrl: sprite.textureUrl!,
+        portraitUrl: sprite.portraitUrl ?? sprite.textureUrl ?? undefined,
         spritesheetData:
           sprite.frameWidth > 0 && sprite.frameHeight > 0
             ? createStandardSpritesheetData(sprite.frameWidth, sprite.frameHeight)
