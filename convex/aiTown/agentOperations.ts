@@ -128,6 +128,75 @@ export const agentGenerateMessage = internalAction({
 });
 
 // =============================================================================
+// Agent Decide On Invite - ELIZA OS POWERED
+// =============================================================================
+
+export const agentDecideOnInvite = internalAction({
+  args: {
+    worldId: v.id('worlds'),
+    agentId,
+    playerId,
+    conversationId,
+    inviterPlayerId: playerId,
+    operationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Get player names
+      const playerNames = await ctx.runQuery(internal.aiTown.agentOperations.getAgentPlayerNames, {
+        worldId: args.worldId,
+        playerIds: [args.playerId, args.inviterPlayerId],
+      });
+      
+      // Get agent description for character info
+      const agentDescription = await ctx.runQuery(internal.aiTown.agentOperations.getAgentDescription, {
+        worldId: args.worldId,
+        agentId: args.agentId,
+      });
+
+      // Ask ElizaOS whether to accept the invite
+      const decision = await ctx.runAction(internal.elizaAgent.elizaRuntime.decideOnInvite, {
+        agentId: args.agentId,
+        characterName: playerNames[args.playerId] || 'Agent',
+        characterBio: agentDescription?.identity || 'A friendly character in AI Town',
+        characterPersonality: agentDescription?.personality || ['friendly', 'curious'],
+        inviterName: playerNames[args.inviterPlayerId] || 'Someone',
+        inviterActivity: undefined,
+        currentActivity: undefined,
+        recentInteractionWithInviter: false,
+      });
+
+      console.log(`[ElizaOS] Agent ${args.agentId} ${decision.accept ? 'accepts' : 'rejects'} invite: ${decision.reason}`);
+
+      await sleep(Math.random() * 500);
+      await ctx.runMutation(api.aiTown.main.sendInput, {
+        worldId: args.worldId,
+        name: 'finishDecideOnInvite',
+        args: {
+          operationId: args.operationId,
+          agentId: args.agentId,
+          conversationId: args.conversationId,
+          accept: decision.accept,
+        },
+      });
+    } catch (error) {
+      console.error(`[ElizaOS] Invite decision error for agent ${args.agentId}:`, error);
+      // Default to accepting on error
+      await ctx.runMutation(api.aiTown.main.sendInput, {
+        worldId: args.worldId,
+        name: 'finishDecideOnInvite',
+        args: {
+          operationId: args.operationId,
+          agentId: args.agentId,
+          conversationId: args.conversationId,
+          accept: true,
+        },
+      });
+    }
+  },
+});
+
+// =============================================================================
 // Agent Do Something - ELIZA OS POWERED
 // =============================================================================
 
@@ -208,25 +277,53 @@ export const agentDoSomething = internalAction({
       switch (action.type) {
         case 'MOVE': {
           // ElizaOS action: MOVE to specific location
-          const x = typeof params.x === 'number' ? params.x : Math.random() * map.width;
-          const y = typeof params.y === 'number' ? params.y : Math.random() * map.height;
-          await ctx.runMutation(api.aiTown.main.sendInput, {
-            worldId: args.worldId,
-            name: 'finishDoSomething',
-            args: {
-              operationId: args.operationId,
+          // If ElizaOS didn't provide coordinates, treat as WANDER (ask ElizaOS where to go)
+          if (typeof params.x !== 'number' || typeof params.y !== 'number') {
+            console.log(`[ElizaOS] MOVE without coordinates, treating as WANDER`);
+            const wanderResult = await ctx.runAction(internal.elizaAgent.elizaRuntime.chooseWanderDestination, {
               agentId: agent.id,
-              destination: {
-                x: Math.max(1, Math.min(map.width - 2, Math.round(x))),
-                y: Math.max(1, Math.min(map.height - 2, Math.round(y))),
+              characterName: playerNames[player.id] || 'Agent',
+              characterBio: agentDescription?.identity || 'A friendly character',
+              characterPersonality: agentDescription?.personality || ['friendly', 'curious'],
+              currentPosition: { x: player.position.x, y: player.position.y },
+              mapWidth: map.width,
+              mapHeight: map.height,
+              nearbyAgents: nearbyAgents.slice(0, 5).map(a => ({
+                name: a.name,
+                position: a.position,
+                distance: a.distance,
+              })),
+            });
+            await ctx.runMutation(api.aiTown.main.sendInput, {
+              worldId: args.worldId,
+              name: 'finishDoSomething',
+              args: {
+                operationId: args.operationId,
+                agentId: agent.id,
+                destination: { x: wanderResult.x, y: wanderResult.y },
               },
-            },
-          });
+            });
+          } else {
+            await ctx.runMutation(api.aiTown.main.sendInput, {
+              worldId: args.worldId,
+              name: 'finishDoSomething',
+              args: {
+                operationId: args.operationId,
+                agentId: agent.id,
+                destination: {
+                  x: Math.max(1, Math.min(map.width - 2, Math.round(params.x))),
+                  y: Math.max(1, Math.min(map.height - 2, Math.round(params.y))),
+                },
+              },
+            });
+          }
           break;
         }
 
         case 'ACTIVITY': {
           // ElizaOS action: ACTIVITY in place
+          // Ensure we have a valid description from ElizaOS, not hardcoded
+          const description = params.description ? String(params.description) : action.reason || 'Being thoughtful';
           await ctx.runMutation(api.aiTown.main.sendInput, {
             worldId: args.worldId,
             name: 'finishDoSomething',
@@ -234,7 +331,7 @@ export const agentDoSomething = internalAction({
               operationId: args.operationId,
               agentId: agent.id,
               activity: {
-                description: String(params.description || 'Doing something'),
+                description,
                 emoji: String(params.emoji || '💭'),
                 until: Date.now() + (Number(params.duration) || 30) * 1000,
               },
@@ -246,14 +343,22 @@ export const agentDoSomething = internalAction({
         case 'CONVERSE': {
           // ElizaOS action: CONVERSE with nearby character
           if (justLeftConversation || recentlyAttemptedInvite) {
-            // On cooldown, just wander instead
+            // On cooldown - do a brief idle activity instead
+            // Use ElizaOS's reason for wanting to converse as context
+            const cooldownReason = action.reason 
+              ? `Considering: ${action.reason}` 
+              : 'Reflecting on recent conversation';
             await ctx.runMutation(api.aiTown.main.sendInput, {
               worldId: args.worldId,
               name: 'finishDoSomething',
               args: {
                 operationId: args.operationId,
                 agentId: agent.id,
-                destination: wanderDestination(map),
+                activity: {
+                  description: cooldownReason,
+                  emoji: '💭',
+                  until: Date.now() + 10000, // Wait 10 seconds
+                },
               },
             });
           } else {
@@ -276,14 +381,29 @@ export const agentDoSomething = internalAction({
         }
 
         case 'WANDER': {
-          // ElizaOS action: WANDER randomly
+          // ElizaOS action: WANDER with intelligent destination selection
+          const wanderResult = await ctx.runAction(internal.elizaAgent.elizaRuntime.chooseWanderDestination, {
+            agentId: agent.id,
+            characterName: playerNames[player.id] || 'Agent',
+            characterBio: agentDescription?.identity || 'A friendly character',
+            characterPersonality: agentDescription?.personality || ['friendly', 'curious'],
+            currentPosition: { x: player.position.x, y: player.position.y },
+            mapWidth: map.width,
+            mapHeight: map.height,
+            nearbyAgents: nearbyAgents.slice(0, 5).map(a => ({
+              name: a.name,
+              position: a.position,
+              distance: a.distance,
+            })),
+          });
+          
           await ctx.runMutation(api.aiTown.main.sendInput, {
             worldId: args.worldId,
             name: 'finishDoSomething',
             args: {
               operationId: args.operationId,
               agentId: agent.id,
-              destination: wanderDestination(map),
+              destination: { x: wanderResult.x, y: wanderResult.y },
             },
           });
           break;
@@ -291,22 +411,30 @@ export const agentDoSomething = internalAction({
 
         case 'IDLE':
         default: {
-          // ElizaOS action: IDLE - stay or wander slowly
+          // ElizaOS action: IDLE - stay in place with a brief activity
+          // Use the reason from ElizaOS as the activity description
+          const idleReason = action.reason || 'Taking a moment';
           await ctx.runMutation(api.aiTown.main.sendInput, {
             worldId: args.worldId,
             name: 'finishDoSomething',
             args: {
               operationId: args.operationId,
               agentId: agent.id,
-              destination: wanderDestination(map),
+              activity: {
+                description: idleReason,
+                emoji: '💭',
+                until: Date.now() + 10000, // 10 seconds of idle
+              },
             },
           });
           break;
         }
       }
     } catch (error) {
-      // Fallback on error - just wander
-      console.error(`[ElizaOS] Decision error for agent ${agent.id}:`, error);
+      // Error fallback - still try to be character-appropriate
+      // Log the error but use character name in the activity
+      const charName = playerNames[player.id] || 'Agent';
+      console.error(`[ElizaOS] Decision error for agent ${agent.id} (${charName}):`, error);
       await sleep(Math.random() * 1000);
       await ctx.runMutation(api.aiTown.main.sendInput, {
         worldId: args.worldId,
@@ -314,24 +442,16 @@ export const agentDoSomething = internalAction({
         args: {
           operationId: args.operationId,
           agentId: agent.id,
-          destination: wanderDestination(map),
+          activity: {
+            description: `Lost in thought`,
+            emoji: '🤔',
+            until: Date.now() + 5000,
+          },
         },
       });
     }
   },
 });
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function wanderDestination(worldMap: WorldMap) {
-  // Wander somewhere at least one tile away from the edge.
-  return {
-    x: 1 + Math.floor(Math.random() * (worldMap.width - 2)),
-    y: 1 + Math.floor(Math.random() * (worldMap.height - 2)),
-  };
-}
 
 // =============================================================================
 // Internal Queries for Context

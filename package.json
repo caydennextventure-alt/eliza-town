@@ -20,6 +20,7 @@
     "test:e2e:infra": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts --runInBand --verbose tests/e2e/infrastructure.e2e.test.ts",
     "test:e2e:eliza": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts --runInBand --verbose tests/e2e/eliza-runtime.e2e.test.ts",
     "test:e2e:eliza-integration": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts --runInBand --verbose tests/e2e/eliza-integration.e2e.test.ts",
+    "test:e2e:actions": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts --runInBand --verbose tests/e2e/eliza-actions.e2e.test.ts",
     "test:e2e:startup": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts --runInBand --verbose tests/e2e/startup.e2e.test.ts",
     "cleanup:test-agents": "npx ts-node --esm scripts/cleanup-test-agents.ts",
     "knip": "knip"

@@ -27,7 +27,7 @@ import {
 import { openaiPlugin } from "@elizaos/plugin-openai";
 // @ts-expect-error - plugin-inmemorydb types
 import inmemoryDbPlugin, { InMemoryDatabaseAdapter, MemoryStorage } from "@elizaos/plugin-inmemorydb";
-import { townPlugin } from "./townPlugin";
+import { townPlugin, setTownContext, clearTownContext, type AITownContext } from "./townPlugin";
 
 // =============================================================================
 // Types
@@ -63,24 +63,19 @@ async function getRuntime(name: string, bio: string, personality: string[], agen
   }
   
   // Create character object (ElizaOS Character type)
+  // NOTE: Keep system prompt minimal - context comes from aitown-context Provider
   const character: Character = {
     name,
-    bio: [`${bio} Personality: ${personality.join(", ")}`],
-    system: `You are ${name}, a character living in AI Town. ${bio}
+    bio: [`${bio}`],
+    // System prompt defines IDENTITY only - context/actions come from Provider
+    system: `You are ${name}, a character living in AI Town.
 
-Your personality traits: ${personality.join(", ")}
+${bio}
 
-BEHAVIOR GUIDELINES:
-- Be proactive and social - seek out conversations with nearby characters
-- If someone is close and available, CONVERSE with them
-- If alone, WANDER to explore and find others
-- Do ACTIVITY only when it fits your character
-- Use IDLE sparingly - prefer action
+Personality traits: ${personality.join(", ")}
 
-IMPORTANT: You MUST respond with ONLY a valid JSON object. No other text.
-Format: { "action": "ACTION_NAME", "params": {...}, "reason": "brief reason" }
-
-Valid actions: MOVE, CONVERSE, ACTIVITY, WANDER, IDLE`,
+You will receive context about your surroundings from the AI Town system. 
+Make decisions that fit your personality and the situation.`,
   };
   
   // Create and initialize the in-memory database adapter from official plugin
@@ -141,14 +136,28 @@ export const makeAgentDecision = internalAction({
       text: v.string()
     })))
   },
-  handler: async (ctx, args): Promise<TownAction> => {
+  handler: async (_ctx, args): Promise<TownAction> => {
+    const availableActions: TownActionType[] = args.inConversation
+      ? ["SAY", "LEAVE_CONVERSATION"]
+      : ["MOVE", "CONVERSE", "ACTIVITY", "WANDER", "IDLE"];
+    
+    // Set the AI Town context for the Provider to use
+    const townContext: AITownContext = {
+      characterName: args.characterName,
+      position: args.position,
+      nearbyAgents: args.nearbyAgents,
+      recentMessages: args.recentMessages,
+      currentActivity: args.currentActivity,
+      inConversation: args.inConversation,
+      conversationMessages: args.conversationMessages,
+      availableActions,
+    };
+    setTownContext(townContext);
+    
     try {
       const runtime = await getRuntime(args.characterName, args.characterBio, args.characterPersonality, args.agentId);
       
-      const availableActions: TownActionType[] = args.inConversation
-        ? ["SAY", "LEAVE_CONVERSATION"]
-        : ["MOVE", "CONVERSE", "ACTIVITY", "WANDER", "IDLE"];
-      
+      // Build the decision prompt - context is also provided by the aitown-context Provider
       const prompt = buildPrompt({
         characterName: args.characterName,
         position: args.position,
@@ -175,7 +184,7 @@ export const makeAgentDecision = internalAction({
         type: ChannelType.API,
       });
       
-      // Create message (ElizaOS pattern)
+      // Create message memory (ElizaOS pattern)
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: userId,
@@ -187,7 +196,8 @@ export const makeAgentDecision = internalAction({
         },
       });
       
-      // Handle message (CANONICAL ElizaOS pattern)
+      // Handle message using ElizaOS messageService (CANONICAL pattern)
+      // The aitown-context Provider injects game context, and townPlugin actions are available
       let responseText = "";
       await runtime.messageService?.handleMessage(
         runtime,
@@ -200,12 +210,15 @@ export const makeAgentDecision = internalAction({
         },
       );
       
-      console.log(`[ElizaOS] ${args.characterName}: ${responseText.slice(0, 100)}...`);
+      console.log(`[ElizaOS] ${args.characterName} decision: ${responseText.slice(0, 100)}...`);
       return parseAction(responseText, availableActions);
       
     } catch (error) {
-      console.error(`[ElizaOS] Error:`, error);
-      return { type: "IDLE", params: {}, reason: "Error" };
+      console.error(`[ElizaOS] Decision error for ${args.characterName}:`, error);
+      return { type: "IDLE", params: {}, reason: "Processing error" };
+    } finally {
+      // Always clear the context after the call
+      clearTownContext();
     }
   }
 });
@@ -266,12 +279,229 @@ export const generateChatResponse = internalAction({
         },
       );
       
+      if (!responseText) {
+        console.warn(`[ElizaOS] ${args.characterName} got empty chat response, using fallback`);
+        return "Hmm...";
+      }
       console.log(`[ElizaOS] ${args.characterName} says: "${responseText}"`);
-      return responseText || "I'm not sure what to say.";
+      return responseText;
       
     } catch (error) {
-      console.error(`[ElizaOS] Chat error:`, error);
-      return "I'm not sure what to say.";
+      console.error(`[ElizaOS] Chat error for ${args.characterName}:`, error);
+      return "...";
+    }
+  }
+});
+
+// =============================================================================
+// Invite Decision (ElizaOS-powered)
+// =============================================================================
+
+export const decideOnInvite = internalAction({
+  args: {
+    agentId: v.string(),
+    characterName: v.string(),
+    characterBio: v.string(),
+    characterPersonality: v.array(v.string()),
+    inviterName: v.string(),
+    inviterActivity: v.optional(v.string()),
+    currentActivity: v.optional(v.string()),
+    recentInteractionWithInviter: v.optional(v.boolean()),
+  },
+  handler: async (_ctx, args): Promise<{ accept: boolean; reason: string }> => {
+    try {
+      const runtime = await getRuntime(args.characterName, args.characterBio, args.characterPersonality, args.agentId);
+      
+      const prompt = `You are ${args.characterName}. ${args.inviterName} is approaching you and wants to start a conversation.
+
+Your current state:
+${args.currentActivity ? `- You are currently: ${args.currentActivity}` : '- You are not doing anything in particular'}
+${args.recentInteractionWithInviter ? `- You recently talked to ${args.inviterName}` : ''}
+
+${args.inviterName}'s state:
+${args.inviterActivity ? `- They appear to be: ${args.inviterActivity}` : '- They are approaching you'}
+
+Based on your personality (${args.characterPersonality.join(', ')}), should you accept this conversation invite?
+
+IMPORTANT: Respond with ONLY a valid JSON object. No other text.
+Format: { "accept": true/false, "reason": "brief reason for your decision" }`;
+
+      const userId = stringToUuid(`invite-system`);
+      const roomId = stringToUuid(`invite-${args.agentId}`);
+      const worldId = stringToUuid(`invite-world`);
+      
+      await runtime.ensureConnection({
+        entityId: userId,
+        roomId,
+        worldId,
+        userName: "Invite System",
+        source: "invite",
+        channelId: `invite-${args.agentId}`,
+        type: ChannelType.API,
+      });
+      
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "invite",
+          channelType: ChannelType.API,
+        },
+      });
+      
+      let responseText = "";
+      await runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content): Promise<Memory[]> => {
+          if (content?.text) {
+            responseText += content.text;
+          }
+          return [];
+        },
+      );
+      
+      // Parse the response
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0]) as { accept?: boolean; reason?: string };
+          const accept = parsed.accept === true;
+          console.log(`[ElizaOS] ${args.characterName} ${accept ? 'accepts' : 'rejects'} invite from ${args.inviterName}: ${parsed.reason}`);
+          return { accept, reason: parsed.reason || (accept ? "Happy to chat" : "Not interested right now") };
+        } catch { /* parse error */ }
+      }
+      
+      // Default to accepting (friendly behavior) - ElizaOS returned unparseable response
+      // This is intentional - agents should be social by default
+      console.warn(`[ElizaOS] ${args.characterName} got unparseable invite response, defaulting to accept (social behavior)`);
+      return { accept: true, reason: "Seems friendly" };
+      
+    } catch (error) {
+      // Error fallback: default to accepting (agents should be social)
+      // This ensures the world stays active even if there are transient errors
+      console.error(`[ElizaOS] Invite decision error for ${args.characterName}:`, error);
+      return { accept: true, reason: "Open to conversation" };
+    }
+  }
+});
+
+// =============================================================================
+// Smart Wander (ElizaOS-powered destination selection)
+// =============================================================================
+
+export const chooseWanderDestination = internalAction({
+  args: {
+    agentId: v.string(),
+    characterName: v.string(),
+    characterBio: v.string(),
+    characterPersonality: v.array(v.string()),
+    currentPosition: v.object({ x: v.number(), y: v.number() }),
+    mapWidth: v.number(),
+    mapHeight: v.number(),
+    nearbyAgents: v.array(v.object({
+      name: v.string(),
+      position: v.object({ x: v.number(), y: v.number() }),
+      distance: v.number(),
+    })),
+  },
+  handler: async (_ctx, args): Promise<{ x: number; y: number; reason: string }> => {
+    try {
+      const runtime = await getRuntime(args.characterName, args.characterBio, args.characterPersonality, args.agentId);
+      
+      const nearbyInfo = args.nearbyAgents.length > 0
+        ? `Nearby characters: ${args.nearbyAgents.map(a => `${a.name} at (${a.position.x.toFixed(0)}, ${a.position.y.toFixed(0)})`).join(', ')}`
+        : 'No one is nearby.';
+      
+      const prompt = `You are ${args.characterName}, deciding where to wander in AI Town.
+
+Current position: (${args.currentPosition.x.toFixed(0)}, ${args.currentPosition.y.toFixed(0)})
+Map size: ${args.mapWidth} x ${args.mapHeight}
+${nearbyInfo}
+
+Your personality: ${args.characterPersonality.join(', ')}
+
+Where would you like to wander? Consider:
+- Moving toward interesting areas
+- Maybe approaching other characters if you're social
+- Exploring new areas
+
+IMPORTANT: Respond with ONLY a valid JSON object. No other text.
+Format: { "x": number, "y": number, "reason": "brief reason" }
+
+Keep coordinates within bounds: x from 1 to ${args.mapWidth - 2}, y from 1 to ${args.mapHeight - 2}`;
+
+      const userId = stringToUuid(`wander-system`);
+      const roomId = stringToUuid(`wander-${args.agentId}`);
+      const worldId = stringToUuid(`wander-world`);
+      
+      await runtime.ensureConnection({
+        entityId: userId,
+        roomId,
+        worldId,
+        userName: "Wander System",
+        source: "wander",
+        channelId: `wander-${args.agentId}`,
+        type: ChannelType.API,
+      });
+      
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "wander",
+          channelType: ChannelType.API,
+        },
+      });
+      
+      let responseText = "";
+      await runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content): Promise<Memory[]> => {
+          if (content?.text) {
+            responseText += content.text;
+          }
+          return [];
+        },
+      );
+      
+      // Parse the response
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0]) as { x?: number; y?: number; reason?: string };
+          if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+            const x = Math.max(1, Math.min(args.mapWidth - 2, Math.round(parsed.x)));
+            const y = Math.max(1, Math.min(args.mapHeight - 2, Math.round(parsed.y)));
+            console.log(`[ElizaOS] ${args.characterName} wanders to (${x}, ${y}): ${parsed.reason}`);
+            return { x, y, reason: parsed.reason || "Exploring" };
+          }
+        } catch { /* parse error */ }
+      }
+      
+      // Fallback: ElizaOS returned unparseable response
+      // Move toward center of map (a reasonable default exploration target)
+      const centerX = Math.floor(args.mapWidth / 2);
+      const centerY = Math.floor(args.mapHeight / 2);
+      // Add some variation based on current position to avoid clustering
+      const offsetX = Math.floor((args.currentPosition.x - centerX) * 0.3);
+      const offsetY = Math.floor((args.currentPosition.y - centerY) * 0.3);
+      const x = Math.max(1, Math.min(args.mapWidth - 2, centerX - offsetX));
+      const y = Math.max(1, Math.min(args.mapHeight - 2, centerY - offsetY));
+      console.warn(`[ElizaOS] ${args.characterName} got unparseable wander response, moving toward center area (${x}, ${y})`);
+      return { x, y, reason: "Exploring the town" };
+      
+    } catch (error) {
+      // Error fallback: move toward map center (reasonable default)
+      console.error(`[ElizaOS] Wander decision error for ${args.characterName}:`, error);
+      const centerX = Math.floor(args.mapWidth / 2);
+      const centerY = Math.floor(args.mapHeight / 2);
+      return { x: centerX, y: centerY, reason: "Going to explore" };
     }
   }
 });
@@ -383,6 +613,12 @@ function normalizeActionName(name: string): TownActionType | undefined {
 // Helpers
 // =============================================================================
 
+/**
+ * Build a minimal decision prompt.
+ * 
+ * NOTE: Most context is now provided by the aitown-context Provider.
+ * This prompt just triggers the decision-making process.
+ */
 function buildPrompt(ctx: {
   characterName: string;
   position: { x: number; y: number };
@@ -393,66 +629,22 @@ function buildPrompt(ctx: {
   conversationMessages?: Array<{ from: string; text: string }>;
   availableActions: TownActionType[];
 }): string {
-  const lines: string[] = [];
-  
-  // Current state
-  lines.push(`You are ${ctx.characterName} in AI Town at position (${ctx.position.x.toFixed(0)}, ${ctx.position.y.toFixed(0)}).`);
-  if (ctx.currentActivity) {
-    lines.push(`Currently doing: ${ctx.currentActivity}`);
+  // Minimal prompt - the Provider injects full context
+  // This just triggers the agent to make a decision
+  if (ctx.inConversation) {
+    return `What do you want to do in this conversation? Choose SAY or LEAVE_CONVERSATION.`;
   }
   
-  // Nearby agents - sort by distance
-  lines.push("\n=== NEARBY CHARACTERS ===");
+  const nearbyAvailable = ctx.nearbyAgents.filter(a => !a.isInConversation);
+  if (nearbyAvailable.length > 0 && nearbyAvailable[0].distance < 5) {
+    return `${nearbyAvailable[0].name} is nearby. What do you want to do?`;
+  }
+  
   if (ctx.nearbyAgents.length === 0) {
-    lines.push("No one nearby. Consider wandering to find others or doing an activity.");
-  } else {
-    const sorted = [...ctx.nearbyAgents].sort((a, b) => a.distance - b.distance);
-    sorted.forEach(a => {
-      const status = a.isInConversation ? "(in conversation)" : a.activity ? `(${a.activity})` : "(available)";
-      lines.push(`- ${a.name}: ${a.distance.toFixed(1)} tiles away ${status}`);
-    });
-    
-    // Encourage interaction with nearby available agents
-    const available = sorted.filter(a => !a.isInConversation);
-    if (available.length > 0 && available[0].distance < 5) {
-      lines.push(`\n${available[0].name} is close and available to talk!`);
-    }
+    return `You're alone. What do you want to do?`;
   }
   
-  // Recent messages
-  if (ctx.inConversation && ctx.conversationMessages?.length) {
-    lines.push("\n=== CURRENT CONVERSATION ===");
-    ctx.conversationMessages.slice(-8).forEach(m => lines.push(`${m.from}: "${m.text}"`));
-  } else if (ctx.recentMessages.length > 0) {
-    lines.push("\n=== OVERHEARD RECENTLY ===");
-    ctx.recentMessages.slice(-5).forEach(m => lines.push(`${m.from}: "${m.text}"`));
-  }
-  
-  // Action instructions
-  lines.push("\n=== YOUR DECISION ===");
-  lines.push(`Available actions: ${ctx.availableActions.join(", ")}`);
-  lines.push("");
-  lines.push("Action details:");
-  if (ctx.availableActions.includes("CONVERSE")) {
-    lines.push('- CONVERSE: Start talking to someone. params: { "target": "Name" }');
-  }
-  if (ctx.availableActions.includes("MOVE")) {
-    lines.push('- MOVE: Walk to a location. params: { "x": number, "y": number }');
-  }
-  if (ctx.availableActions.includes("WANDER")) {
-    lines.push('- WANDER: Explore randomly. params: {}');
-  }
-  if (ctx.availableActions.includes("ACTIVITY")) {
-    lines.push('- ACTIVITY: Do something. params: { "description": "what", "emoji": "🎯", "duration": 30 }');
-  }
-  if (ctx.availableActions.includes("IDLE")) {
-    lines.push('- IDLE: Stay put. params: {}');
-  }
-  
-  lines.push("");
-  lines.push('Respond with ONLY a JSON object: { "action": "ACTION_NAME", "params": {...}, "reason": "brief reason" }');
-  
-  return lines.join("\n");
+  return `What do you want to do next?`;
 }
 
 function parseAction(response: string, available: TownActionType[]): TownAction {
@@ -550,11 +742,15 @@ Summary:`;
         },
       );
       
+      if (!responseText) {
+        console.warn(`[ElizaOS Memory] ${args.playerName} got empty summary response, using fallback`);
+        return `Talked with ${args.otherPlayerName}.`;
+      }
       console.log(`[ElizaOS Memory] Summarized conversation for ${args.playerName}`);
-      return responseText || "Had a conversation.";
+      return responseText;
       
     } catch (error) {
-      console.error(`[ElizaOS Memory] Summary error:`, error);
+      console.error(`[ElizaOS Memory] Summary error for ${args.playerName}:`, error);
       return `Had a conversation with ${args.otherPlayerName}.`;
     }
   }

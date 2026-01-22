@@ -1,15 +1,186 @@
 /**
  * AI Town Plugin for ElizaOS
  * 
- * This plugin registers AI Town-specific actions (MOVE, CONVERSE, ACTIVITY, etc.)
- * with ElizaOS so they are recognized as valid actions and don't cause
- * "Action not found" errors.
+ * This plugin provides:
+ * 1. AI Town Provider - Injects game context (position, nearby agents, etc.) into ElizaOS state
+ * 2. AI Town Actions - MOVE, CONVERSE, ACTIVITY, SAY, LEAVE_CONVERSATION, WANDER, IDLE
  * 
- * These actions are pass-through - the actual handling happens in agentOperations.ts
- * after parsing the LLM response.
+ * The Provider ensures ElizaOS has access to the game world context when making decisions.
+ * The Actions are registered so ElizaOS recognizes them as valid action choices.
+ * 
+ * Actual action execution happens in agentOperations.ts after parsing the LLM response.
  */
 
-import type { Action, ActionResult, Plugin, IAgentRuntime, Memory, State, HandlerCallback } from "@elizaos/core";
+import type { Action, ActionResult, Plugin, IAgentRuntime, Memory, State, HandlerCallback, Provider, ProviderResult } from "@elizaos/core";
+
+// =============================================================================
+// AI Town Context Provider
+// =============================================================================
+
+/**
+ * AI Town Context - stored in runtime state to be accessed by the provider
+ */
+export interface AITownContext {
+  characterName: string;
+  position: { x: number; y: number };
+  nearbyAgents: Array<{
+    name: string;
+    distance: number;
+    activity?: string;
+    isInConversation: boolean;
+  }>;
+  recentMessages: Array<{ from: string; text: string }>;
+  currentActivity?: string;
+  inConversation: boolean;
+  conversationMessages?: Array<{ from: string; text: string }>;
+  availableActions: string[];
+  mapWidth?: number;
+  mapHeight?: number;
+}
+
+// Global context storage (set before each ElizaOS call)
+let currentTownContext: AITownContext | null = null;
+
+/**
+ * Set the AI Town context before making an ElizaOS call
+ */
+export function setTownContext(context: AITownContext): void {
+  currentTownContext = context;
+}
+
+/**
+ * Clear the AI Town context after an ElizaOS call
+ */
+export function clearTownContext(): void {
+  currentTownContext = null;
+}
+
+/**
+ * AI Town Provider - Injects game world context into ElizaOS
+ * 
+ * This provider is called by ElizaOS to get context about the current game state.
+ * It formats the information for the LLM to understand the agent's situation.
+ * 
+ * Returns a ProviderResult with:
+ * - values: Structured data for template substitution
+ * - data: Raw context data for other components
+ * - text: Human-readable context string
+ */
+const aiTownProvider: Provider = {
+  name: "aitown-context",
+  description: "Provides AI Town game world context including position, nearby characters, and available actions",
+  
+  get: async (_runtime: IAgentRuntime, _message: Memory, _state?: State): Promise<ProviderResult> => {
+    if (!currentTownContext) {
+      return {
+        values: { location: "unknown", nearbyCount: 0 },
+        data: {},
+        text: "You are in AI Town. Look around and decide what to do.",
+      };
+    }
+    
+    const ctx = currentTownContext;
+    const lines: string[] = [];
+    
+    // Current state
+    lines.push(`=== AI TOWN STATUS ===`);
+    lines.push(`Location: (${ctx.position.x.toFixed(0)}, ${ctx.position.y.toFixed(0)})`);
+    if (ctx.currentActivity) {
+      lines.push(`Currently: ${ctx.currentActivity}`);
+    }
+    
+    // Nearby agents
+    lines.push(`\n=== NEARBY CHARACTERS ===`);
+    const sortedAgents = [...ctx.nearbyAgents].sort((a, b) => a.distance - b.distance);
+    const availableAgents = sortedAgents.filter(a => !a.isInConversation);
+    
+    if (ctx.nearbyAgents.length === 0) {
+      lines.push("No one nearby.");
+    } else {
+      sortedAgents.forEach(a => {
+        const status = a.isInConversation 
+          ? "(busy - in conversation)" 
+          : a.activity 
+            ? `(${a.activity})` 
+            : "(available)";
+        lines.push(`- ${a.name}: ${a.distance.toFixed(1)} tiles away ${status}`);
+      });
+      
+      // Highlight opportunities
+      if (availableAgents.length > 0 && availableAgents[0].distance < 5) {
+        lines.push(`\n💬 ${availableAgents[0].name} is nearby and available to talk!`);
+      }
+    }
+    
+    // Conversation context
+    if (ctx.inConversation && ctx.conversationMessages?.length) {
+      lines.push(`\n=== CURRENT CONVERSATION ===`);
+      ctx.conversationMessages.slice(-6).forEach(m => {
+        lines.push(`${m.from}: "${m.text}"`);
+      });
+    } else if (ctx.recentMessages.length > 0) {
+      lines.push(`\n=== OVERHEARD ===`);
+      ctx.recentMessages.slice(-3).forEach(m => {
+        lines.push(`${m.from}: "${m.text}"`);
+      });
+    }
+    
+    // Available actions with instructions
+    lines.push(`\n=== AVAILABLE ACTIONS ===`);
+    lines.push(`You can choose from: ${ctx.availableActions.join(", ")}`);
+    lines.push("");
+    
+    // Action-specific instructions based on available actions
+    if (ctx.availableActions.includes("CONVERSE")) {
+      lines.push('• CONVERSE - Start talking to someone nearby. params: { "target": "CharacterName" }');
+    }
+    if (ctx.availableActions.includes("MOVE")) {
+      lines.push('• MOVE - Walk to a specific location. params: { "x": number, "y": number }');
+    }
+    if (ctx.availableActions.includes("WANDER")) {
+      lines.push('• WANDER - Explore and walk around. params: {}');
+    }
+    if (ctx.availableActions.includes("ACTIVITY")) {
+      lines.push('• ACTIVITY - Do something in place. params: { "description": "what you\'re doing", "emoji": "🎯", "duration": 30 }');
+    }
+    if (ctx.availableActions.includes("IDLE")) {
+      lines.push('• IDLE - Stay put and observe. params: {}');
+    }
+    if (ctx.availableActions.includes("SAY")) {
+      lines.push('• SAY - Speak in conversation. params: { "text": "what to say" }');
+    }
+    if (ctx.availableActions.includes("LEAVE_CONVERSATION")) {
+      lines.push('• LEAVE_CONVERSATION - End the conversation. params: {}');
+    }
+    
+    // Decision prompt
+    lines.push(`\n=== YOUR DECISION ===`);
+    lines.push(`Respond with ONLY a JSON object:`);
+    lines.push(`{ "action": "ACTION_NAME", "params": {...}, "reason": "brief reason" }`);
+    
+    // Return proper ProviderResult with structured data
+    return {
+      values: {
+        characterName: ctx.characterName,
+        location: `(${ctx.position.x.toFixed(0)}, ${ctx.position.y.toFixed(0)})`,
+        positionX: ctx.position.x,
+        positionY: ctx.position.y,
+        nearbyCount: ctx.nearbyAgents.length,
+        availableCount: availableAgents.length,
+        closestAvailable: availableAgents[0]?.name || "no one",
+        inConversation: ctx.inConversation,
+        currentActivity: ctx.currentActivity || "nothing",
+        availableActions: ctx.availableActions.join(", "),
+      },
+      data: {
+        context: ctx,
+        nearbyAgents: sortedAgents,
+        availableAgents,
+      },
+      text: lines.join("\n"),
+    };
+  },
+};
 
 // =============================================================================
 // AI Town Action Definitions
@@ -253,7 +424,7 @@ const idleAction: Action = {
 
 export const townPlugin: Plugin = {
   name: "aitown",
-  description: "AI Town actions plugin - registers MOVE, CONVERSE, ACTIVITY, SAY, LEAVE_CONVERSATION, WANDER, IDLE",
+  description: "AI Town plugin - provides context via Provider and registers MOVE, CONVERSE, ACTIVITY, SAY, LEAVE_CONVERSATION, WANDER, IDLE actions",
   actions: [
     moveAction,
     converseAction,
@@ -264,7 +435,7 @@ export const townPlugin: Plugin = {
     idleAction,
   ],
   evaluators: [],
-  providers: [],
+  providers: [aiTownProvider], // Provider injects game context into ElizaOS
   services: [],
 };
 

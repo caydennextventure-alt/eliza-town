@@ -33,6 +33,60 @@ export const agentInputs = {
       return null;
     },
   }),
+  finishDecideOnInvite: inputHandler({
+    args: {
+      operationId: v.string(),
+      agentId,
+      conversationId,
+      accept: v.boolean(),
+    },
+    handler: (game, now, args) => {
+      const agentId = parseGameId('agents', args.agentId);
+      const agent = game.world.agents.get(agentId);
+      if (!agent) {
+        throw new Error(`Couldn't find agent: ${agentId}`);
+      }
+      if (
+        !agent.inProgressOperation ||
+        agent.inProgressOperation.operationId !== args.operationId
+      ) {
+        console.debug(`Agent ${agentId} didn't have ${args.operationId} in progress`);
+        return null;
+      }
+      delete agent.inProgressOperation;
+      
+      const player = game.world.players.get(agent.playerId);
+      if (!player) {
+        throw new Error(`Couldn't find player: ${agent.playerId}`);
+      }
+      
+      const conversationId = parseGameId('conversations', args.conversationId);
+      const conversation = game.world.conversations.get(conversationId);
+      if (!conversation) {
+        console.debug(`Conversation ${conversationId} no longer exists`);
+        return null;
+      }
+      
+      // Import functions from conversation module
+      if (args.accept) {
+        console.log(`Agent ${player.id} accepts invite via ElizaOS`);
+        // Accept the invite
+        const member = conversation.participants.get(player.id);
+        if (member && member.status.kind === 'invited') {
+          member.status = { kind: 'walkingOver' };
+          if (player.pathfinding) {
+            delete player.pathfinding;
+          }
+        }
+      } else {
+        console.log(`Agent ${player.id} rejects invite via ElizaOS`);
+        // Reject the invite - leave the conversation
+        leaveConversation(conversation, game, now, player);
+      }
+      
+      return null;
+    },
+  }),
   finishDoSomething: inputHandler({
     args: {
       operationId: v.string(),

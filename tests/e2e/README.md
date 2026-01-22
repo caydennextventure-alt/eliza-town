@@ -133,7 +133,7 @@ npm run test:e2e:eliza
 
 **Duration**: ~3-5 minutes
 
-### ElizaOS Tests (`eliza-runtime.e2e.test.ts`, `eliza-convex-integration.e2e.test.ts`)
+### ElizaOS Tests (`eliza-runtime.e2e.test.ts`, `eliza-integration.e2e.test.ts`)
 - ElizaOS AgentRuntime initialization
 - Message processing through messageService
 - Action execution (MOVE, SAY, CONVERSE)
@@ -141,6 +141,21 @@ npm run test:e2e:eliza
 - Error handling
 
 **Duration**: ~2-5 minutes (requires LLM API key)
+
+### ElizaOS Action Integration Tests (`eliza-actions.e2e.test.ts`) **NEW**
+- Verifies EVERY agent action is driven by ElizaOS (no bypasses)
+- Tests MOVE action results in actual pathfinding
+- Tests CONVERSE action starts real conversations
+- Tests ACTIVITY/IDLE actions create visible activities
+- Tests WANDER uses ElizaOS-chosen destinations
+- Monitors agent operations to ensure all use ElizaOS runtime
+- Creates test agents to verify new agents are ElizaOS-driven
+
+**Duration**: ~5-10 minutes (requires LLM API key)
+
+```bash
+npm run test:e2e:actions
+```
 
 ## Timeouts
 

@@ -17,7 +17,6 @@ import {
   AWKWARD_CONVERSATION_TIMEOUT,
   CONVERSATION_COOLDOWN,
   CONVERSATION_DISTANCE,
-  INVITE_ACCEPT_PROBABILITY,
   INVITE_TIMEOUT,
   MAX_CONVERSATION_DURATION,
   MAX_CONVERSATION_MESSAGES,
@@ -38,7 +37,6 @@ import { Agent } from './agentTypes';
 import { 
   stopConversation, 
   acceptConversationInvite, 
-  rejectConversationInvite, 
   leaveConversation,
   setConversationIsTyping 
 } from './conversation';
@@ -113,16 +111,24 @@ export function tickAgent(agent: Agent, game: Game, now: number) {
     )!;
     const otherPlayer = game.world.players.get(otherPlayerId)!;
     if (member.status.kind === 'invited') {
-      if (otherPlayer.human || Math.random() < INVITE_ACCEPT_PROBABILITY) {
-        console.log(`Agent ${player.id} accepting invite from ${otherPlayer.id}`);
+      // Always accept invites from human players immediately
+      if (otherPlayer.human) {
+        console.log(`Agent ${player.id} accepting invite from human ${otherPlayer.id}`);
         acceptConversationInvite(conversation, game, player);
         if (player.pathfinding) {
           delete player.pathfinding;
         }
-      } else {
-        console.log(`Agent ${player.id} rejecting invite from ${otherPlayer.id}`);
-        rejectConversationInvite(conversation, game, now, player);
+        return;
       }
+      // For agent-to-agent invites, ask ElizaOS to decide
+      console.log(`Agent ${player.id} considering invite from ${otherPlayer.id}...`);
+      startAgentOperation(agent, game, now, 'agentDecideOnInvite', {
+        worldId: game.worldId,
+        agentId: agent.id,
+        playerId: agent.playerId,
+        conversationId: conversation.id,
+        inviterPlayerId: otherPlayer.id,
+      });
       return;
     }
     if (member.status.kind === 'walkingOver') {
@@ -263,6 +269,9 @@ export async function runAgentOperation(ctx: MutationCtx, operation: string, arg
       break;
     case 'agentDoSomething':
       reference = internal.aiTown.agentOperations.agentDoSomething;
+      break;
+    case 'agentDecideOnInvite':
+      reference = internal.aiTown.agentOperations.agentDecideOnInvite;
       break;
     default:
       throw new Error(`Unknown operation: ${operation}`);

@@ -207,3 +207,33 @@ export async function waitForAgentIdle(
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Wait for a boolean condition to become true.
+ * Simpler version of waitFor for direct boolean checks.
+ */
+export async function waitForCondition(
+  condition: () => Promise<boolean>,
+  timeoutMs: number,
+  description: string,
+  intervalMs = 2000,
+): Promise<boolean> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const result = await condition();
+      if (result) {
+        return true;
+      }
+    } catch (error) {
+      // Ignore errors and keep trying
+      console.debug(`Condition check error (${description}):`, error);
+    }
+    
+    await sleep(intervalMs);
+  }
+  
+  console.warn(`Timeout waiting for: ${description} after ${timeoutMs}ms`);
+  return false;
+}

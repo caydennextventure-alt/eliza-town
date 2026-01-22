@@ -47,8 +47,12 @@ export async function startConversationMessage(
     },
   });
   
+  if (!response) {
+    console.warn(`[ElizaOS] ${player.name} got empty response for start, using fallback`);
+    return `Hello ${otherPlayer.name}!`;
+  }
   console.log(`[ElizaOS] ${player.name} starting conversation: "${response}"`);
-  return response || `Hello ${otherPlayer.name}!`;
+  return response;
 }
 
 // =============================================================================
@@ -99,8 +103,12 @@ export async function continueConversationMessage(
     },
   });
 
+  if (!response) {
+    console.warn(`[ElizaOS] ${player.name} got empty response for continue, using fallback`);
+    return "...";
+  }
   console.log(`[ElizaOS] ${player.name} continues: "${response}"`);
-  return response || "...";
+  return response;
 }
 
 // =============================================================================
@@ -143,8 +151,12 @@ export async function leaveConversationMessage(
     },
   });
 
+  if (!response) {
+    console.warn(`[ElizaOS] ${player.name} got empty response for leave, using fallback`);
+    return "I have to go now. Goodbye!";
+  }
   console.log(`[ElizaOS] ${player.name} leaving: "${response}"`);
-  return response || "I have to go now. Goodbye!";
+  return response;
 }
 
 // =============================================================================
