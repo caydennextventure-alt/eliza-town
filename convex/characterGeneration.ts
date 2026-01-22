@@ -234,7 +234,7 @@ export const generateCharacterConcept = action({
         throw new Error("Missing API Keys");
     }
 
-    let finalPrompt = args.prompt;
+    const finalPrompt = args.prompt;
     
     // Construct parts array for the request
     const parts: any[] = [{ 

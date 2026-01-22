@@ -70,8 +70,8 @@ export const useCharacters = () => {
       isCustom: false,
     }));
     const custom = (customSprites ?? [])
-      .filter((sprite) => typeof sprite.textureUrl === 'string' && sprite.textureUrl.length > 0)
-      .map((sprite): CharacterDefinition => ({
+      .filter((sprite: CharacterRegistryEntry) => typeof sprite.textureUrl === 'string' && sprite.textureUrl.length > 0)
+      .map((sprite: CharacterRegistryEntry): CharacterDefinition => ({
         name: sprite.spriteId,
         displayName: sprite.displayName,
         textureUrl: sprite.textureUrl!,

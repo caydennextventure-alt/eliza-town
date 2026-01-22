@@ -128,29 +128,25 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     setIsCreating(true);
     
     try {
-      const result = await createElizaAgent({
+      // Create ElizaOS agent configuration
+      // The agent will be linked to a player when they spawn
+      await createElizaAgent({
         worldId,
+        playerId: selectedId || `custom-${Date.now()}`,
         name: name.trim(),
-        character: selectedId,
-        identity: identity.trim(),
-        plan: plan.trim(),
+        bio: identity.trim() + (plan.trim() ? ` Goals: ${plan.trim()}` : ''),
         personality,
       });
       
-      const { inputId } = result;
-      
-      await waitForInput(convex, inputId as Id<'inputs'>, {
-        timeoutMs: 15000,
-        timeoutMessage: 'World is still processing. Try again in a moment.',
-      });
-      
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       if (error instanceof ConvexError) {
-        setError(error.data);
+        setError(error.data as string);
+      } else if (error instanceof Error) {
+        setError(error.message ?? 'Failed to create agent.');
       } else {
-        setError(error?.message ?? 'Failed to create agent.');
+        setError('Failed to create agent.');
       }
     } finally {
       setIsCreating(false);

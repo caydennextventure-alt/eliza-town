@@ -24,7 +24,7 @@ export const cleanupWorldData = mutation({
     if (!worldId) {
       throw new ConvexError('World ID is required');
     }
-    const validWorldId = worldId as Id<'worlds'>;
+    const validWorldId = worldId ;
 
     const world = await ctx.db.get(validWorldId);
     if (!world) {

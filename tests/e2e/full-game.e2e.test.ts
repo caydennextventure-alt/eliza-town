@@ -37,6 +37,17 @@ describe('Full Game E2E Tests', () => {
     }
   });
   
+  afterAll(async () => {
+    // Clean up all test agents created during tests
+    const status = await client.getDefaultWorldStatus();
+    if (status) {
+      const removedCount = await client.cleanupTestAgents(status.worldId);
+      if (removedCount > 0) {
+        console.log(`Cleaned up ${removedCount} test agent(s)`);
+      }
+    }
+  });
+  
   describe('Game State Evolution', () => {
     test('game state should change over time', async () => {
       const status = await client.getDefaultWorldStatus();

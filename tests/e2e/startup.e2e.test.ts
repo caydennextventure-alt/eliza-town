@@ -317,6 +317,17 @@ describe('Startup E2E Tests', () => {
 describe('Start Agents Button E2E Tests', () => {
   const client = getTestClient();
   
+  afterAll(async () => {
+    // Clean up all test agents created during tests
+    const status = await client.getDefaultWorldStatus();
+    if (status) {
+      const removedCount = await client.cleanupTestAgents(status.worldId);
+      if (removedCount > 0) {
+        console.log(`Cleaned up ${removedCount} test agent(s)`);
+      }
+    }
+  });
+  
   describe('Agent Creation via API', () => {
     test('should be able to create a new agent', async () => {
       const status = await client.getDefaultWorldStatus();

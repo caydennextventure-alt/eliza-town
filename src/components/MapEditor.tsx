@@ -1086,8 +1086,8 @@ const MapEditor = () => {
   }, [activeStamp, stampRotation]);
 
   const transformStampCoord = (x: number, y: number, stamp: StampDefinition) => {
-    let tx = stampFlipX ? stamp.width - 1 - x : x;
-    let ty = stampFlipY ? stamp.height - 1 - y : y;
+    const tx = stampFlipX ? stamp.width - 1 - x : x;
+    const ty = stampFlipY ? stamp.height - 1 - y : y;
     if (stampRotation === 90) {
       return { x: ty, y: stamp.width - 1 - tx };
     }

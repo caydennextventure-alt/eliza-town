@@ -6,7 +6,7 @@ import { Viewport } from 'pixi-viewport';
 import { Application } from 'pixi.js';
 import { MutableRefObject, ReactNode } from 'react';
 
-export type ViewportProps = {
+type ViewportProps = {
   app: Application;
   viewportRef?: MutableRefObject<Viewport | undefined>;
 
@@ -21,12 +21,13 @@ export type ViewportProps = {
 export default PixiComponent('Viewport', {
   create(props: ViewportProps) {
     const { app, children, viewportRef, ...viewportProps } = props;
-    const viewport = new Viewport({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    const viewportOptions: any = {
       events: app.renderer.events,
       passiveWheel: false,
       ...viewportProps,
-    });
+    };
+    const viewport = new Viewport(viewportOptions);
     if (viewportRef) {
       viewportRef.current = viewport;
     }

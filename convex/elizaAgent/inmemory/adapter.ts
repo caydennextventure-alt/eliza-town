@@ -58,14 +58,14 @@ interface StoredMemory {
 
 function toMemory(stored: StoredMemory): Memory {
   return {
-    id: stored.id as UUID | undefined,
-    entityId: stored.entityId as UUID,
-    agentId: stored.agentId as UUID | undefined,
+    id: stored.id ,
+    entityId: stored.entityId ,
+    agentId: stored.agentId ,
     createdAt: stored.createdAt,
     content: stored.content,
     embedding: stored.embedding,
-    roomId: stored.roomId as UUID,
-    worldId: stored.worldId as UUID | undefined,
+    roomId: stored.roomId ,
+    worldId: stored.worldId ,
     unique: stored.unique,
     similarity: stored.similarity,
     metadata: stored.metadata,

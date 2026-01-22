@@ -15,7 +15,7 @@ import { PositionIndicator } from './PositionIndicator.tsx';
 import { SHOW_DEBUG_UI } from './Game.tsx';
 import { ServerGame } from '../hooks/serverGame.ts';
 
-export const PixiGame = (props: {
+const PixiGame = (props: {
   worldId: Id<'worlds'>;
   engineId: Id<'engines'>;
   game: ServerGame;

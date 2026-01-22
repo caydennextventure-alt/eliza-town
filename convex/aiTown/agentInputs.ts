@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { agentId, conversationId, parseGameId } from './ids';
 import { Player, activity } from './player';
-import { Conversation, conversationInputs } from './conversation';
+import { conversationInputs, startConversation, leaveConversation, Conversation } from './conversation';
 import { movePlayer } from './movement';
 import { inputHandler } from './inputHandler';
 import { point } from '../util/types';
@@ -62,7 +62,7 @@ export const agentInputs = {
         if (!invitee) {
           throw new Error(`Couldn't find player: ${inviteeId}`);
         }
-        Conversation.start(game, now, player, invitee);
+        startConversation(game, now, player, invitee);
         agent.lastInviteAttempt = now;
       }
       if (args.destination) {
@@ -111,7 +111,7 @@ export const agentInputs = {
         timestamp: args.timestamp,
       });
       if (args.leaveConversation) {
-        conversation.leave(game, now, player);
+        leaveConversation(conversation, game, now, player);
       }
       return null;
     },
@@ -152,7 +152,7 @@ export const agentInputs = {
         delete conversation.isTyping;
       }
       if (args.leaveConversation) {
-        conversation.leave(game, now, player);
+        leaveConversation(conversation, game, now, player);
       }
       return null;
     },

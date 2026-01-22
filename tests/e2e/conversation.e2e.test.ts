@@ -37,6 +37,17 @@ describe('Conversation E2E Tests', () => {
     }
   });
   
+  afterAll(async () => {
+    // Clean up all test agents created during tests
+    const status = await client.getDefaultWorldStatus();
+    if (status) {
+      const removedCount = await client.cleanupTestAgents(status.worldId);
+      if (removedCount > 0) {
+        console.log(`Cleaned up ${removedCount} test agent(s)`);
+      }
+    }
+  });
+  
   describe('Autonomous Conversations', () => {
     test('agents should eventually start a conversation', async () => {
       const status = await client.getDefaultWorldStatus();

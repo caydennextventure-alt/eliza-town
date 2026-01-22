@@ -1,7 +1,7 @@
 import { ObjectType, v } from 'convex/values';
-import { Conversation, serializedConversation } from './conversation';
+import { Conversation, serializedConversation } from './conversationTypes';
 import { Player, serializedPlayer } from './player';
-import { Agent, serializedAgent } from './agent';
+import { Agent, serializedAgent } from './agentTypes';
 import { GameId, parseGameId, playerId } from './ids';
 import { parseMap } from '../util/object';
 

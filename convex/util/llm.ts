@@ -10,7 +10,7 @@ const getRequestTimeoutMs = () => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_LLM_REQUEST_TIMEOUT_MS;
 };
 
-export const EMBEDDING_DIMENSION: number = OLLAMA_EMBEDDING_DIMENSION;
+export const EMBEDDING_DIMENSION: number = OPENAI_EMBEDDING_DIMENSION;
 
 export function detectMismatchedLLMProvider() {
   switch (EMBEDDING_DIMENSION) {
@@ -50,7 +50,7 @@ export interface LLMConfig {
 }
 
 export function getLLMConfig(): LLMConfig {
-  let provider = process.env.LLM_PROVIDER;
+  const provider = process.env.LLM_PROVIDER;
   if (provider ? provider === 'openai' : process.env.OPENAI_API_KEY) {
     if (EMBEDDING_DIMENSION !== OPENAI_EMBEDDING_DIMENSION) {
       throw new Error('EMBEDDING_DIMENSION must be 1536 for OpenAI');

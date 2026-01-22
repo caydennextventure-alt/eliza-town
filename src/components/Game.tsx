@@ -42,52 +42,58 @@ export default function Game() {
   const worldState = useQuery(api.world.worldState, worldId ? { worldId } : 'skip');
   const { historicalTime, timeManager } = useHistoricalTime(worldState?.engine);
 
-  if (!worldId || !engineId || !game) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <p>Loading AI Town...</p>
-        </div>
-      </div>
-    );
-  }
+  // Check if still loading data (but always render the container for size measurement)
+  const isLoading = !worldId || !engineId || !game;
 
   return (
-    <>
-      {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
-      <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
-        <Stage width={width} height={height} options={{ backgroundColor: 0x7ab5ff }}>
-          <ConvexProvider client={convex}>
-            <PixiGame
-              game={game}
+    <div className="w-full h-full relative overflow-hidden bg-gray-900" ref={gameWrapperRef}>
+      {isLoading || !width || !height ? (
+        <div className="w-full h-full flex items-center justify-center text-white">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+            <p>Loading AI Town...</p>
+            <p className="text-xs text-gray-400 mt-2">
+              {!worldStatus ? 'Connecting to server...' : 
+               !game ? 'Loading world data...' : 
+               'Initializing display...'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
+          <Stage width={width} height={height} options={{ backgroundColor: 0x7ab5ff }}>
+            <ConvexProvider client={convex}>
+              <PixiGame
+                game={game}
+                worldId={worldId}
+                engineId={engineId}
+                width={width}
+                height={height}
+                historicalTime={historicalTime}
+                setSelectedElement={setSelectedElement}
+              />
+            </ConvexProvider>
+          </Stage>
+
+          {/* Right-side overlay for Player Details */}
+          <div className="absolute top-0 right-0 z-10 h-full w-80 lg:w-96 p-4 flex flex-col pointer-events-auto overflow-hidden">
+            <PlayerDetails
               worldId={worldId}
               engineId={engineId}
-              width={width}
-              height={height}
-              historicalTime={historicalTime}
+              game={game}
+              playerId={selectedElement?.id}
               setSelectedElement={setSelectedElement}
             />
-          </ConvexProvider>
-        </Stage>
+          </div>
 
-        {/* Right-side overlay for Player Details */}
-        <div className="absolute top-0 right-0 z-10 h-full w-80 lg:w-96 p-4 flex flex-col pointer-events-auto overflow-hidden">
-          <PlayerDetails
-            worldId={worldId}
-            engineId={engineId}
-            game={game}
-            playerId={selectedElement?.id}
-            setSelectedElement={setSelectedElement}
-          />
-        </div>
-
-        {/* ElizaOS Status Badge */}
-        <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-sm text-white/90 flex items-center gap-2">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          <span>AI Agents powered by ElizaOS</span>
-        </div>
-      </div>
-    </>
+          {/* ElizaOS Status Badge */}
+          <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-sm text-white/90 flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <span>AI Agents powered by ElizaOS</span>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

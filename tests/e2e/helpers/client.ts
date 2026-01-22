@@ -135,6 +135,9 @@ export interface TestClient {
   
   // Initialize
   initialize(numAgents?: number): Promise<void>;
+  
+  // Cleanup operations
+  cleanupTestAgents(worldId: WorldId): Promise<number>;
 }
 
 /**
@@ -253,6 +256,52 @@ export function createTestClient(convexUrl?: string): TestClient {
     async initialize(numAgents?: number): Promise<void> {
       // The init module exports a default mutation
       await client.mutation(api.init.default, { numAgents });
+    },
+    
+    async cleanupTestAgents(worldId: WorldId): Promise<number> {
+      // Pattern to match test agent names
+      const testAgentPatterns = [
+        /^TestAgent_\d+$/,
+        /^ToRemove_\d+$/,
+        /^E2EAgent_/,
+        /^Test_/,
+      ];
+      
+      const state = await this.getWorldState(worldId);
+      const descriptions = await this.getGameDescriptions(worldId);
+      
+      let removedCount = 0;
+      
+      for (const agent of state.world.agents) {
+        // Find the agent description to get associated player name
+        const agentDesc = descriptions.agentDescriptions.find(d => d.agentId === agent.id);
+        if (!agentDesc) continue;
+        
+        // Find the player to get the name
+        const player = state.world.players.find(p => p.id === agent.playerId);
+        if (!player) continue;
+        
+        const playerDesc = descriptions.playerDescriptions.find(d => d.playerId === player.id);
+        if (!playerDesc) continue;
+        
+        // Check if this is a test agent by name pattern or isCustom flag
+        const isTestAgent = testAgentPatterns.some(pattern => pattern.test(playerDesc.name));
+        
+        if (isTestAgent || agentDesc.isCustom) {
+          try {
+            console.log(`Cleaning up test agent: ${playerDesc.name} (${agent.id})`);
+            const inputId = await this.removeAgent(worldId, agent.id);
+            await this.waitForInput(inputId, 30000);
+            removedCount++;
+            // Small delay between removals to avoid overwhelming the engine
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error(`Failed to remove agent ${playerDesc.name}:`, error);
+          }
+        }
+      }
+      
+      return removedCount;
     },
   };
 }

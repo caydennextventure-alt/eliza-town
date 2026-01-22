@@ -19,7 +19,7 @@ export function MessageInput({
   conversation: Conversation;
 }) {
   const descriptions = useQuery(api.world.gameDescriptions, { worldId });
-  const humanName = descriptions?.playerDescriptions.find((p) => p.playerId === humanPlayer.id)
+  const humanName = descriptions?.playerDescriptions.find((p: { playerId: string; name: string }) => p.playerId === humanPlayer.id)
     ?.name;
   const inputRef = useRef<HTMLParagraphElement>(null);
   const inflightUuid = useRef<string | undefined>();

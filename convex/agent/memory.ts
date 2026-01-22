@@ -170,7 +170,7 @@ export async function searchMemories(
     candidates,
     n,
   });
-  return rankedMemories.map(({ memory }) => memory);
+  return rankedMemories.map(({ memory }: { memory: Memory }) => memory);
 }
 
 function makeRange(values: number[]) {
@@ -338,8 +338,8 @@ async function reflectOnMemories(
 
   // should only reflect if lastest 100 items have importance score of >500
   const sumOfImportanceScore = memories
-    .filter((m) => m._creationTime > (lastReflectionTs ?? 0))
-    .reduce((acc, curr) => acc + curr.importance, 0);
+    .filter((m: Memory) => m._creationTime > (lastReflectionTs ?? 0))
+    .reduce((acc: number, curr: Memory) => acc + curr.importance, 0);
   const shouldReflect = sumOfImportanceScore > 500;
 
   if (!shouldReflect) {
@@ -348,7 +348,7 @@ async function reflectOnMemories(
   console.debug('sum of importance score = ', sumOfImportanceScore);
   console.debug('Reflecting...');
   const prompt = ['[no prose]', '[Output only JSON]', `You are ${name}, statements about you:`];
-  memories.forEach((m, idx) => {
+  memories.forEach((m: Memory, idx: number) => {
     prompt.push(`Statement ${idx}: ${m.description}`);
   });
   prompt.push('What 3 high-level insights can you infer from the above statements?');
