@@ -481,3 +481,226 @@ function parseAction(response: string, available: TownActionType[]): TownAction 
   }
   return { type: "IDLE", params: {}, reason: "Could not parse" };
 }
+
+// =============================================================================
+// Memory Operations (ElizaOS-powered)
+// =============================================================================
+
+export const summarizeConversation = internalAction({
+  args: {
+    playerName: v.string(),
+    otherPlayerName: v.string(),
+    messages: v.array(v.object({
+      author: v.string(),
+      text: v.string(),
+    })),
+  },
+  handler: async (_ctx, args): Promise<string> => {
+    try {
+      const runtime = await getRuntime(args.playerName, "A character in AI Town", ["observant", "reflective"], `memory-${args.playerName}`);
+      
+      // Build conversation text
+      const conversationText = args.messages
+        .map(m => `${m.author}: "${m.text}"`)
+        .join("\n");
+      
+      const prompt = `You are ${args.playerName}, and you just finished a conversation with ${args.otherPlayerName}. 
+Summarize the conversation from your perspective, using first-person pronouns like "I," and add if you liked or disliked this interaction.
+
+The conversation:
+${conversationText}
+
+Summary:`;
+      
+      // Setup connection
+      const userId = stringToUuid(`memory-system`);
+      const roomId = stringToUuid(`memory-${args.playerName}`);
+      const worldId = stringToUuid(`memory-world`);
+      
+      await runtime.ensureConnection({
+        entityId: userId,
+        roomId,
+        worldId,
+        userName: "Memory System",
+        source: "memory",
+        channelId: `memory-${args.playerName}`,
+        type: ChannelType.API,
+      });
+      
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "memory",
+          channelType: ChannelType.API,
+        },
+      });
+      
+      let responseText = "";
+      await runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content): Promise<Memory[]> => {
+          if (content?.text) {
+            responseText += content.text;
+          }
+          return [];
+        },
+      );
+      
+      console.log(`[ElizaOS Memory] Summarized conversation for ${args.playerName}`);
+      return responseText || "Had a conversation.";
+      
+    } catch (error) {
+      console.error(`[ElizaOS Memory] Summary error:`, error);
+      return `Had a conversation with ${args.otherPlayerName}.`;
+    }
+  }
+});
+
+export const calculateMemoryImportance = internalAction({
+  args: {
+    description: v.string(),
+  },
+  handler: async (_ctx, args): Promise<number> => {
+    try {
+      const runtime = await getRuntime("MemoryRater", "A memory importance evaluator", ["analytical"], "memory-rater");
+      
+      const prompt = `On the scale of 0 to 9, where 0 is purely mundane (e.g., brushing teeth, making bed) and 9 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
+Memory: ${args.description}
+Answer on a scale of 0 to 9. Respond with number only, e.g. "5"`;
+      
+      const userId = stringToUuid(`importance-system`);
+      const roomId = stringToUuid(`importance-room`);
+      const worldId = stringToUuid(`importance-world`);
+      
+      await runtime.ensureConnection({
+        entityId: userId,
+        roomId,
+        worldId,
+        userName: "Importance System",
+        source: "importance",
+        channelId: "importance",
+        type: ChannelType.API,
+      });
+      
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "importance",
+          channelType: ChannelType.API,
+        },
+      });
+      
+      let responseText = "";
+      await runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content): Promise<Memory[]> => {
+          if (content?.text) {
+            responseText += content.text;
+          }
+          return [];
+        },
+      );
+      
+      let importance = parseFloat(responseText);
+      if (isNaN(importance)) {
+        importance = +(responseText.match(/\d+/)?.[0] ?? NaN);
+      }
+      if (isNaN(importance)) {
+        console.debug('[ElizaOS Memory] Could not parse importance from:', responseText);
+        importance = 5;
+      }
+      
+      return Math.max(0, Math.min(9, importance));
+      
+    } catch (error) {
+      console.error(`[ElizaOS Memory] Importance error:`, error);
+      return 5;
+    }
+  }
+});
+
+export const generateReflection = internalAction({
+  args: {
+    playerName: v.string(),
+    memories: v.array(v.object({
+      description: v.string(),
+      idx: v.number(),
+    })),
+  },
+  handler: async (_ctx, args): Promise<Array<{ insight: string; statementIds: number[] }>> => {
+    try {
+      const runtime = await getRuntime(args.playerName, "A reflective character", ["introspective", "thoughtful"], `reflection-${args.playerName}`);
+      
+      const prompt = ['[no prose]', '[Output only JSON]', `You are ${args.playerName}, statements about you:`];
+      args.memories.forEach((m) => {
+        prompt.push(`Statement ${m.idx}: ${m.description}`);
+      });
+      prompt.push('What 3 high-level insights can you infer from the above statements?');
+      prompt.push(
+        'Return in JSON format, where the key is a list of input statements that contributed to your insights and value is your insight. Make the response parseable by Typescript JSON.parse() function. DO NOT escape characters or include "\\n" or white space in response.',
+      );
+      prompt.push(
+        'Example: [{"insight": "...", "statementIds": [1,2]}, {"insight": "...", "statementIds": [1]}, ...]',
+      );
+      
+      const userId = stringToUuid(`reflection-system`);
+      const roomId = stringToUuid(`reflection-${args.playerName}`);
+      const worldId = stringToUuid(`reflection-world`);
+      
+      await runtime.ensureConnection({
+        entityId: userId,
+        roomId,
+        worldId,
+        userName: "Reflection System",
+        source: "reflection",
+        channelId: `reflection-${args.playerName}`,
+        type: ChannelType.API,
+      });
+      
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt.join("\n"),
+          source: "reflection",
+          channelType: ChannelType.API,
+        },
+      });
+      
+      let responseText = "";
+      await runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content): Promise<Memory[]> => {
+          if (content?.text) {
+            responseText += content.text;
+          }
+          return [];
+        },
+      );
+      
+      // Parse JSON response
+      const match = responseText.match(/\[[\s\S]*\]/);
+      if (match) {
+        const insights = JSON.parse(match[0]) as Array<{ insight: string; statementIds: number[] }>;
+        console.log(`[ElizaOS Memory] Generated ${insights.length} reflections for ${args.playerName}`);
+        return insights;
+      }
+      
+      return [];
+      
+    } catch (error) {
+      console.error(`[ElizaOS Memory] Reflection error:`, error);
+      return [];
+    }
+  }
+});

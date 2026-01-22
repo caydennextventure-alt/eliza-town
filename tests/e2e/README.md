@@ -1,6 +1,8 @@
-# AI Town E2E Tests
+# AI Town E2E Tests (100% ElizaOS Powered)
 
-End-to-end tests for the AI Town game backend. These tests use **real APIs** with **no mocks** - they test the actual game with actual LLM calls.
+End-to-end tests for the AI Town game backend. These tests use **real APIs** with **no mocks** - they test the actual game with actual LLM calls through **ElizaOS runtime**.
+
+All agent behavior (decisions, conversations, memory) is powered by ElizaOS with the `@elizaos/core` runtime and `@elizaos/plugin-openai`.
 
 ## Prerequisites
 

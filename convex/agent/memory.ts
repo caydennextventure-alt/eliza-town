@@ -1,8 +1,15 @@
+/**
+ * Agent Memory - 100% ElizaOS Powered
+ * 
+ * All memory operations (summarization, importance, reflection) use ElizaOS.
+ * NO direct chatCompletion calls.
+ */
+
 import { v } from 'convex/values';
 import { ActionCtx, DatabaseReader, internalMutation, internalQuery } from '../_generated/server';
 import { Doc, Id } from '../_generated/dataModel';
 import { internal } from '../_generated/api';
-import { LLMMessage, chatCompletion, fetchEmbedding } from '../util/llm';
+import { fetchEmbedding } from '../util/llm';
 import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
 import { SerializedPlayer } from '../aiTown/player';
@@ -39,33 +46,33 @@ export async function rememberConversation(
     return;
   }
 
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'user',
-      content: `You are ${player.name}, and you just finished a conversation with ${otherPlayer.name}. I would
-      like you to summarize the conversation from ${player.name}'s perspective, using first-person pronouns like
-      "I," and add if you liked or disliked this interaction.`,
-    },
-  ];
+  // Build messages for ElizaOS summarization
   const authors = new Set<GameId<'players'>>();
-  for (const message of messages) {
+  const formattedMessages = messages.map(message => {
     const author = message.author === player.id ? player : otherPlayer;
     authors.add(author.id as GameId<'players'>);
-    const recipient = message.author === player.id ? otherPlayer : player;
-    llmMessages.push({
-      role: 'user',
-      content: `${author.name} to ${recipient.name}: ${message.text}`,
-    });
-  }
-  llmMessages.push({ role: 'user', content: 'Summary:' });
-  const { content } = await chatCompletion({
-    messages: llmMessages,
-    max_tokens: 500,
+    return {
+      author: author.name,
+      text: message.text,
+    };
   });
+
+  // Use ElizaOS for conversation summary (NO chatCompletion)
+  const content = await ctx.runAction(internal.elizaAgent.elizaRuntime.summarizeConversation, {
+    playerName: player.name,
+    otherPlayerName: otherPlayer.name,
+    messages: formattedMessages,
+  });
+  
   const description = `Conversation with ${otherPlayer.name} at ${new Date(
     data.conversation._creationTime,
   ).toLocaleString()}: ${content}`;
-  const importance = await calculateImportance(description);
+  
+  // Use ElizaOS for importance calculation (NO chatCompletion)
+  const importance = await ctx.runAction(internal.elizaAgent.elizaRuntime.calculateMemoryImportance, {
+    description,
+  });
+  
   const { embedding } = await fetchEmbedding(description);
   authors.delete(player.id as GameId<'players'>);
   await ctx.runMutation(selfInternal.insertMemory, {
@@ -243,30 +250,7 @@ export const loadMessages = internalQuery({
   },
 });
 
-async function calculateImportance(description: string) {
-  const { content: importanceRaw } = await chatCompletion({
-    messages: [
-      {
-        role: 'user',
-        content: `On the scale of 0 to 9, where 0 is purely mundane (e.g., brushing teeth, making bed) and 9 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
-      Memory: ${description}
-      Answer on a scale of 0 to 9. Respond with number only, e.g. "5"`,
-      },
-    ],
-    temperature: 0.0,
-    max_tokens: 1,
-  });
-
-  let importance = parseFloat(importanceRaw);
-  if (isNaN(importance)) {
-    importance = +(importanceRaw.match(/\d+/)?.[0] ?? NaN);
-  }
-  if (isNaN(importance)) {
-    console.debug('Could not parse memory importance from: ', importanceRaw);
-    importance = 5;
-  }
-  return importance;
-}
+// calculateImportance is now handled by ElizaOS in elizaRuntime.calculateMemoryImportance
 
 const { embeddingId: _embeddingId, ...memoryFieldsWithoutEmbeddingId } = memoryFields;
 
@@ -346,33 +330,31 @@ async function reflectOnMemories(
     return false;
   }
   console.debug('sum of importance score = ', sumOfImportanceScore);
-  console.debug('Reflecting...');
-  const prompt = ['[no prose]', '[Output only JSON]', `You are ${name}, statements about you:`];
-  memories.forEach((m: Memory, idx: number) => {
-    prompt.push(`Statement ${idx}: ${m.description}`);
-  });
-  prompt.push('What 3 high-level insights can you infer from the above statements?');
-  prompt.push(
-    'Return in JSON format, where the key is a list of input statements that contributed to your insights and value is your insight. Make the response parseable by Typescript JSON.parse() function. DO NOT escape characters or include "\n" or white space in response.',
-  );
-  prompt.push(
-    'Example: [{insight: "...", statementIds: [1,2]}, {insight: "...", statementIds: [1]}, ...]',
-  );
+  console.debug('Reflecting with ElizaOS...');
 
-  const { content: reflection } = await chatCompletion({
-    messages: [
-      {
-        role: 'user',
-        content: prompt.join('\n'),
-      },
-    ],
-  });
+  // Use ElizaOS for reflection (NO chatCompletion)
+  const memoriesWithIdx = memories.map((m: Memory, idx: number) => ({
+    description: m.description,
+    idx,
+  }));
 
   try {
-    const insights = JSON.parse(reflection) as { insight: string; statementIds: number[] }[];
+    const insights = await ctx.runAction(internal.elizaAgent.elizaRuntime.generateReflection, {
+      playerName: name,
+      memories: memoriesWithIdx,
+    });
+    
+    if (!insights || insights.length === 0) {
+      console.debug('No reflections generated');
+      return false;
+    }
+
     const memoriesToSave = await asyncMap(insights, async (item) => {
       const relatedMemoryIds = item.statementIds.map((idx: number) => memories[idx]._id);
-      const importance = await calculateImportance(item.insight);
+      // Use ElizaOS for importance calculation
+      const importance = await ctx.runAction(internal.elizaAgent.elizaRuntime.calculateMemoryImportance, {
+        description: item.insight,
+      });
       const { embedding } = await fetchEmbedding(item.insight);
       console.debug('adding reflection memory...', item.insight);
       return {
@@ -390,7 +372,6 @@ async function reflectOnMemories(
     });
   } catch (e) {
     console.error('error saving or parsing reflection', e);
-    console.debug('reflection', reflection);
     return false;
   }
   return true;

@@ -1,8 +1,11 @@
 /**
- * Agent Server Logic
+ * Agent Server Logic - 100% ElizaOS Powered
  * 
  * This file contains server-side agent logic.
  * The Agent class is extended from agentTypes.ts with server-specific methods.
+ * 
+ * ALL agent decisions and conversations are powered by ElizaOS runtime.
+ * The game loop calls agentOperations which delegates to elizaAgent/elizaRuntime.
  */
 
 import { v } from 'convex/values';
