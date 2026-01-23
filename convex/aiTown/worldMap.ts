@@ -38,6 +38,12 @@ export const serializedWorldMap = {
   bgTiles: v.array(v.array(v.array(v.number()))),
   objectTiles: v.array(tileLayer),
   placedObjects: v.optional(v.array(v.object(placedObject))),
+  terrainDecals: v.optional(
+    v.object({
+      grassId: v.string(),
+      sandId: v.string(),
+    }),
+  ),
   animatedSprites: v.array(v.object(animatedSprite)),
 };
 export type SerializedWorldMap = ObjectType<typeof serializedWorldMap>;
@@ -55,6 +61,7 @@ export class WorldMap {
   bgTiles: TileLayer[];
   objectTiles: TileLayer[];
   placedObjects: PlacedObject[];
+  terrainDecals?: { grassId: string; sandId: string };
   animatedSprites: AnimatedSprite[];
 
   constructor(serialized: SerializedWorldMap) {
@@ -67,6 +74,7 @@ export class WorldMap {
     this.bgTiles = serialized.bgTiles;
     this.objectTiles = serialized.objectTiles;
     this.placedObjects = serialized.placedObjects ?? [];
+    this.terrainDecals = serialized.terrainDecals ?? undefined;
     this.animatedSprites = serialized.animatedSprites;
   }
 
@@ -81,6 +89,7 @@ export class WorldMap {
       bgTiles: this.bgTiles,
       objectTiles: this.objectTiles,
       placedObjects: this.placedObjects,
+      terrainDecals: this.terrainDecals,
       animatedSprites: this.animatedSprites,
     };
   }

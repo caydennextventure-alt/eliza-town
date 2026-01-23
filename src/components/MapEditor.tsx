@@ -13,6 +13,7 @@ import { StardewButton } from '../ui/stardew/StardewButton';
 import { StardewCheckbox } from '../ui/stardew/StardewCheckbox';
 import { HangingSign } from '../ui/stardew/HangingSign';
 import { StardewTab } from '../ui/stardew/StardewTab';
+import { StardewSubTabGroup } from '../ui/stardew/StardewSubTab';
 import { AssetSlicer } from './AssetSlicer';
 import { BaseTexture, SCALE_MODES, Spritesheet, type ISpritesheetData } from 'pixi.js';
 // Map editor starts with an empty canvas; tilesets are supplied via packs.
@@ -28,6 +29,8 @@ const EMPTY_TILESET_DATA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgCj2R1kAAAAASUVORK5CYII=';
 const PACK_INDEX_PATH = 'assets/packs/index.json';
 const ASSETS_JSON_PATH = 'assets/assets.json';
+const DECAL_SHEET_PATH = 'assets/Tileset Asset/terrain_decals_pack_32/sheet/decals_sheet.png';
+const DECAL_SHEET_JSON_PATH = 'assets/Tileset Asset/terrain_decals_pack_32/sheet/decals_sheet.json';
 
 const MAP_WIDTH = DEFAULT_MAP_WIDTH;
 const MAP_HEIGHT = DEFAULT_MAP_HEIGHT;
@@ -63,6 +66,7 @@ type TileCategory = 'terrain' | 'paths' | 'props' | 'buildings';
 type TileCategoryFilter = 'all' | TileCategory;
 type EditorMode = 'terrain' | 'paths' | 'props' | 'buildings' | 'objects' | 'prefabs';
 type StampRotation = 0 | 90 | 180 | 270;
+type DecalFrame = { x: number; y: number; w: number; h: number };
 
 type PackTileset = {
   image: string;
@@ -140,6 +144,7 @@ type SavedMapPayload = {
   collisionLayer: number[][];
   placedObjects: PlacedObject[];
   animatedSprites: MapAnimatedSprite[];
+  terrainDecals?: { grassId: string; sandId: string } | null;
 };
 
 type AutoStampOptions = {
@@ -219,6 +224,30 @@ const getRotationTransform = (width: number, height: number, rotation: ObjectRot
   if (rotation === 180) return `translate(${width}px, ${height}px) rotate(180deg)`;
   if (rotation === 270) return `translate(${height}px, 0px) rotate(270deg)`;
   return 'none';
+};
+
+const stableHash = (x: number, y: number, seed: number) => {
+  let hash = (x * 73856093) ^ (y * 19349663) ^ (seed * 83492791);
+  hash >>>= 0;
+  return hash;
+};
+
+const pickVariantIndex = (x: number, y: number, seed: number, count: number) => {
+  if (count <= 0) return 0;
+  return stableHash(x, y, seed) % count;
+};
+
+const buildDecalVariantCounts = (frames: Record<string, DecalFrame>) => {
+  const counts: Record<string, number> = {};
+  for (const key of Object.keys(frames)) {
+    const match = key.match(/^(.*)_([0-9]+)$/);
+    if (!match) continue;
+    const prefix = match[1];
+    const index = Number(match[2]);
+    if (Number.isNaN(index)) continue;
+    counts[prefix] = Math.max(counts[prefix] ?? 0, index + 1);
+  }
+  return counts;
 };
 
 const DEFAULT_TILESET: TilesetConfig = {
@@ -325,6 +354,7 @@ const MapEditor = () => {
   const [showCollision, setShowCollision] = useState(true); // Toggle collision overlay
   const [showAnimatedSprites, setShowAnimatedSprites] = useState(true);
   const [showObjects, setShowObjects] = useState(true); // Toggle placed objects visibility
+  const [showDecals, setShowDecals] = useState(true);
   const [canvasScale, setCanvasScale] = useState(0.7); // Zoom level (0.3 - 2.0)
   const [isZoomCollapsed, setIsZoomCollapsed] = useState(false);
   const [tilesetLoaded, setTilesetLoaded] = useState(false);
@@ -412,6 +442,13 @@ const MapEditor = () => {
   const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
   const [objectRenameDraft, setObjectRenameDraft] = useState('');
   const [isObjectPaletteSelecting, setIsObjectPaletteSelecting] = useState(false);
+  const [decalGrassId, setDecalGrassId] = useState<string | null>(null);
+  const [decalSandId, setDecalSandId] = useState<string | null>(null);
+  const [decalFrames, setDecalFrames] = useState<Record<string, DecalFrame>>({});
+  const [decalSheetMeta, setDecalSheetMeta] = useState<{ width: number; height: number; tileSize: number } | null>(
+    null,
+  );
+  const [decalLoadError, setDecalLoadError] = useState<string | null>(null);
   const [showAutoStampOptions, setShowAutoStampOptions] = useState(false);
   const [autoStampOptions, setAutoStampOptions] = useState<AutoStampOptions>({
     minTiles: 6,
@@ -504,6 +541,41 @@ const MapEditor = () => {
   }, [assetReloadToken]);
 
   useEffect(() => {
+    let active = true;
+    const loadDecals = async () => {
+      try {
+        setDecalLoadError(null);
+        const response = await fetch(resolveAssetPath(DECAL_SHEET_JSON_PATH), { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Decal sheet not found (${response.status})`);
+        }
+        const data = await response.json();
+        const frames = (data?.frames ?? {}) as Record<string, DecalFrame>;
+        const tileSize = Number(data?.tileSize) || DEFAULT_TILE_SIZE;
+        let maxX = 0;
+        let maxY = 0;
+        for (const frame of Object.values(frames)) {
+          maxX = Math.max(maxX, frame.x + frame.w);
+          maxY = Math.max(maxY, frame.y + frame.h);
+        }
+        if (!active) return;
+        setDecalFrames(frames);
+        setDecalSheetMeta({ width: maxX, height: maxY, tileSize });
+      } catch (error) {
+        if (!active) return;
+        console.warn('Failed to load decal sheet:', error);
+        setDecalFrames({});
+        setDecalSheetMeta(null);
+        setDecalLoadError('Missing decal pack.');
+      }
+    };
+    void loadDecals();
+    return () => {
+      active = false;
+    };
+  }, [assetReloadToken]);
+
+  useEffect(() => {
     const nextOptions = assetPacks
       .filter((pack) => Boolean(pack.tileset))
       .map((pack) => ({
@@ -560,6 +632,13 @@ const MapEditor = () => {
   const mapPixelWidth = MAP_WIDTH * tileSize;
   const mapPixelHeight = MAP_HEIGHT * tileSize;
   const tilesetUrl = useMemo(() => resolveAssetPath(tileset.path), [tileset.path]);
+  const decalSheetUrl = useMemo(() => resolveAssetPath(DECAL_SHEET_PATH), []);
+  const decalVariantCounts = useMemo(() => buildDecalVariantCounts(decalFrames), [decalFrames]);
+  const terrainDecalConfig = useMemo(() => {
+    if (!decalGrassId || !decalSandId) return null;
+    if (decalGrassId === decalSandId) return null;
+    return { grassId: decalGrassId, sandId: decalSandId };
+  }, [decalGrassId, decalSandId]);
 
   // Combine all BG layers for rendering (layer 0 is base, layer 1+ are overlays)
   // bgLayers structure: bgLayers[layerIndex][x][y] = tileIndex
@@ -756,6 +835,31 @@ const MapEditor = () => {
     }
     return map;
   }, [tilesetObjectsForSet]);
+
+  const zigzagTerrainOptions = useMemo(
+    () => tilesetObjectsForSet.filter((obj) => obj.category === 'terrain'),
+    [tilesetObjectsForSet],
+  );
+
+  useEffect(() => {
+    if (zigzagTerrainOptions.length === 0) {
+      setDecalGrassId(null);
+      setDecalSandId(null);
+      return;
+    }
+    if (!decalGrassId || !zigzagTerrainOptions.some((opt) => opt.id === decalGrassId)) {
+      setDecalGrassId(zigzagTerrainOptions[0].id);
+    }
+    if (
+      !decalSandId ||
+      !zigzagTerrainOptions.some((opt) => opt.id === decalSandId) ||
+      decalSandId === decalGrassId
+    ) {
+      const fallback = zigzagTerrainOptions.find((opt) => opt.id !== decalGrassId);
+      setDecalSandId(fallback ? fallback.id : null);
+    }
+  }, [zigzagTerrainOptions, decalGrassId, decalSandId]);
+
 
   useEffect(() => {
     setActiveStampId(null);
@@ -1322,6 +1426,91 @@ const MapEditor = () => {
     });
     return list;
   }, [placedObjects, objectsById]);
+
+  const placedObjectsByLayer = useMemo(() => {
+    const ground: PlacedObject[] = [];
+    const standing: PlacedObject[] = [];
+    for (const placement of placedObjectsSorted) {
+      const def = objectsById.get(placement.objectId);
+      const category = def?.category;
+      const isGround = category === 'terrain' || category === 'paths' || category === 'tile-object';
+      if (isGround) {
+        ground.push(placement);
+      } else {
+        standing.push(placement);
+      }
+    }
+    return { ground, standing };
+  }, [placedObjectsSorted, objectsById]);
+
+  const decalPlacements = useMemo(() => {
+    if (!showDecals || !terrainDecalConfig) return [];
+    if (!decalSheetMeta || Object.keys(decalFrames).length === 0) return [];
+    const { grassId, sandId } = terrainDecalConfig;
+    const grid: number[][] = Array.from({ length: MAP_WIDTH }, () => Array.from({ length: MAP_HEIGHT }, () => 0));
+
+    for (const placement of placedObjects) {
+      if (placement.col < 0 || placement.row < 0 || placement.col >= MAP_WIDTH || placement.row >= MAP_HEIGHT) continue;
+      if (placement.objectId === grassId) {
+        grid[placement.col][placement.row] = 1;
+      } else if (placement.objectId === sandId) {
+        grid[placement.col][placement.row] = 2;
+      }
+    }
+
+    const placements: Array<{ col: number; row: number; frameKey: string }> = [];
+
+    const pickFrame = (prefix: string, col: number, row: number, seed: number) => {
+      const count = decalVariantCounts[prefix] ?? 0;
+      if (count <= 0) return null;
+      const index = pickVariantIndex(col, row, seed, count);
+      const key = `${prefix}_${index}`;
+      if (!decalFrames[key]) return null;
+      return key;
+    };
+
+    const addDecal = (prefix: string, col: number, row: number, seed: number) => {
+      const key = pickFrame(prefix, col, row, seed);
+      if (!key) return;
+      placements.push({ col, row, frameKey: key });
+    };
+
+    for (let col = 0; col < MAP_WIDTH; col += 1) {
+      for (let row = 0; row < MAP_HEIGHT; row += 1) {
+        if (grid[col][row] !== 2) continue; // Sand cell only
+        const north = row > 0 ? grid[col][row - 1] : 0;
+        const south = row < MAP_HEIGHT - 1 ? grid[col][row + 1] : 0;
+        const west = col > 0 ? grid[col - 1][row] : 0;
+        const east = col < MAP_WIDTH - 1 ? grid[col + 1][row] : 0;
+
+        if (north === 1) addDecal('grass_in_sand_N', col, row, 1);
+        if (east === 1) addDecal('grass_in_sand_E', col, row, 2);
+        if (south === 1) addDecal('grass_in_sand_S', col, row, 3);
+        if (west === 1) addDecal('grass_in_sand_W', col, row, 4);
+
+        if (north === 1 && east === 1) addDecal('grass_in_sand_corner_NE', col, row, 5);
+        if (north === 1 && west === 1) addDecal('grass_in_sand_corner_NW', col, row, 6);
+        if (south === 1 && east === 1) addDecal('grass_in_sand_corner_SE', col, row, 7);
+        if (south === 1 && west === 1) addDecal('grass_in_sand_corner_SW', col, row, 8);
+
+        const nearGrass = north === 1 || south === 1 || east === 1 || west === 1;
+        if (nearGrass && (decalVariantCounts['grass_tuft'] ?? 0) > 0) {
+          const roll = stableHash(col, row, 9) % 100;
+          if (roll < 18) {
+            addDecal('grass_tuft', col, row, 10);
+          }
+        }
+      }
+    }
+    return placements;
+  }, [
+    showDecals,
+    terrainDecalConfig,
+    decalSheetMeta,
+    decalFrames,
+    decalVariantCounts,
+    placedObjects,
+  ]);
 
   const quickbarTileSlots = useMemo(
     () => Array.from({ length: QUICKBAR_SLOTS }, (_, index) => recentTiles[index] ?? null),
@@ -2071,8 +2260,9 @@ const MapEditor = () => {
       collisionLayer: cloneLayer(collisionLayer),
       placedObjects: clonePlacedObjects(placedObjects),
       animatedSprites: [...animatedSprites],
+      terrainDecals: terrainDecalConfig ?? null,
     }),
-    [animatedSprites, bgLayers, collisionLayer, placedObjects, tileset],
+    [animatedSprites, bgLayers, collisionLayer, placedObjects, tileset, terrainDecalConfig],
   );
 
   const applySavedPayload = useCallback((payload: SavedMapPayload) => {
@@ -2088,6 +2278,10 @@ const MapEditor = () => {
     setCollisionLayer(payload.collisionLayer ?? createBlankLayer(MAP_WIDTH, MAP_HEIGHT));
     setPlacedObjects(payload.placedObjects ?? []);
     setAnimatedSprites(payload.animatedSprites ?? []);
+    if (payload.terrainDecals?.grassId && payload.terrainDecals?.sandId) {
+      setDecalGrassId(payload.terrainDecals.grassId);
+      setDecalSandId(payload.terrainDecals.sandId);
+    }
     setHistory({ past: [], future: [] });
     pendingHistoryRef.current = null;
     historyDirtyRef.current = false;
@@ -2182,6 +2376,8 @@ export const objmap = ${JSON.stringify([collisionLayer])};
 export const placedobjects = ${JSON.stringify(placedObjects)};
 
 export const animatedsprites = ${JSON.stringify(animatedSprites)};
+
+export const terraindecals = ${terrainDecalConfig ? JSON.stringify(terrainDecalConfig) : 'null'};
 
 export const mapwidth = ${MAP_WIDTH};
 export const mapheight = ${MAP_HEIGHT};
@@ -2306,7 +2502,16 @@ export const mapheight = ${MAP_HEIGHT};
                                       imageRendering: 'pixelated'
                                   }}
                                />
-                               <span className="absolute bottom-0 w-full text-center text-[8px] bg-black/50 text-white truncate px-0.5">{obj.name}</span>
+                               <span
+                                       className="absolute bottom-0 w-full text-center text-[7px] font-bold uppercase tracking-tight py-0.5 truncate px-1"
+                                       style={{
+                                         background: 'linear-gradient(180deg, rgba(139,90,43,0.85) 0%, rgba(90,56,37,0.95) 100%)',
+                                         color: '#f4e0c0',
+                                         textShadow: '0 1px 1px rgba(0,0,0,0.5)',
+                                         borderTop: '1px solid rgba(244,224,192,0.3)'
+                                       }}
+                                       title={obj.name}
+                                     >{obj.name}</span>
                            </div>
                          );
                       })}
@@ -2485,6 +2690,63 @@ export const mapheight = ${MAP_HEIGHT};
     );
   };
 
+  const renderPlacedObject = (placement: PlacedObject) => {
+    const objectDef = objectsById.get(placement.objectId);
+    if (!objectDef) return null;
+    const placementRotation = getPlacementRotation(placement);
+    const bounds = getObjectPixelBounds(objectDef, { ...placement, rotation: placementRotation });
+    const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
+
+    const isGroundTile =
+      (objectDef as any).category === 'terrain' ||
+      (objectDef as any).category === 'paths' ||
+      (objectDef as any).category === 'tile-object';
+    const baseWidth = isGroundTile
+      ? tileSize
+      : (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * ((objectDef as any).scale ?? 1.0);
+    const baseHeight = isGroundTile
+      ? tileSize
+      : (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * ((objectDef as any).scale ?? 1.0);
+    const rotatedSize = getRotatedSize(baseWidth, baseHeight, placementRotation);
+
+    const objectOffsetY = isGroundTile
+      ? 0
+      : (objectDef.imagePath && objectDef.anchor === 'bottom-left'
+        ? Math.max(0, bounds.height - rotatedSize.height)
+        : 0);
+    return (
+      <div
+        key={placement.id}
+        className="absolute"
+        style={{
+          left: bounds.left,
+          top: bounds.top + objectOffsetY,
+          width: rotatedSize.width,
+          height: rotatedSize.height,
+        }}
+      >
+        <div
+          className="absolute"
+          style={{
+            width: baseWidth,
+            height: baseHeight,
+            backgroundImage: `url(${objectImageUrl})`,
+            backgroundPosition: objectDef.imagePath
+              ? '0px 0px'
+              : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
+            backgroundSize: objectDef.imagePath
+              ? `${baseWidth}px ${baseHeight}px`
+              : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+            backgroundRepeat: 'no-repeat',
+            imageRendering: 'pixelated',
+            transformOrigin: 'top left',
+            transform: getRotationTransform(baseWidth, baseHeight, placementRotation),
+          }}
+        />
+      </div>
+    );
+  };
+
   const renderCanvas = () => {
       // Dimensions of the scaled content
       const contentWidth = mapPixelWidth * canvasScale;
@@ -2523,7 +2785,7 @@ export const mapheight = ${MAP_HEIGHT};
                  }}
                >
                   {/* BG Layers */}
-                  {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
+                   {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
                     Array.from({ length: MAP_WIDTH }).map((_, cIndex) => (
                       <div
                         key={`${rIndex}-${cIndex}`}
@@ -2550,8 +2812,8 @@ export const mapheight = ${MAP_HEIGHT};
                                }}
                              />
                            );
-                         })}
-                      </div>
+                       })}
+                     </div>
                     ))
                   )}
                </div>
@@ -2568,66 +2830,38 @@ export const mapheight = ${MAP_HEIGHT};
              </div>
 
              {/* Placed Objects */}
-             {showObjects && placedObjectsSorted.length > 0 && (
+             {showObjects &&
+               (placedObjectsByLayer.ground.length > 0 || placedObjectsByLayer.standing.length > 0) && (
                 <div className="absolute inset-0 pointer-events-none">
-                  {placedObjectsSorted.map((placement) => {
-                    const objectDef = objectsById.get(placement.objectId);
-                    if (!objectDef) return null;
-                    const placementRotation = getPlacementRotation(placement);
-                    const bounds = getObjectPixelBounds(objectDef, { ...placement, rotation: placementRotation });
-                    const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
-
-                    // For terrain/paths: force display to grid size (32px) regardless of source image size
-                    const isGroundTile =
-                      (objectDef as any).category === 'terrain' ||
-                      (objectDef as any).category === 'paths' ||
-                      (objectDef as any).category === 'tile-object';
-                    const baseWidth = isGroundTile
-                      ? tileSize
-                      : (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * ((objectDef as any).scale ?? 1.0);
-                    const baseHeight = isGroundTile
-                      ? tileSize
-                      : (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * ((objectDef as any).scale ?? 1.0);
-                    const rotatedSize = getRotatedSize(baseWidth, baseHeight, placementRotation);
-
-                    // For ground tiles, no offset needed since they align to grid
-                    const objectOffsetY = isGroundTile
-                      ? 0
-                      : (objectDef.imagePath && objectDef.anchor === 'bottom-left'
-                        ? Math.max(0, bounds.height - rotatedSize.height)
-                        : 0);
-                    return (
-                      <div
-                        key={placement.id}
-                        className="absolute"
-                        style={{
-                          left: bounds.left,
-                          top: bounds.top + objectOffsetY,
-                          width: rotatedSize.width,
-                          height: rotatedSize.height,
-                        }}
-                      >
-                        <div
-                          className="absolute"
-                          style={{
-                            width: baseWidth,
-                            height: baseHeight,
-                            backgroundImage: `url(${objectImageUrl})`,
-                            backgroundPosition: objectDef.imagePath
-                              ? '0px 0px'
-                              : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
-                            backgroundSize: objectDef.imagePath
-                              ? `${baseWidth}px ${baseHeight}px`
-                              : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                            backgroundRepeat: 'no-repeat',
-                            imageRendering: 'pixelated',
-                            transformOrigin: 'top left',
-                            transform: getRotationTransform(baseWidth, baseHeight, placementRotation),
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
+                  {placedObjectsByLayer.ground.map((placement) => renderPlacedObject(placement))}
+                  {showDecals && decalPlacements.length > 0 && decalSheetMeta && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {decalPlacements.map((decal, index) => {
+                        const frame = decalFrames[decal.frameKey];
+                        if (!frame) return null;
+                        const scale = tileSize / decalSheetMeta.tileSize;
+                        const backgroundSize = `${decalSheetMeta.width * scale}px ${decalSheetMeta.height * scale}px`;
+                        return (
+                          <div
+                            key={`decal-${decal.col}-${decal.row}-${decal.frameKey}-${index}`}
+                            className="absolute"
+                            style={{
+                              left: decal.col * tileSize,
+                              top: decal.row * tileSize,
+                              width: tileSize,
+                              height: tileSize,
+                              backgroundImage: `url(${decalSheetUrl})`,
+                              backgroundPosition: `-${frame.x * scale}px -${frame.y * scale}px`,
+                              backgroundSize,
+                              backgroundRepeat: 'no-repeat',
+                              imageRendering: 'pixelated',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  {placedObjectsByLayer.standing.map((placement) => renderPlacedObject(placement))}
                 </div>
              )}
 
@@ -2847,30 +3081,14 @@ export const mapheight = ${MAP_HEIGHT};
                     </div>
                   ) : activeMode === 'objects' ? (
                     <div className="flex flex-col gap-2">
-                         {/* Sub-Category Pills (icon-only, cleaner design) */}
+                         {/* Sub-Category Tabs (Stardew style) */}
                          {activeSubCategory !== 'buildings' && (
-                             <div className="flex items-center justify-center gap-2 mb-3">
-                                {[
-                                   { id: 'nature', icon: '🌳', label: 'Nature' },
-                                   { id: 'furniture', icon: '🪑', label: 'Furniture' },
-                                   { id: 'decorations', icon: '✨', label: 'Decorations' },
-                                   { id: 'fences', icon: '🧱', label: 'Fences' },
-                                   { id: 'tile-object', icon: '🧩', label: 'Tile Objects' }
-                                ].map(cat => (
-                                   <button
-                                      key={cat.id}
-                                      onClick={() => setActiveSubCategory(cat.id)}
-                                      title={cat.label}
-                                      className={`w-9 h-9 rounded-full flex items-center justify-center text-base transition-all ${
-                                          activeSubCategory === cat.id 
-                                          ? 'bg-[#ffd93d] border-2 border-[#e8b030] shadow-lg scale-110' 
-                                          : 'bg-[#5a4030] border-2 border-[#6d4c30] hover:bg-[#6d4c30] hover:scale-105'
-                                      }`}
-                                   >
-                                      {cat.icon}
-                                   </button>
-                                ))}
-                             </div>
+                             <StardewSubTabGroup
+                                categories={['nature', 'furniture', 'decorations', 'fences', 'tile-object']}
+                                activeCategory={activeSubCategory}
+                                onSelect={setActiveSubCategory}
+                                className="mb-3"
+                             />
                          )}
 
                          {/* Objects Grid - use filteredObjects which filters by activeSubCategory */}
@@ -2906,7 +3124,16 @@ export const mapheight = ${MAP_HEIGHT};
                                             imageRendering: 'pixelated'
                                         }}
                                      />
-                                     <span className="absolute bottom-0 w-full text-center text-[8px] bg-black/50 text-white truncate px-0.5">{obj.name}</span>
+                                     <span
+                                       className="absolute bottom-0 w-full text-center text-[7px] font-bold uppercase tracking-tight py-0.5 truncate px-1"
+                                       style={{
+                                         background: 'linear-gradient(180deg, rgba(139,90,43,0.85) 0%, rgba(90,56,37,0.95) 100%)',
+                                         color: '#f4e0c0',
+                                         textShadow: '0 1px 1px rgba(0,0,0,0.5)',
+                                         borderTop: '1px solid rgba(244,224,192,0.3)'
+                                       }}
+                                       title={obj.name}
+                                     >{obj.name}</span>
                                  </div>
                                );
                             })}
@@ -3116,7 +3343,51 @@ export const mapheight = ${MAP_HEIGHT};
                         ✂️ <span>SLICE</span>
                     </button>
                     
-                    <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
+                   <div className="space-y-1">
+                      <div className="text-[8px] uppercase tracking-wider text-[#a88b6a] text-center">Decals</div>
+                      <label className="flex items-center justify-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide terrain decals">
+                        <StardewCheckbox
+                          label="DECAL"
+                          checked={showDecals}
+                          onChange={setShowDecals}
+                          className="scale-70 origin-left"
+                        />
+                      </label>
+                      <select
+                        value={decalGrassId ?? ''}
+                        onChange={(event) => setDecalGrassId(event.target.value || null)}
+                        className="w-full bg-[#3b2a21] border border-[#6d4c30] text-[#f3e2b5] text-[8px] px-1 py-1 rounded"
+                      >
+                        <option value="">Grass</option>
+                        {zigzagTerrainOptions.map((opt) => (
+                          <option key={`decal-grass-${opt.id}`} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={decalSandId ?? ''}
+                        onChange={(event) => setDecalSandId(event.target.value || null)}
+                        className="w-full bg-[#3b2a21] border border-[#6d4c30] text-[#f3e2b5] text-[8px] px-1 py-1 rounded"
+                      >
+                        <option value="">Sand</option>
+                        {zigzagTerrainOptions.map((opt) => (
+                          <option key={`decal-sand-${opt.id}`} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-[7px] text-[#8b6b4a] text-center">
+                        Grass → Sand edge overlay
+                      </div>
+                      {decalLoadError && (
+                        <div className="text-[7px] text-[#c96c6c] text-center">
+                          Decal pack missing
+                        </div>
+                      )}
+                   </div>
+
+                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
 
                    <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide grid overlay">
                       <StardewCheckbox 
@@ -3144,8 +3415,6 @@ export const mapheight = ${MAP_HEIGHT};
                         className="scale-70 origin-left"
                       />
                    </label>
-                   
-                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
                    
                    <div className="text-[#8b6b4a] text-[8px] font-display text-center">
                       {MAP_WIDTH}×{MAP_HEIGHT}

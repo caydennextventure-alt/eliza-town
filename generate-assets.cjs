@@ -59,6 +59,7 @@ const assetsJson = {
   categories: {},
   objects: []
 };
+const usedIds = new Set();
 
 // Build categories
 for (const cat of categories) {
@@ -84,7 +85,16 @@ for (const cat of categories) {
     const dims = getImageDimensions(filePath);
     const folder = categoryFolders[cat] ?? cat;
     const baseId = fileToId(file);
-    const id = cat === 'tile-object' ? `tile-object-${baseId}` : baseId;
+    let id = cat === 'tile-object' ? `tile-object-${baseId}` : baseId;
+    if (usedIds.has(id)) {
+      id = `${cat}-${baseId}`;
+      let suffix = 2;
+      while (usedIds.has(id)) {
+        id = `${cat}-${baseId}-${suffix}`;
+        suffix += 1;
+      }
+    }
+    usedIds.add(id);
     
     assetsJson.objects.push({
       id,

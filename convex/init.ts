@@ -84,6 +84,7 @@ async function getOrCreateDefaultWorld(ctx: MutationCtx) {
     bgTiles: mapData.bgtiles,
     objectTiles: mapData.objmap,
     placedObjects: mapData.placedobjects ?? [],
+    terrainDecals: mapData.terraindecals ?? mapData.terrainDecals,
     animatedSprites: mapData.animatedsprites,
   });
   await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
