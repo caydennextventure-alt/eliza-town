@@ -16,8 +16,6 @@ import { fetchEmbedding } from './util/llm';
 import { chatCompletion } from './util/llm';
 import { startConversationMessage } from './agent/conversation';
 import { GameId } from './aiTown/ids';
-import * as gentleMap from '../data/gentle';
-import * as testMap from '../data/beginning_fields';
 
 // Clear all of the tables except for the embeddings cache.
 const excludedTables: Array<TableNames> = ['embeddingsCache'];
@@ -202,40 +200,3 @@ export const testConvo = internalAction({
     return await a.readAll();
   },
 });
-
-export const toggleTestMap = mutation({
-  handler: async (ctx) => {
-    const { worldStatus } = await getDefaultWorld(ctx.db);
-    const existingMap = await ctx.db
-      .query('maps')
-      .withIndex('worldId', (q) => q.eq('worldId', worldStatus.worldId))
-      .unique();
-      
-    if (!existingMap) throw new Error('No map found');
-    
-    // Check which map is currently loaded based on width/height or some property
-    // gentle: 45x32, test: 40x40
-    const isCurrentlyTest = existingMap.width === testMap.mapwidth && existingMap.height === testMap.mapheight;
-    
-    // Swap target
-    const targetMap = isCurrentlyTest ? gentleMap : testMap;
-    console.log(`Switching map to: ${isCurrentlyTest ? 'Gentle (Default)' : 'Test Map'}`);
-
-    await ctx.db.replace(existingMap._id, {
-      worldId: worldStatus.worldId,
-      width: targetMap.mapwidth,
-      height: targetMap.mapheight,
-      tileSetUrl: targetMap.tilesetpath,
-      tileSetDimX: targetMap.tilesetpxw,
-      tileSetDimY: targetMap.tilesetpxh,
-      tileDim: targetMap.tiledim,
-      bgTiles: targetMap.bgtiles,
-      objectTiles: targetMap.objmap,
-      animatedSprites: targetMap.animatedsprites,
-    });
-    
-    // Kick engine to force reload
-    await kickEngine(ctx, worldStatus.worldId);
-  },
-});
-

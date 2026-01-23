@@ -21,6 +21,8 @@ const placedObject = {
   col: v.number(),
   row: v.number(),
   rotation: v.optional(v.number()),
+  pixelOffsetX: v.optional(v.number()),
+  pixelOffsetY: v.optional(v.number()),
 };
 export type PlacedObject = ObjectType<typeof placedObject>;
 
@@ -42,6 +44,7 @@ export const serializedWorldMap = {
     v.object({
       grassId: v.string(),
       sandId: v.string(),
+      waterId: v.optional(v.string()),
     }),
   ),
   animatedSprites: v.array(v.object(animatedSprite)),
@@ -61,7 +64,7 @@ export class WorldMap {
   bgTiles: TileLayer[];
   objectTiles: TileLayer[];
   placedObjects: PlacedObject[];
-  terrainDecals?: { grassId: string; sandId: string };
+  terrainDecals?: { grassId: string; sandId: string; waterId?: string };
   animatedSprites: AnimatedSprite[];
 
   constructor(serialized: SerializedWorldMap) {

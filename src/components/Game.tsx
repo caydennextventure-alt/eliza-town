@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import PixiGame from './PixiGame.tsx';
-import MapSwitcher from './MapSwitcher.tsx';
+import { useState } from 'react';
 
 import { useElementSize } from 'usehooks-ts';
 import { Stage } from '@pixi/react';
@@ -22,13 +21,6 @@ export default function Game() {
     id: GameId<'players'>;
   }>();
   const [gameWrapperRef, { width, height }] = useElementSize();
-  const [isLoadingMap, setIsLoadingMap] = useState(false);
-
-  const handleMapSwitch = () => {
-    setIsLoadingMap(true);
-    // Optimistic loading time - give server enough time to process and client to reconnect
-    setTimeout(() => setIsLoadingMap(false), 3000);
-  };
 
   const worldStatus = useQuery(api.world.defaultWorldStatus);
   const worldId = worldStatus?.worldId;
@@ -74,17 +66,6 @@ export default function Game() {
           />
         </div>
 
-        {/* Map Switcher Button */}
-        <MapSwitcher onSwitch={handleMapSwitch} />
-
-        {/* Loading Overlay */}
-        {isLoadingMap && (
-          <div className="absolute inset-0 z-50 bg-black flex items-center justify-center">
-            <div className="text-white font-pixel text-2xl animate-pulse">
-              LOADING NEW MAP...
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

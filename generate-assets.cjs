@@ -5,21 +5,31 @@ const { execSync } = require('child_process');
 const TILESET_PATH = path.join(__dirname, 'public/assets/Tileset Asset');
 const OUTPUT_PATH = path.join(__dirname, 'public/assets/assets.json');
 
-const categories = ['terrain', 'nature', 'buildings', 'decorations', 'furniture', 'fences', 'paths', 'tile-object'];
+const categories = ['terrain', 'flooring', 'nature', 'buildings', 'decorations', 'furniture', 'fences', 'paths', 'tile-object', 'stamp'];
 
 const categoryNames = {
   terrain: '地形',
+  flooring: '地板',
   nature: '自然',
   buildings: '建筑',
   decorations: '装饰',
   furniture: '家具',
   fences: '围栏',
   paths: '道路',
-  'tile-object': '地面物件'
+  'tile-object': '地面物件',
+  stamp: 'Stamp'
 };
 
 const categoryFolders = {
-  'tile-object': 'tile object'
+  flooring: 'Floor',
+  'tile-object': 'tile object',
+  stamp: 'Stamp'
+};
+
+const nameOverrides = {
+  grass: 'Grass',
+  sand: 'Sand',
+  sea: 'Sea',
 };
 
 function getImageDimensions(filePath) {
@@ -96,14 +106,18 @@ for (const cat of categories) {
     }
     usedIds.add(id);
     
-    assetsJson.objects.push({
+    const objectEntry = {
       id,
-      name: fileToName(file),
+      name: nameOverrides[id] ?? fileToName(file),
       category: cat,
       image: `assets/Tileset Asset/${folder}/${file}`,
       pixelWidth: dims.width,
       pixelHeight: dims.height
-    });
+    };
+    if (cat === 'stamp') {
+      objectEntry.anchor = 'center';
+    }
+    assetsJson.objects.push(objectEntry);
   }
 }
 

@@ -48,6 +48,23 @@ const icons: Record<string, React.ReactNode> = {
             fill="#7B68EE" stroke="#483D8B" strokeWidth="0.5"/>
     </svg>
   ),
+  paths: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Simple dirt path */}
+      <rect x="3" y="2" width="10" height="12" fill="#C9A06A" stroke="#8B5A2B" strokeWidth="0.5"/>
+      <rect x="5" y="4" width="6" height="2" fill="#B5834A"/>
+      <rect x="4" y="8" width="8" height="2" fill="#B5834A"/>
+      <rect x="5" y="11" width="6" height="2" fill="#B5834A"/>
+    </svg>
+  ),
+  flooring: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Simple tile grid */}
+      <rect x="2" y="2" width="12" height="12" fill="#D0D0D0" stroke="#7A7A7A" strokeWidth="0.5"/>
+      <rect x="2" y="7" width="12" height="1" fill="#9A9A9A"/>
+      <rect x="7" y="2" width="1" height="12" fill="#9A9A9A"/>
+    </svg>
+  ),
 };
 
 // Display labels for each category
@@ -57,6 +74,8 @@ const labels: Record<string, string> = {
   decorations: 'Decor',
   fences: 'Fences',
   'tile-object': 'Tiles',
+  paths: 'Paths',
+  flooring: 'Floor',
 };
 
 interface StardewSubTabProps {
