@@ -14,6 +14,7 @@ import { DebugPath } from './DebugPath.tsx';
 import { PositionIndicator } from './PositionIndicator.tsx';
 import { SHOW_DEBUG_UI } from './Game.tsx';
 import { ServerGame } from '../hooks/serverGame.ts';
+import { WerewolfBuildingMarker } from './werewolf/WerewolfBuildingMarker.tsx';
 
 export const PixiGame = (props: {
   worldId: Id<'worlds'>;
@@ -23,6 +24,7 @@ export const PixiGame = (props: {
   width: number;
   height: number;
   setSelectedElement: SelectElement;
+  onOpenSpectator?: (matchId: string) => void;
 }) => {
   // PIXI setup.
   const pixiApp = useApp();
@@ -32,6 +34,7 @@ export const PixiGame = (props: {
   const humanPlayerId = [...props.game.world.players.values()].find(
     (p) => p.human === humanTokenIdentifier,
   )?.id;
+  const buildingResult = useQuery(api.werewolf.buildingsInWorld, { worldId: props.worldId });
 
   const moveTo = useSendInput(props.engineId, 'moveTo');
 
@@ -81,6 +84,7 @@ export const PixiGame = (props: {
   };
   const { width, height, tileDim } = props.game.worldMap;
   const players = [...props.game.world.players.values()];
+  const buildings = buildingResult?.buildings ?? [];
 
   // Zoom on the user’s avatar when it is created
   useEffect(() => {
@@ -107,6 +111,19 @@ export const PixiGame = (props: {
         onpointerup={onMapPointerUp}
         onpointerdown={onMapPointerDown}
       />
+      {buildings.map((building) => (
+        <WerewolfBuildingMarker
+          key={building.buildingId}
+          x={building.x * tileDim + tileDim / 2}
+          y={building.y * tileDim + tileDim / 2}
+          tileDim={tileDim}
+          onSelect={
+            props.onOpenSpectator
+              ? () => props.onOpenSpectator(building.matchId)
+              : undefined
+          }
+        />
+      ))}
       {players.map(
         (p) =>
           // Only show the path for the human player in non-debug mode.

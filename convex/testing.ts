@@ -1,5 +1,5 @@
 import { Id, TableNames } from './_generated/dataModel';
-import { internal } from './_generated/api';
+import { anyApi } from 'convex/server';
 import {
   DatabaseReader,
   internalAction,
@@ -17,6 +17,9 @@ import { chatCompletion } from './util/llm';
 import { startConversationMessage } from './agent/conversation';
 import { GameId } from './aiTown/ids';
 
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
+
 // Clear all of the tables except for the embeddings cache.
 const excludedTables: Array<TableNames> = ['embeddingsCache'];
 
@@ -26,7 +29,7 @@ export const wipeAllTables = internalMutation({
       if (excludedTables.includes(tableName as TableNames)) {
         continue;
       }
-      await ctx.scheduler.runAfter(0, internal.testing.deletePage, { tableName, cursor: null });
+      await ctx.scheduler.runAfter(0, apiAny.testing.deletePage, { tableName, cursor: null });
     }
   },
 });
@@ -44,7 +47,7 @@ export const deletePage = internalMutation({
       await ctx.db.delete(row._id);
     }
     if (!results.isDone) {
-      await ctx.scheduler.runAfter(0, internal.testing.deletePage, {
+      await ctx.scheduler.runAfter(0, apiAny.testing.deletePage, {
         tableName: args.tableName,
         cursor: results.continueCursor,
       });

@@ -9,15 +9,20 @@
     "predev": "convex dev --run init --until-success",
     "dev:backend": "convex dev --tail-logs",
     "dev:frontend": "vite",
+    "predev:e2e": "CONVEX_AGENT_MODE=anonymous convex dev --run init --until-success --local --local-cloud-port ${E2E_CONVEX_PORT:-3212} --local-site-port ${E2E_CONVEX_SITE_PORT:-3213}",
+    "dev:backend:e2e": "CONVEX_AGENT_MODE=anonymous convex dev --tail-logs --local --local-cloud-port ${E2E_CONVEX_PORT:-3212} --local-site-port ${E2E_CONVEX_SITE_PORT:-3213}",
+    "dev:frontend:e2e": "VITE_E2E=1 VITE_CONVEX_URL=http://127.0.0.1:${E2E_CONVEX_PORT:-3212} vite --mode e2e --port 4173 --strictPort",
     "dashboard": "convex dashboard",
-    "dev:e2e": "VITE_E2E_MOCKS=1 VITE_CONVEX_URL=http://localhost:3210 vite --port 4173 --strictPort",
+    "dev:e2e": "npm-run-all --parallel dev:backend:e2e dev:frontend:e2e",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --verbose",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "mcp:werewolf": "node --loader ts-node/esm mcp/werewolf/server.ts"
   },
   "dependencies": {
     "@clerk/clerk-react": "^4.27.0",
     "@elizaos/core": "^1.7.2",
+    "@modelcontextprotocol/sdk": "^1.8.0",
     "@pixi/react": "^7.1.0",
     "@pixi/sound": "^5.2.0",
     "@tailwindcss/forms": "^0.5.3",

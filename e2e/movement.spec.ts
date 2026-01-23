@@ -1,17 +1,19 @@
 import { expect, test } from '@playwright/test';
-import { enterWorld, gotoScenario, openJoinDialog } from './utils';
+import { enterWorld, gotoHome, ensureCustomAgent, takeOverFirstAgent } from './utils';
 
 test('move action updates the player position', async ({ page }) => {
-  await gotoScenario(page, 'base');
+  await gotoHome(page);
   await enterWorld(page);
+  await ensureCustomAgent(page);
+  await takeOverFirstAgent(page);
 
-  await openJoinDialog(page);
-  await page.getByTestId('join-world-takeover').click();
-  await expect(page.getByTestId('join-world-dialog')).toBeHidden();
+  await page.getByTestId('test-move').click();
+  await expect(page.getByTestId('test-player-position')).toHaveText('1,1', {
+    timeout: 20000,
+  });
 
-  await page.getByTestId('mock-move').click();
-  await expect(page.getByTestId('player-position')).toHaveText('1,1');
-
-  await page.getByTestId('mock-move').click();
-  await expect(page.getByTestId('player-position')).toHaveText('2,2');
+  await page.getByTestId('test-move').click();
+  await expect(page.getByTestId('test-player-position')).toHaveText('2,2', {
+    timeout: 20000,
+  });
 });

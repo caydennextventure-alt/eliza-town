@@ -2,7 +2,10 @@ import { v } from 'convex/values';
 import { query, internalMutation } from './_generated/server';
 import Replicate, { WebhookEventType } from 'replicate';
 import { httpAction, internalAction } from './_generated/server';
-import { internal, api } from './_generated/api';
+import { anyApi } from 'convex/server';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 function client(): Replicate {
   const replicate = new Replicate({
@@ -48,7 +51,7 @@ export const enqueueBackgroundMusicGeneration = internalAction({
     if (!replicateAvailable()) {
       return;
     }
-    const worldStatus = await ctx.runQuery(api.world.defaultWorldStatus);
+    const worldStatus = await ctx.runQuery(apiAny.world.defaultWorldStatus);
     if (!worldStatus) {
       console.log('No active default world, returning.');
       return;
@@ -65,7 +68,7 @@ export const handleReplicateWebhook = httpAction(async (ctx, request) => {
     const response = await fetch(prediction.output);
     const music = await response.blob();
     const storageId = await ctx.storage.store(music);
-    await ctx.runMutation(internal.music.insertMusic, { type: 'background', storageId });
+    await ctx.runMutation(apiAny.music.insertMusic, { type: 'background', storageId });
   }
   return new Response();
 });

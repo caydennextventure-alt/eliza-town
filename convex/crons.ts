@@ -1,21 +1,23 @@
 import { cronJobs } from 'convex/server';
 import { DELETE_BATCH_SIZE, IDLE_WORLD_TIMEOUT, VACUUM_MAX_AGE } from './constants';
-import { internal } from './_generated/api';
+import { anyApi } from 'convex/server';
 import { internalMutation } from './_generated/server';
 import { TableNames } from './_generated/dataModel';
 import { v } from 'convex/values';
 
 const crons = cronJobs();
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 crons.interval(
   'stop inactive worlds',
   { seconds: IDLE_WORLD_TIMEOUT / 1000 },
-  internal.world.stopInactiveWorlds,
+  apiAny.world.stopInactiveWorlds,
 );
 
-crons.interval('restart dead worlds', { seconds: 60 }, internal.world.restartDeadWorlds);
+crons.interval('restart dead worlds', { seconds: 60 }, apiAny.world.restartDeadWorlds);
 
-crons.daily('vacuum old entries', { hourUTC: 4, minuteUTC: 20 }, internal.crons.vacuumOldEntries);
+crons.daily('vacuum old entries', { hourUTC: 4, minuteUTC: 20 }, apiAny.crons.vacuumOldEntries);
 
 export default crons;
 
@@ -49,7 +51,7 @@ export const vacuumOldEntries = internalMutation({
         .first();
       if (exists) {
         console.log(`Vacuuming ${tableName}...`);
-        await ctx.scheduler.runAfter(0, internal.crons.vacuumTable, {
+        await ctx.scheduler.runAfter(0, apiAny.crons.vacuumTable, {
           tableName,
           before,
           cursor: null,
@@ -76,7 +78,7 @@ export const vacuumTable = internalMutation({
       await ctx.db.delete(row._id);
     }
     if (!results.isDone) {
-      await ctx.scheduler.runAfter(0, internal.crons.vacuumTable, {
+      await ctx.scheduler.runAfter(0, apiAny.crons.vacuumTable, {
         tableName,
         before,
         soFar: results.page.length + soFar,

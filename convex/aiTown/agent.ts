@@ -19,9 +19,12 @@ import {
 import { FunctionArgs } from 'convex/server';
 import { MutationCtx, internalMutation, internalQuery } from '../_generated/server';
 import { distance } from '../util/geometry';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 export class Agent {
   id: GameId<'agents'>;
@@ -248,7 +251,7 @@ export class Agent {
     }
   }
 
-  startOperation<Name extends keyof AgentOperations>(
+  startOperation<Name extends keyof AgentOperations & string>(
     game: Game,
     now: number,
     name: Name,
@@ -297,19 +300,19 @@ export const serializedAgent = {
 };
 export type SerializedAgent = ObjectType<typeof serializedAgent>;
 
-type AgentOperations = typeof internal.aiTown.agentOperations;
+type AgentOperations = typeof apiAny.aiTown.agentOperations;
 
 export async function runAgentOperation(ctx: MutationCtx, operation: string, args: any) {
   let reference;
   switch (operation) {
     case 'agentRememberConversation':
-      reference = internal.aiTown.agentOperations.agentRememberConversation;
+      reference = apiAny.aiTown.agentOperations.agentRememberConversation;
       break;
     case 'agentGenerateMessage':
-      reference = internal.aiTown.agentOperations.agentGenerateMessage;
+      reference = apiAny.aiTown.agentOperations.agentGenerateMessage;
       break;
     case 'agentDoSomething':
-      reference = internal.aiTown.agentOperations.agentDoSomething;
+      reference = apiAny.aiTown.agentOperations.agentDoSomething;
       break;
     default:
       throw new Error(`Unknown operation: ${operation}`);

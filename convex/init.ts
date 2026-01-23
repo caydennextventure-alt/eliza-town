@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internal } from './_generated/api';
+import { anyApi } from 'convex/server';
 import { DatabaseReader, MutationCtx, mutation } from './_generated/server';
 import { Descriptions } from '../data/characters';
 import * as map from '../data/gentle';
@@ -8,6 +8,9 @@ import { Id } from './_generated/dataModel';
 import { createEngine } from './aiTown/main';
 import { ENGINE_ACTION_DURATION } from './constants';
 import { detectMismatchedLLMProvider } from './util/llm';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 const init = mutation({
   args: {
@@ -79,7 +82,7 @@ async function getOrCreateDefaultWorld(ctx: MutationCtx) {
     objectTiles: map.objmap,
     animatedSprites: map.animatedsprites,
   });
-  await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
+  await ctx.scheduler.runAfter(0, apiAny.aiTown.main.runStep, {
     worldId,
     generationNumber: engine.generationNumber,
     maxDuration: ENGINE_ACTION_DURATION,

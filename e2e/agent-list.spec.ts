@@ -1,28 +1,36 @@
 import { expect, test } from '@playwright/test';
-import { enterWorld, gotoScenario } from './utils';
+import { enterWorld, gotoHome, createCustomAgent, takeOverAgentByName, openAgentList, releaseAgent } from './utils';
 
 test('remove controlled agent with confirmation', async ({ page }) => {
-  await gotoScenario(page, 'controlled');
+  await gotoHome(page);
   await enterWorld(page);
 
-  await page.getByTestId('open-agent-list').click();
-  await expect(page.getByTestId('agent-list-dialog')).toBeVisible();
+  const agentName = `E2E Remove ${Date.now()}`;
+  await createCustomAgent(page, agentName);
+  await takeOverAgentByName(page, agentName);
+
+  await openAgentList(page);
   await page.getByTestId('agent-list-close').click();
   await expect(page.getByTestId('agent-list-dialog')).toBeHidden();
 
-  await page.getByTestId('open-agent-list').click();
-  await expect(page.getByTestId('agent-list-dialog')).toBeVisible();
-
-  const removeButton = page.locator('[data-testid^="agent-remove-"]').first();
+  await openAgentList(page);
+  const row = page.locator('[data-testid^="agent-row-"]').filter({ hasText: agentName }).first();
+  const removeButton = row.locator('[data-testid^="agent-remove-"]');
   await removeButton.click();
 
-  const cancelButton = page.locator('[data-testid^="agent-cancel-remove-"]').first();
+  const cancelButton = row.locator('[data-testid^="agent-cancel-remove-"]');
   await cancelButton.click();
 
   await removeButton.click();
-  const confirmButton = page.locator('[data-testid^="agent-confirm-remove-"]').first();
+  const confirmButton = row.locator('[data-testid^="agent-confirm-remove-"]');
   await confirmButton.click();
 
-  await expect(page.locator('[data-testid^="agent-remove-"]')).toHaveCount(0);
+  await expect(page.locator(`[data-agent-name="${agentName}"]`)).toHaveCount(0, {
+    timeout: 30000,
+  });
   await page.getByTestId('agent-list-done').click();
+  const joinText = (await page.getByTestId('join-world').textContent()) ?? '';
+  if (joinText.includes('Release')) {
+    await releaseAgent(page);
+  }
 });

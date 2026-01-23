@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { enterWorld, gotoScenario } from './utils';
+import { enterWorld, gotoHome } from './utils';
 
 test('landing page interactions', async ({ page }) => {
-  await gotoScenario(page, 'base');
+  await gotoHome(page);
 
   await expect(page.getByText('ELIZA TOWN')).toBeVisible();
 

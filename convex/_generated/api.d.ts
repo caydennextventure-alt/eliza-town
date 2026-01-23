@@ -8,11 +8,6 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as agent_conversation from "../agent/conversation.js";
 import type * as agent_embeddingsCache from "../agent/embeddingsCache.js";
 import type * as agent_memory from "../agent/memory.js";
@@ -62,16 +57,32 @@ import type * as util_object from "../util/object.js";
 import type * as util_sleep from "../util/sleep.js";
 import type * as util_types from "../util/types.js";
 import type * as util_xxhash from "../util/xxhash.js";
+import type * as werewolf from "../werewolf.js";
+import type * as werewolf_advancePhase from "../werewolf/advancePhase.js";
+import type * as werewolf_db from "../werewolf/db.js";
+import type * as werewolf_engine_day from "../werewolf/engine/day.js";
+import type * as werewolf_engine_earlyAdvance from "../werewolf/engine/earlyAdvance.js";
+import type * as werewolf_engine_events from "../werewolf/engine/events.js";
+import type * as werewolf_engine_narrator from "../werewolf/engine/narrator.js";
+import type * as werewolf_engine_night from "../werewolf/engine/night.js";
+import type * as werewolf_engine_roleAssign from "../werewolf/engine/roleAssign.js";
+import type * as werewolf_engine_state from "../werewolf/engine/state.js";
+import type * as werewolf_engine_transitions from "../werewolf/engine/transitions.js";
+import type * as werewolf_engine_win from "../werewolf/engine/win.js";
+import type * as werewolf_idempotency from "../werewolf/idempotency.js";
+import type * as werewolf_match from "../werewolf/match.js";
+import type * as werewolf_matchmaking from "../werewolf/matchmaking.js";
+import type * as werewolf_queries from "../werewolf/queries.js";
+import type * as werewolf_queue from "../werewolf/queue.js";
+import type * as werewolf_types from "../werewolf/types.js";
 import type * as world from "../world.js";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 declare const fullApi: ApiFromModules<{
   "agent/conversation": typeof agent_conversation;
   "agent/embeddingsCache": typeof agent_embeddingsCache;
@@ -122,13 +133,51 @@ declare const fullApi: ApiFromModules<{
   "util/sleep": typeof util_sleep;
   "util/types": typeof util_types;
   "util/xxhash": typeof util_xxhash;
+  werewolf: typeof werewolf;
+  "werewolf/advancePhase": typeof werewolf_advancePhase;
+  "werewolf/db": typeof werewolf_db;
+  "werewolf/engine/day": typeof werewolf_engine_day;
+  "werewolf/engine/earlyAdvance": typeof werewolf_engine_earlyAdvance;
+  "werewolf/engine/events": typeof werewolf_engine_events;
+  "werewolf/engine/narrator": typeof werewolf_engine_narrator;
+  "werewolf/engine/night": typeof werewolf_engine_night;
+  "werewolf/engine/roleAssign": typeof werewolf_engine_roleAssign;
+  "werewolf/engine/state": typeof werewolf_engine_state;
+  "werewolf/engine/transitions": typeof werewolf_engine_transitions;
+  "werewolf/engine/win": typeof werewolf_engine_win;
+  "werewolf/idempotency": typeof werewolf_idempotency;
+  "werewolf/match": typeof werewolf_match;
+  "werewolf/matchmaking": typeof werewolf_matchmaking;
+  "werewolf/queries": typeof werewolf_queries;
+  "werewolf/queue": typeof werewolf_queue;
+  "werewolf/types": typeof werewolf_types;
   world: typeof world;
 }>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};

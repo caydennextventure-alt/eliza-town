@@ -8,6 +8,7 @@ import closeImg from '../assets/close.svg';
 import charactersImg from '../assets/ui/icon-characters.svg';
 import newAgentImg from '../assets/ui/icon-new-agent.svg';
 import agentsImg from '../assets/ui/icon-agents.svg';
+import werewolfImg from '../assets/ui/chats.svg';
 import { useState, useEffect } from 'react';
 import ReactModal from 'react-modal';
 import MusicButton from './ui/buttons/MusicButton.tsx';
@@ -18,6 +19,8 @@ import CreateCharacterDialog from './components/CreateCharacterDialog.tsx';
 import CreateAgentDialog from './components/CreateAgentDialog.tsx';
 import WorldJoinControls from './components/WorldJoinControls.tsx';
 import AgentListDialog from './components/AgentListDialog.tsx';
+import WerewolfPanel from './components/werewolf/WerewolfPanel.tsx';
+import SpectatorPanel from './components/werewolf/SpectatorPanel.tsx';
 
 const modalStyles = {
   overlay: {
@@ -45,6 +48,8 @@ export default function Home() {
   const [createCharacterOpen, setCreateCharacterOpen] = useState(false);
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const [agentListOpen, setAgentListOpen] = useState(false);
+  const [werewolfPanelOpen, setWerewolfPanelOpen] = useState(false);
+  const [spectatorMatchId, setSpectatorMatchId] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [showVisualTest, setShowVisualTest] = useState(false);
@@ -130,6 +135,16 @@ export default function Home() {
           setCreateAgentOpen(true);
         }}
       />
+      <WerewolfPanel
+        isOpen={werewolfPanelOpen}
+        onClose={() => setWerewolfPanelOpen(false)}
+        onOpenSpectator={(matchId) => setSpectatorMatchId(matchId)}
+      />
+      <SpectatorPanel
+        isOpen={spectatorMatchId !== null}
+        matchId={spectatorMatchId}
+        onClose={() => setSpectatorMatchId(null)}
+      />
 
       {!gameStarted ? (
         // LANDING PAGE STATE
@@ -174,12 +189,20 @@ export default function Home() {
         <div className="w-full h-screen flex flex-col" data-testid="game-view">
           {/* Game area fills remaining space */}
           <div className="flex-grow relative overflow-hidden">
-            <Game />
+            <Game onOpenSpectator={(matchId) => setSpectatorMatchId(matchId)} />
           </div>
 
           {/* Minimal Overlay Controls for Game Mode */}
           <div className="absolute top-4 left-4 z-10 flex flex-wrap items-start gap-3 pointer-events-auto max-w-[calc(100%-2rem)]">
             <WorldJoinControls onCreateAgent={() => setCreateAgentOpen(true)} />
+            <Button
+              imgUrl={werewolfImg}
+              onClick={() => setWerewolfPanelOpen(true)}
+              title="Open the Werewolf panel"
+              dataTestId="open-werewolf-panel"
+            >
+              Werewolf
+            </Button>
             <Button
               imgUrl={charactersImg}
               onClick={() => setCreateCharacterOpen(true)}

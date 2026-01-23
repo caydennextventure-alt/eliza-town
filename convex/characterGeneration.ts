@@ -1,7 +1,10 @@
 import { v } from 'convex/values';
 import { action } from './_generated/server';
-import { api } from './_generated/api';
+import { anyApi } from 'convex/server';
 import Replicate from 'replicate';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 export const generate = action({
   args: {
@@ -195,7 +198,7 @@ export const generate = action({
     console.log("Step 3.1: Getting upload URL...");
 
     // 1. Generate Upload URL
-    const uploadUrl = await ctx.runMutation(api.characterSprites.generateUploadUrl);
+    const uploadUrl = await ctx.runMutation(apiAny.characterSprites.generateUploadUrl);
     console.log("Step 3.2: Upload URL obtained, uploading blob...");
     console.log("Blob size:", finalImageBlob.size, "bytes, type:", finalImageBlob.type);
     

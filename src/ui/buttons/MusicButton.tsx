@@ -4,7 +4,7 @@ import { sound } from '@pixi/sound';
 import Button from './Button';
 import { useQuery } from 'convex/react';
 import { api } from 'convex/_generated/api';
-import { isE2E } from '../../mocks/env';
+import { isTestMode } from '../../testEnv';
 
 export default function MusicButton() {
   const musicUrl = useQuery(api.music.getBackgroundMusic);
@@ -17,7 +17,7 @@ export default function MusicButton() {
   }, [musicUrl]);
 
   const flipSwitch = async () => {
-    if (isE2E) {
+    if (isTestMode) {
       setPlaying((prev) => !prev);
       return;
     }

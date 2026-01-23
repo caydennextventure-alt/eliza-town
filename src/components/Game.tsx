@@ -12,11 +12,15 @@ import { DebugTimeManager } from './DebugTimeManager.tsx';
 import { GameId } from '../../convex/aiTown/ids.ts';
 import { useServerGame } from '../hooks/serverGame.ts';
 import { useSendInput } from '../hooks/sendInput.ts';
-import { isE2E } from '../mocks/env';
+import { isTestMode } from '../testEnv';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
-export default function Game() {
+type Props = {
+  onOpenSpectator?: (matchId: string) => void;
+};
+
+export default function Game({ onOpenSpectator }: Props) {
   const convex = useConvex();
   const [selectedElement, setSelectedElement] = useState<{
     kind: 'player';
@@ -35,7 +39,7 @@ export default function Game() {
       ? [...game.world.players.values()].find((p) => p.human === humanTokenIdentifier)?.id
       : undefined;
   const moveTo = useSendInput(engineId!, 'moveTo');
-  const [mockDestination, setMockDestination] = useState<{ x: number; y: number } | null>(null);
+  const [testDestination, setTestDestination] = useState<{ x: number; y: number } | null>(null);
 
   // Send a periodic heartbeat to our world to keep it alive.
   useWorldHeartbeat();
@@ -47,55 +51,82 @@ export default function Game() {
     return null;
   }
   const humanPlayer = humanPlayerId ? game.world.players.get(humanPlayerId) : undefined;
-  const handleMockMove = async () => {
+  const handleTestMove = async () => {
     if (!humanPlayerId) {
       return;
     }
     const next = {
-      x: mockDestination ? mockDestination.x + 1 : 1,
-      y: mockDestination ? mockDestination.y + 1 : 1,
+      x: testDestination ? testDestination.x + 1 : 1,
+      y: testDestination ? testDestination.y + 1 : 1,
     };
-    setMockDestination(next);
+    setTestDestination(next);
     await moveTo({ playerId: humanPlayerId, destination: next });
+  };
+  const startConversation = useSendInput(engineId!, 'startConversation');
+  const handleInviteMe = async () => {
+    if (!humanPlayerId || !selectedElement || selectedElement.id === humanPlayerId) {
+      return;
+    }
+    await startConversation({ playerId: selectedElement.id, invitee: humanPlayerId });
   };
   return (
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
       <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
-        {isE2E && (
+        {isTestMode && (
           <div
-            className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 bg-black/40 p-3 text-white text-xs max-w-[240px]"
-            data-testid="mock-controls"
+            className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 bg-black/40 p-3 text-white text-xs max-w-[260px]"
+            data-testid="test-controls"
           >
             <div className="font-bold uppercase tracking-wider">Test Controls</div>
+            <div>
+              Human:{' '}
+              <span data-testid="test-human-player-id">
+                {humanPlayerId ?? 'not-playing'}
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => void handleMockMove()}
+              onClick={() => void handleTestMove()}
               className="border border-white/40 px-2 py-1 hover:border-white"
-              data-testid="mock-move"
+              data-testid="test-move"
             >
               Move +1,+1
             </button>
             <div>
               Position:{' '}
-              <span data-testid="player-position">
+              <span data-testid="test-player-position">
                 {humanPlayer
                   ? `${Math.floor(humanPlayer.position.x)},${Math.floor(humanPlayer.position.y)}`
                   : 'not-playing'}
               </span>
             </div>
-            <div className="space-y-1" data-testid="mock-player-list">
-              {[...game.world.players.values()].map((player) => (
+            <button
+              type="button"
+              onClick={() => void handleInviteMe()}
+              disabled={!selectedElement || selectedElement.id === humanPlayerId}
+              className="border border-white/40 px-2 py-1 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="test-invite-me"
+            >
+              Invite Me (from selected)
+            </button>
+            <div className="space-y-1" data-testid="test-player-list">
+              {[...game.world.players.values()].map((player) => {
+                const label = game.playerDescriptions.get(player.id)?.name ?? player.id;
+                return (
                 <button
                   key={player.id}
                   type="button"
                   onClick={() => setSelectedElement({ kind: 'player', id: player.id })}
                   className="block w-full border border-white/20 px-2 py-1 text-left hover:border-white"
-                  data-testid={`player-select-${player.id}`}
+                  data-testid={`test-player-select-${player.id}`}
+                  data-player-id={player.id}
+                  data-player-name={label}
                 >
-                  Select {player.id}
+                  Select {label}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -109,6 +140,7 @@ export default function Game() {
               height={height}
               historicalTime={historicalTime}
               setSelectedElement={setSelectedElement}
+              onOpenSpectator={onOpenSpectator}
             />
           </ConvexProvider>
         </Stage>

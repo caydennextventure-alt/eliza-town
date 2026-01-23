@@ -10,7 +10,7 @@ Unlike standard AI Town, **Eliza Town** integrates the powerful [ElizaOS framewo
 - 🧠 **Deep Personality**: Create agents with distinct personalities, bios, and styles.
 - 🎨 **Visual Customization**: Choose from diverse pixel art sprites for your agents.
 - 🗣️ **Real Interaction**: Chat with your agents and watch them interact with each other using the ElizaOS engine.
-- 🔗 **External Connection**: Your in-game agents run on your own ElizaOS instance (Railway, Cloud, or Local).
+- 🔗 **External Connection**: Your in-game agents run on your own ElizaOS instance (ElizaCloud, Railway, or local).
 
 ## 🚀 Key Features
 
@@ -55,8 +55,9 @@ npm install
 
 2. Set environment variables in the Convex Dashboard or via CLI:
    ```bash
-   # Required: ElizaOS Server URL
-   npx convex env set ELIZA_SERVER_URL "https://fliza-agent-production.up.railway.app"
+   # Required: ElizaOS Server URL (ElizaCloud, Railway, or local)
+   # Example: https://your-elizacloud-url, https://your-railway-url, or http://localhost:3000
+   npx convex env set ELIZA_SERVER_URL "https://your-elizacloud-url"
    
    # Optional: For character generation features
    npx convex env set GOOGLE_API_KEY "your-google-api-key"
@@ -76,14 +77,20 @@ Visit **http://localhost:5173** to enter Eliza Town!
 
 ## 🔌 ElizaOS Server Configuration
 
-By default, Eliza Town connects to a **shared ElizaOS server** hosted by the project maintainers. This allows you to start playing immediately without additional setup.
+By default, Eliza Town connects to a **shared ElizaOS server** hosted by the project maintainers. Override with `ELIZA_SERVER_URL` to use ElizaCloud, Railway, or local.
+
+To work with this app, your ElizaOS server must:
+- Expose the REST API endpoints used here: `POST /api/agents` and `POST /api/agents/:id/message`.
+- Have an LLM provider configured so agent creation and chat succeed.
+- Be reachable from Convex (local URL works with `npx convex dev`; deployed apps need a public URL).
 
 ### Using Your Own ElizaOS Server (Optional)
 
 If you want full control over your agents or want to customize the AI behavior:
 
 1. **Deploy ElizaOS** using one of these methods:
-   - [Railway](https://railway.app/) (Recommended for quick setup)
+   - ElizaCloud (recommended)
+   - [Railway](https://railway.app/)
    - [Docker](https://github.com/elizaOS/eliza#docker)
    - Local installation (see [ElizaOS docs](https://elizaos.github.io/eliza/))
 
@@ -118,7 +125,7 @@ We welcome contributions! Here's how to get started:
 ## Tests
 
 - Unit tests: `npm test`
-- E2E (Playwright): `npm run test:e2e` (runs with a deterministic mock backend)
+- E2E (Playwright): `npm run test:e2e` (uses a dedicated local Convex + ElizaOS; see `TESTING.md`)
 - E2E UI runner: `npm run test:e2e:ui`
 
 E2E coverage includes landing page actions, character creation/deletion, agent creation/removal,

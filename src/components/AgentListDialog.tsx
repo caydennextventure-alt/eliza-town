@@ -186,6 +186,8 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                 <div
                   key={agent.agentId}
                   className="flex items-center gap-4 border border-white/10 bg-white/5 px-4 py-3"
+                  data-testid={`agent-row-${agent.agentId}`}
+                  data-agent-name={agent.name}
                 >
                   <div className="box shrink-0">
                     <div className="bg-brown-200 p-1">
@@ -198,7 +200,9 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
                   </div>
                   <div className="flex-1 text-sm text-white/80">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-lg">{agent.name}</div>
+                      <div className="text-lg" data-testid={`agent-name-${agent.agentId}`}>
+                        {agent.name}
+                      </div>
                       <span
                         className={[
                           'text-[10px] uppercase px-2 py-0.5 border',

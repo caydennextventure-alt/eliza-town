@@ -21,10 +21,13 @@ import {
   engineUpdate,
   loadEngine,
 } from '../engine/abstractGame';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { HistoricalObject } from '../engine/historicalObject';
 import { AgentDescription, serializedAgentDescription } from './agentDescription';
 import { parseMap, serializeMap } from '../util/object';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 const gameState = v.object({
   world: v.object(serializedWorld),
@@ -205,7 +208,7 @@ export class Game extends AbstractGame {
 
   async saveStep(ctx: ActionCtx, engineUpdate: EngineUpdate): Promise<void> {
     const diff = this.takeDiff();
-    await ctx.runMutation(internal.aiTown.game.saveWorld, {
+    await ctx.runMutation(apiAny.aiTown.game.saveWorld, {
       engineId: this.engine._id,
       engineUpdate,
       worldId: this.worldId,

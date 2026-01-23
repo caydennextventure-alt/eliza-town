@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { ActionCtx, DatabaseReader, internalMutation, internalQuery } from '../_generated/server';
 import { Doc, Id } from '../_generated/dataModel';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { LLMMessage, chatCompletion, fetchEmbedding } from '../util/llm';
 import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
@@ -13,7 +13,8 @@ export const MEMORY_ACCESS_THROTTLE = 300_000; // In ms
 // We fetch 10x the number of memories by relevance, to have more candidates
 // for sorting by relevance + recency + importance.
 const MEMORY_OVERFETCH = 10;
-const selfInternal = internal.agent.memory;
+// Avoid deep type instantiation in Convex tsc.
+const selfInternal = anyApi.agent.memory;
 
 export type Memory = Doc<'memories'>;
 export type MemoryType = Memory['data']['type'];
@@ -155,22 +156,29 @@ export const loadConversation = internalQuery({
   },
 });
 
+type RankedMemory = { memory: Memory };
+type ReflectionMemoriesResult = {
+  name: string;
+  memories: Memory[];
+  lastReflectionTs?: number;
+};
+
 export async function searchMemories(
   ctx: ActionCtx,
   playerId: GameId<'players'>,
   searchEmbedding: number[],
   n: number = 3,
-) {
+): Promise<Memory[]> {
   const candidates = await ctx.vectorSearch('memoryEmbeddings', 'embedding', {
     vector: searchEmbedding,
     filter: (q) => q.eq('playerId', playerId),
     limit: n * MEMORY_OVERFETCH,
   });
-  const rankedMemories = await ctx.runMutation(selfInternal.rankAndTouchMemories, {
+  const rankedMemories = (await ctx.runMutation(selfInternal.rankAndTouchMemories, {
     candidates,
     n,
-  });
-  return rankedMemories.map(({ memory }) => memory);
+  })) as RankedMemory[];
+  return rankedMemories.map((entry) => entry.memory);
 }
 
 function makeRange(values: number[]) {
@@ -327,19 +335,19 @@ async function reflectOnMemories(
   worldId: Id<'worlds'>,
   playerId: GameId<'players'>,
 ) {
-  const { memories, lastReflectionTs, name } = await ctx.runQuery(
-    internal.agent.memory.getReflectionMemories,
+  const { memories, lastReflectionTs, name } = (await ctx.runQuery(
+    selfInternal.getReflectionMemories,
     {
       worldId,
       playerId,
       numberOfItems: 100,
     },
-  );
+  )) as ReflectionMemoriesResult;
 
   // should only reflect if lastest 100 items have importance score of >500
   const sumOfImportanceScore = memories
-    .filter((m) => m._creationTime > (lastReflectionTs ?? 0))
-    .reduce((acc, curr) => acc + curr.importance, 0);
+    .filter((memory) => memory._creationTime > (lastReflectionTs ?? 0))
+    .reduce((acc, memory) => acc + memory.importance, 0);
   const shouldReflect = sumOfImportanceScore > 500;
 
   if (!shouldReflect) {
@@ -348,8 +356,8 @@ async function reflectOnMemories(
   console.debug('sum of importance score = ', sumOfImportanceScore);
   console.debug('Reflecting...');
   const prompt = ['[no prose]', '[Output only JSON]', `You are ${name}, statements about you:`];
-  memories.forEach((m, idx) => {
-    prompt.push(`Statement ${idx}: ${m.description}`);
+  memories.forEach((memory, idx) => {
+    prompt.push(`Statement ${idx}: ${memory.description}`);
   });
   prompt.push('What 3 high-level insights can you infer from the above statements?');
   prompt.push(

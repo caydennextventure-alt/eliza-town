@@ -2,7 +2,6 @@ import { ReactNode, useState } from 'react';
 import { ConvexReactClient, ConvexProvider } from 'convex/react';
 // import { ConvexProviderWithClerk } from 'convex/react-clerk';
 // import { ClerkProvider, useAuth } from '@clerk/clerk-react';
-import { isE2E } from '../mocks/env';
 
 /**
  * Determines the Convex deployment to use.
@@ -19,9 +18,6 @@ function convexUrl(): string {
 }
 
 export default function ConvexClientProvider({ children }: { children: ReactNode }) {
-  if (isE2E) {
-    return <ConvexProvider>{children}</ConvexProvider>;
-  }
   const [convex] = useState(
     () => new ConvexReactClient(convexUrl(), { unsavedChangesWarning: false }),
   );

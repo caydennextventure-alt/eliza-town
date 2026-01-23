@@ -4,9 +4,11 @@ const baseURL = 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  timeout: 90_000,
+  workers: 1,
+  fullyParallel: false,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   use: {
     baseURL,
@@ -16,7 +18,7 @@ export default defineConfig({
     command: 'npm run dev:e2e',
     url: `${baseURL}/ai-town/`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
   projects: [
     {

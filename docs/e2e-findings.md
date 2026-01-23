@@ -6,8 +6,9 @@
 - Added `data-testid` hooks across interactive UI controls for stable Playwright selectors.
 
 ## Test Environment Notes
-- E2E runs in a mock Convex mode to keep tests deterministic and avoid external dependencies.
-- A lightweight mock map is used for rendering; movement is validated through a test-only control overlay.
+- E2E runs against a real local Convex backend and ElizaOS server; no mock backend is used.
+- A test-only control overlay exposes player selection, invite triggers, and position readouts for stable assertions.
+- Manual sprite upload is available for tests to avoid external image-generation dependencies.
 
 ## Risks / Follow-ups
 - Canvas-level interactions (Pixi object picking) are exercised indirectly via the test-only player list.

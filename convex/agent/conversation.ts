@@ -3,12 +3,14 @@ import { Id } from '../_generated/dataModel';
 import { ActionCtx, internalQuery } from '../_generated/server';
 import { LLMMessage, chatCompletion } from '../util/llm';
 import * as memory from './memory';
-import { api, internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import * as embeddingsCache from './embeddingsCache';
 import { GameId, conversationId, playerId } from '../aiTown/ids';
 import { NUM_MEMORIES_TO_SEARCH } from '../constants';
 
-const selfInternal = internal.agent.conversation;
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
+const selfInternal = anyApi.agent.conversation;
 
 export async function startConversationMessage(
   ctx: ActionCtx,
@@ -28,7 +30,7 @@ export async function startConversationMessage(
   );
   
   if (elizaAgent) {
-    const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+    const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
       elizaAgentId: elizaAgent.elizaAgentId,
       // For start, we simulate an approach
       message: "*Approaches you to start a conversation*", 
@@ -106,12 +108,12 @@ export async function continueConversationMessage(
   
   if (elizaAgent) {
     // Get last message from other player
-    const messages = await ctx.runQuery(api.messages.listMessages, { worldId, conversationId });
+    const messages = await ctx.runQuery(apiAny.messages.listMessages, { worldId, conversationId });
     const lastMessage = messages[messages.length - 1];
     
     // Only reply if the last message is from the other player (which it should be if it's our turn)
     if (lastMessage && lastMessage.author === otherPlayerId) {
-       const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+       const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
           elizaAgentId: elizaAgent.elizaAgentId,
           message: lastMessage.text,
           senderId: otherPlayerId,
@@ -183,7 +185,7 @@ export async function leaveConversationMessage(
   );
   
   if (elizaAgent) {
-     const response = await ctx.runAction(api.elizaAgent.actions.sendMessage, {
+     const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
         elizaAgentId: elizaAgent.elizaAgentId,
         message: "*I need to leave now*",
         senderId: otherPlayerId,
@@ -276,7 +278,7 @@ async function previousMessages(
   conversationId: GameId<'conversations'>,
 ) {
   const llmMessages: LLMMessage[] = [];
-  const prevMessages = await ctx.runQuery(api.messages.listMessages, { worldId, conversationId });
+  const prevMessages = await ctx.runQuery(apiAny.messages.listMessages, { worldId, conversationId });
   for (const message of prevMessages) {
     const author = message.author === player.id ? player : otherPlayer;
     const recipient = message.author === player.id ? otherPlayer : player;

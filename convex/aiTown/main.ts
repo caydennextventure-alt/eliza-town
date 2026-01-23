@@ -2,10 +2,13 @@ import { ConvexError, v } from 'convex/values';
 import { DatabaseReader, MutationCtx, internalAction, mutation, query } from '../_generated/server';
 import { insertInput } from './insertInput';
 import { Game } from './game';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { sleep } from '../util/sleep';
 import { Id } from '../_generated/dataModel';
 import { ENGINE_ACTION_DURATION } from '../constants';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 export async function createEngine(ctx: MutationCtx) {
   const now = Date.now();
@@ -49,7 +52,7 @@ export async function startEngine(ctx: MutationCtx, worldId: Id<'worlds'>) {
     running: true,
     generationNumber,
   });
-  await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
+  await ctx.scheduler.runAfter(0, apiAny.aiTown.main.runStep, {
     worldId: worldId,
     generationNumber,
     maxDuration: ENGINE_ACTION_DURATION,
@@ -67,7 +70,7 @@ export async function kickEngine(ctx: MutationCtx, worldId: Id<'worlds'>) {
   }
   const generationNumber = engine.generationNumber + 1;
   await ctx.db.patch(engineId, { generationNumber });
-  await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
+  await ctx.scheduler.runAfter(0, apiAny.aiTown.main.runStep, {
     worldId: worldId,
     generationNumber,
     maxDuration: ENGINE_ACTION_DURATION,
@@ -94,7 +97,7 @@ export const runStep = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      const { engine, gameState } = await ctx.runQuery(internal.aiTown.game.loadWorld, {
+      const { engine, gameState } = await ctx.runQuery(apiAny.aiTown.game.loadWorld, {
         worldId: args.worldId,
         generationNumber: args.generationNumber,
       });
@@ -108,7 +111,7 @@ export const runStep = internalAction({
         await sleep(sleepUntil - now);
         now = Date.now();
       }
-      await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
+      await ctx.scheduler.runAfter(0, apiAny.aiTown.main.runStep, {
         worldId: args.worldId,
         generationNumber: game.engine.generationNumber,
         maxDuration: args.maxDuration,

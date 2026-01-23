@@ -2,7 +2,10 @@ import { ConvexError, Infer, Value, v } from 'convex/values';
 import { Doc, Id } from '../_generated/dataModel';
 import { ActionCtx, DatabaseReader, MutationCtx, internalQuery } from '../_generated/server';
 import { engine } from '../engine/schema';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
+
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 export abstract class AbstractGame {
   abstract tickDuration: number;
@@ -20,7 +23,7 @@ export abstract class AbstractGame {
   abstract saveStep(ctx: ActionCtx, engineUpdate: EngineUpdate): Promise<void>;
 
   async runStep(ctx: ActionCtx, now: number) {
-    const inputs = await ctx.runQuery(internal.engine.abstractGame.loadInputs, {
+    const inputs = await ctx.runQuery(apiAny.engine.abstractGame.loadInputs, {
       engineId: this.engine._id,
       processedInputNumber: this.engine.processedInputNumber,
       max: this.maxInputsPerStep,

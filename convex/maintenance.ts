@@ -8,7 +8,7 @@ export const cleanupWorldData = mutation({
     worldId: v.optional(v.id('worlds')),
   },
   handler: async (ctx, args) => {
-    let worldId = args.worldId as Id<'worlds'> | undefined;
+    let worldId = args.worldId;
     if (!worldId) {
       const worldStatus = await ctx.db
         .query('worldStatus')
@@ -19,8 +19,12 @@ export const cleanupWorldData = mutation({
       }
       worldId = worldStatus.worldId;
     }
+    if (!worldId) {
+      throw new ConvexError('No world ID resolved.');
+    }
 
-    const world = await ctx.db.get(worldId);
+    const resolvedWorldId: Id<'worlds'> = worldId;
+    const world = await ctx.db.get(resolvedWorldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${worldId}`);
     }
@@ -41,7 +45,7 @@ export const cleanupWorldData = mutation({
       .map((conversation) => conversation.id);
 
     if (removedAgentIds.length > 0 || removedConversationIds.length > 0) {
-      await ctx.db.replace(worldId, {
+      await ctx.db.replace(resolvedWorldId, {
         ...world,
         agents: cleanedAgents,
         conversations: cleanedConversations,
@@ -50,7 +54,7 @@ export const cleanupWorldData = mutation({
 
     const agentDescriptions = await ctx.db
       .query('agentDescriptions')
-      .withIndex('worldId', (q) => q.eq('worldId', worldId))
+      .withIndex('worldId', (q) => q.eq('worldId', resolvedWorldId))
       .collect();
     const remainingAgentIds = new Set(cleanedAgents.map((agent) => agent.id));
     let removedAgentDescriptions = 0;
@@ -63,7 +67,7 @@ export const cleanupWorldData = mutation({
 
     const playerDescriptions = await ctx.db
       .query('playerDescriptions')
-      .withIndex('worldId', (q) => q.eq('worldId', worldId))
+      .withIndex('worldId', (q) => q.eq('worldId', resolvedWorldId))
       .collect();
     let removedPlayerDescriptions = 0;
     for (const description of playerDescriptions) {
@@ -74,13 +78,13 @@ export const cleanupWorldData = mutation({
     }
 
     try {
-      await kickEngine(ctx, worldId);
+      await kickEngine(ctx, resolvedWorldId);
     } catch (error) {
-      console.warn(`Failed to kick engine for ${worldId}:`, error);
+      console.warn(`Failed to kick engine for ${resolvedWorldId}:`, error);
     }
 
     return {
-      worldId,
+      worldId: resolvedWorldId,
       removedAgentIds,
       removedConversationIds,
       removedAgentDescriptions,

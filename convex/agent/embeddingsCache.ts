@@ -1,10 +1,11 @@
 import { v } from 'convex/values';
 import { ActionCtx, internalMutation, internalQuery } from '../_generated/server';
-import { internal } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { Id } from '../_generated/dataModel';
 import { fetchEmbeddingBatch } from '../util/llm';
 
-const selfInternal = internal.agent.embeddingsCache;
+// Avoid deep type instantiation in Convex tsc.
+const selfInternal = anyApi.agent.embeddingsCache;
 
 export async function fetch(ctx: ActionCtx, text: string) {
   const result = await fetchBatch(ctx, [text]);

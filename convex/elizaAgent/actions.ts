@@ -1,10 +1,11 @@
 import { action } from '../_generated/server';
 import { v } from 'convex/values';
-import { internal } from '../_generated/api';
-import { api } from '../_generated/api';
+import { anyApi } from 'convex/server';
 import { Id } from '../_generated/dataModel';
 
 const ELIZA_SERVER = process.env.ELIZA_SERVER_URL || 'https://fliza-agent-production.up.railway.app';
+// Avoid deep type instantiation in Convex tsc.
+const apiAny = anyApi;
 
 export const createElizaAgent = action({
   args: {
@@ -63,7 +64,7 @@ export const createElizaAgent = action({
       // 2. Create game player using existing API
       // We use api.world.createAgent to create the character in the game engine
       // casting to any to avoid circular type inference issues
-      const inputId: any = await ctx.runMutation(api.world.createAgent, {
+      const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
          worldId: args.worldId,
          name: args.name,
          character: args.character,
@@ -74,7 +75,7 @@ export const createElizaAgent = action({
       // 3. Save Mapping
       // We can't link playerId yet as it's created asynchronously by the engine.
       // We map by name/worldId for now, or just store the record.
-      await ctx.runMutation(internal.elizaAgent.mutations.saveMapping, {
+      await ctx.runMutation(apiAny.elizaAgent.mutations.saveMapping, {
          worldId: args.worldId,
          name: args.name, 
          elizaAgentId,

@@ -48,12 +48,14 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
   
   // Existing upload fallback
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [spriteFile, setSpriteFile] = useState<File | null>(null);
   
   const [error, setError] = useState<string | null>(null);
 
   const generateCharacterConcept = useAction(api.characterGeneration.generateCharacterConcept);
   const generateCharacter = useAction(api.characterGeneration.generate);
   const createSprite = useMutation(api.characterSprites.create);
+  const generateUploadUrl = useMutation(api.characterSprites.generateUploadUrl);
   const removeSprite = useMutation(api.characterSprites.remove);
   const mySprites = useQuery(api.characterSprites.listMine) ?? [];
   const generatedPreviewUrl = useQuery(api.characterSprites.getUrl, generatedStorageId ? { storageId: generatedStorageId } : "skip");
@@ -66,6 +68,7 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
       setStep('concept');
       setConceptUrl(null);
       setReferenceFile(null);
+      setSpriteFile(null);
       setGeneratedStorageId(null);
       setError(null);
       setIsGenerating(false);
@@ -76,6 +79,12 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
     const file = event.target.files?.[0] ?? null;
     if (file) {
         setReferenceFile(file);
+    }
+  };
+  const handleSpriteFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (file) {
+      setSpriteFile(file);
     }
   };
 
@@ -157,6 +166,35 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
   };
 
   const storeImage = useAction(api.characterSprites.storeImage);
+  const handleUploadSprite = async () => {
+    if (!spriteFile) {
+      setError('Please upload a sprite sheet.');
+      return;
+    }
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const uploadResult = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': spriteFile.type || 'image/png' },
+        body: spriteFile,
+      });
+      if (!uploadResult.ok) {
+        throw new Error(`Upload failed (${uploadResult.status}).`);
+      }
+      const { storageId } = await uploadResult.json();
+      if (!storageId) {
+        throw new Error('Upload did not return a storage ID.');
+      }
+      setGeneratedStorageId(storageId);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message ?? 'Upload failed');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!generatedStorageId) return;
@@ -239,6 +277,27 @@ export default function CreateCharacterDialog({ isOpen, onClose }: Props) {
                                  onChange={handleReferenceFileChange}
                                  data-testid="character-reference-upload"
                              />
+                         </div>
+
+                         <div className="mt-4 space-y-2 border-t border-gray-700/60 pt-3">
+                             <label className="block text-xs text-gray-500">
+                               Upload sprite sheet (96×128, 4 rows × 3 columns)
+                             </label>
+                             <input
+                               type="file"
+                               accept="image/*"
+                               className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-800 file:text-white hover:file:bg-gray-700"
+                               onChange={handleSpriteFileChange}
+                               data-testid="character-sprite-upload"
+                             />
+                             <button
+                               onClick={handleUploadSprite}
+                               disabled={isGenerating}
+                               className="w-full border border-gray-600 hover:bg-gray-800 text-white py-2 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                               data-testid="character-upload-sprite"
+                             >
+                               {isGenerating ? 'Uploading...' : 'Use Uploaded Sprite'}
+                             </button>
                          </div>
 
                          <button 
