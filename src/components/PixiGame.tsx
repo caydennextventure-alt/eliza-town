@@ -103,6 +103,7 @@ export const PixiGame = (props: {
       viewportRef={viewportRef}
     >
       <PixiStaticMap
+        key={props.game.worldMapId}
         map={props.game.worldMap}
         onpointerup={onMapPointerUp}
         onpointerdown={onMapPointerDown}

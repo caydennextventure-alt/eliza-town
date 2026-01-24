@@ -18,6 +18,8 @@ import CreateCharacterDialog from './components/CreateCharacterDialog.tsx';
 import CreateAgentDialog from './components/CreateAgentDialog.tsx';
 import WorldJoinControls from './components/WorldJoinControls.tsx';
 import AgentListDialog from './components/AgentListDialog.tsx';
+import LoginButton from './ui/buttons/LoginButton.tsx';
+import { SignedOut } from '@clerk/clerk-react';
 
 const modalStyles = {
   overlay: {
@@ -68,6 +70,8 @@ export default function Home() {
   if (showEditor) {
     return <MapEditor />;
   }
+
+  const clerkEnabled = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-between font-body game-background">
@@ -144,6 +148,11 @@ export default function Home() {
               Star
             </Button>
             <MusicButton />
+            {clerkEnabled && (
+              <SignedOut>
+                <LoginButton />
+              </SignedOut>
+            )}
           </div>
           
            <div className="absolute bottom-2 right-4 text-white/50 text-sm">
@@ -161,6 +170,11 @@ export default function Home() {
           {/* Minimal Overlay Controls for Game Mode */}
           <div className="absolute top-4 left-4 z-10 flex flex-wrap items-start gap-3 pointer-events-auto max-w-[calc(100%-2rem)]">
             <WorldJoinControls onCreateAgent={() => setCreateAgentOpen(true)} />
+            {clerkEnabled && (
+              <SignedOut>
+                <LoginButton />
+              </SignedOut>
+            )}
             <Button
               imgUrl={charactersImg}
               onClick={() => setCreateCharacterOpen(true)}

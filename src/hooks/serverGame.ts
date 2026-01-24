@@ -14,6 +14,7 @@ export type ServerGame = {
   playerDescriptions: Map<GameId<'players'>, PlayerDescription>;
   agentDescriptions: Map<GameId<'agents'>, AgentDescription>;
   worldMap: WorldMap;
+  worldMapId: Id<'maps'>;
 };
 
 // TODO: This hook reparses the game state (even if we're not rerunning the query)
@@ -38,6 +39,7 @@ export function useServerGame(worldId: Id<'worlds'> | undefined): ServerGame | u
         (p) => p.playerId,
       ),
       worldMap: new WorldMap(descriptions.worldMap),
+      worldMapId: descriptions.worldMap._id,
     };
   }, [worldState, descriptions]);
   return game;

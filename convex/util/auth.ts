@@ -1,0 +1,41 @@
+import { ConvexError } from 'convex/values';
+
+type Identity = {
+  tokenIdentifier?: string;
+  name?: string | null;
+  givenName?: string | null;
+  nickname?: string | null;
+  email?: string | null;
+};
+
+type HasAuth = {
+  auth: {
+    getUserIdentity: () => Promise<Identity | null>;
+  };
+};
+
+export async function getOptionalUserId(ctx: HasAuth): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  return identity?.tokenIdentifier ?? null;
+}
+
+export async function requireUserId(ctx: HasAuth, message = 'Not logged in'): Promise<string> {
+  const userId = await getOptionalUserId(ctx);
+  if (!userId) {
+    throw new ConvexError(message);
+  }
+  return userId;
+}
+
+export async function getOptionalIdentity(ctx: HasAuth): Promise<Identity | null> {
+  return await ctx.auth.getUserIdentity();
+}
+
+export function displayNameFromIdentity(identity: Identity): string | null {
+  if (identity.givenName) return identity.givenName;
+  if (identity.nickname) return identity.nickname;
+  if (identity.name) return identity.name;
+  if (identity.email) return identity.email.split('@')[0] ?? null;
+  return null;
+}
+

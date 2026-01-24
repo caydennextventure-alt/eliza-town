@@ -5,7 +5,7 @@ import { Descriptions } from '../data/characters';
 import * as map from '../data/gentle';
 import { insertInput } from './aiTown/insertInput';
 import { Id } from './_generated/dataModel';
-import { createEngine } from './aiTown/main';
+import { createEngine, startEngine } from './aiTown/main';
 import { ENGINE_ACTION_DURATION } from './constants';
 import { detectMismatchedLLMProvider } from './util/llm';
 
@@ -18,9 +18,13 @@ const init = mutation({
     const { worldStatus, engine } = await getOrCreateDefaultWorld(ctx);
     if (worldStatus.status !== 'running') {
       console.warn(
-        `Engine ${engine._id} is not active! Run "npx convex run testing:resume" to restart it.`,
+        `Default world ${worldStatus.worldId} is not running (state: ${worldStatus.status}). Restarting...`,
       );
-      return;
+      const now = Date.now();
+      await ctx.db.patch(worldStatus._id, { status: 'running', lastViewed: now });
+      if (!engine.running) {
+        await startEngine(ctx, worldStatus.worldId);
+      }
     }
     const shouldCreate = await shouldCreateAgents(
       ctx.db,
@@ -79,7 +83,7 @@ async function getOrCreateDefaultWorld(ctx: MutationCtx) {
     bgTiles: map.bgtiles,
     objectTiles: map.objmap,
     placedObjects: map.placedobjects ?? [],
-    terrainDecals: map.terraindecals ?? map.terrainDecals,
+    terrainDecals: map.terraindecals ?? (map as any).terrainDecals,
     animatedSprites: map.animatedsprites,
   });
   await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {

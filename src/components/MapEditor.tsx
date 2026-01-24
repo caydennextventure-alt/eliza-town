@@ -3665,24 +3665,20 @@ export const mapheight = ${MAP_HEIGHT};
   };
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-[#fdf6d8] flex items-center justify-center font-display">
+    <div className="w-screen h-screen overflow-hidden bg-[#fdf6d8] font-display">
       <div 
-        className="relative select-none p-4 transition-all duration-300 origin-center"
+        className="relative select-none p-3 w-full h-full"
         style={{
-          transform: 'scale(1.3)', // Scale up entire UI by 30% for thicker borders
           display: 'grid',
-          // Flexible columns: Sidebars take content width, Main takes remaining
-          gridTemplateColumns: 'min-content 1fr min-content', 
-          gridTemplateRows: 'auto 1fr auto', // Header takes content, Main fills, Footer takes content
+          gridTemplateColumns: '360px 1fr 260px',
+          gridTemplateRows: 'auto 1fr auto',
           gridTemplateAreas: `
-            ". header header"
+            "sidebar-left header header"
             "sidebar-left main sidebar-right"
             "sidebar-left footer sidebar-right"
           `,
-          gap: '10px', // Slightly reduced gap for scaled view
+          gap: '10px',
           imageRendering: 'pixelated',
-          width: '77%', // 100% / 1.3 to fit within viewport after scaling
-          height: '77%',
         }}
       >
         {/* --------------------------------------------------------------------------
@@ -3691,7 +3687,7 @@ export const mapheight = ${MAP_HEIGHT};
             Responsive Width: min-content (based on children)
            -------------------------------------------------------------------------- */}
          {/* Hanging Sign - Positioned absolutely relative to the scaled grid container, at the top left column */}
-         <div className="absolute top-0 left-[140px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%) translateY(-25%)' }}>
+         <div className="absolute top-0 left-[180px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%) translateY(-25%)' }}>
              <HangingSign scale={0.9} />
          </div>
 
@@ -3700,7 +3696,7 @@ export const mapheight = ${MAP_HEIGHT};
             Area: sidebar-left
             Responsive Width: min-content (based on children)
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-left', transform: 'translateY(-5%)' }} className="relative h-full pt-4 min-w-[260px] min-h-[450px]">
+        <div style={{ gridArea: 'sidebar-left' }} className="relative h-full pt-4 min-w-[260px] min-h-[450px]">
             {/* Hanging Sign removed from here */}
             
             <StardewFrame className="w-full h-full flex flex-col pt-4 pb-2 px-2" >
@@ -3827,7 +3823,7 @@ export const mapheight = ${MAP_HEIGHT};
             Area: header
             Responsive Height: auto (min 56px)
            -------------------------------------------------------------------------- */}
-         <div style={{ gridArea: 'header' }} className="flex h-[108px] gap-[10px] justify-end pr-[15%]"> {/* pr-15% shifts it left */}
+         <div style={{ gridArea: 'header' }} className="flex h-[108px] gap-[10px] justify-center">
              {/* Header Left: Tabs (Fit to content) */}
              <div className="h-full w-fit"> 
                  <StardewFrame className="flex items-center px-4 h-full" >
@@ -3870,8 +3866,8 @@ export const mapheight = ${MAP_HEIGHT};
             Zone: Main (Canvas)
             Area: main
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'main' }} className="relative flex items-center justify-center min-h-0 min-w-0"> {/* min-h/w-0 prevents grid blowout */}
-            <div className="border-[6px] border-[#6d4c30] bg-[#d4c4a0] shadow-[inset_0_0_20px_rgba(0,0,0,0.2)] rounded overflow-hidden flex ring-4 ring-[#8b6b4a]" style={{ width: '90%', height: '90%', maxWidth: '800px', maxHeight: '600px' }}>
+        <div style={{ gridArea: 'main' }} className="relative flex items-center justify-center min-h-0 min-w-0">
+            <div className="w-full h-full border-[6px] border-[#6d4c30] bg-[#d4c4a0] shadow-[inset_0_0_20px_rgba(0,0,0,0.2)] rounded overflow-hidden flex ring-4 ring-[#8b6b4a]">
                 {renderCanvas()}
             </div>
         </div>
@@ -3881,7 +3877,7 @@ export const mapheight = ${MAP_HEIGHT};
             Area: footer
             Responsive Height: auto
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'footer', transform: 'translateY(-15%)' }} className="flex justify-center items-center h-[100px]">
+        <div style={{ gridArea: 'footer' }} className="flex justify-center items-center h-[100px]">
              <div className="h-full">
                 <StardewFrame className="h-full flex items-center justify-center px-4" >
                      <div className="flex gap-2 items-center">
@@ -3948,7 +3944,7 @@ export const mapheight = ${MAP_HEIGHT};
             Area: sidebar-right
             Responsive Width: min-content or fixed
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-right', alignSelf: 'start' }} className="flex flex-col pt-4 pl-2 w-[160px]">
+        <div style={{ gridArea: 'sidebar-right', alignSelf: 'start' }} className="flex flex-col pt-4 pl-2 w-full">
             <StardewFrame className="p-3 w-full">
                 <div className="flex flex-col gap-1">
                    <button 

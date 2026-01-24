@@ -1,7 +1,8 @@
 import { v } from 'convex/values';
 import { action } from './_generated/server';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import Replicate from 'replicate';
+import { requireUserId } from './util/auth';
 
 export const generate = action({
   args: {
@@ -9,6 +10,18 @@ export const generate = action({
     image: v.optional(v.string()), // Base64 string of the reference image
   },
   handler: async (ctx, args) => {
+    const actorId = await requireUserId(ctx, 'Please log in to generate characters.');
+    await ctx.runMutation(internal.rateLimit.consume, {
+      key: `characterGeneration.generate:${actorId}`,
+      limit: 3,
+      windowMs: 60_000,
+    });
+    await ctx.runMutation(internal.audit.log, {
+      actorId,
+      action: 'characterGeneration.generate',
+      metadata: { promptLength: args.prompt.length, hasImage: Boolean(args.image) },
+    });
+
     // 1. Validate Credentials
     // User referred to Gemini/Imagen as "nanobanana", so we check both for flexibility.
     const googleApiKey = process.env.GOOGLE_API_KEY || process.env.NANOBANANA_API_KEY; 
@@ -226,6 +239,18 @@ export const generateCharacterConcept = action({
     image: v.optional(v.string()) 
   },
   handler: async (ctx, args) => {
+    const actorId = await requireUserId(ctx, 'Please log in to generate characters.');
+    await ctx.runMutation(internal.rateLimit.consume, {
+      key: `characterGeneration.generateCharacterConcept:${actorId}`,
+      limit: 6,
+      windowMs: 60_000,
+    });
+    await ctx.runMutation(internal.audit.log, {
+      actorId,
+      action: 'characterGeneration.generateCharacterConcept',
+      metadata: { promptLength: args.prompt.length, hasImage: Boolean(args.image) },
+    });
+
     // 0. Check API Keys
     const googleApiKey = process.env.GOOGLE_API_KEY || process.env.NANOBANANA_API_KEY; 
     const replicateToken = process.env.REPLICATE_API_TOKEN;

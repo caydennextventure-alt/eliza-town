@@ -1,8 +1,9 @@
-import { action } from '../_generated/server';
+import { action, internalAction } from '../_generated/server';
 import { v } from 'convex/values';
 import { internal } from '../_generated/api';
 import { api } from '../_generated/api';
 import { Id } from '../_generated/dataModel';
+import { requireUserId } from '../util/auth';
 
 const ELIZA_SERVER = process.env.ELIZA_SERVER_URL || 'https://fliza-agent-production.up.railway.app';
 
@@ -16,6 +17,23 @@ export const createElizaAgent = action({
     personality: v.array(v.string()), // ['Friendly', 'Curious']
   },
   handler: async (ctx, args): Promise<{ inputId: Id<"inputs"> | string; elizaAgentId: string }> => {
+    const actorId = await requireUserId(ctx, 'Please log in to create an agent.');
+    await ctx.runMutation(internal.rateLimit.consume, {
+      key: `elizaAgent.createElizaAgent:${actorId}`,
+      limit: 5,
+      windowMs: 60 * 60_000,
+    });
+    await ctx.runMutation(internal.audit.log, {
+      actorId,
+      action: 'elizaAgent.createElizaAgent',
+      worldId: args.worldId,
+      metadata: {
+        hasPersonality: args.personality.length > 0,
+        identityLength: args.identity.length,
+        planLength: args.plan.length,
+      },
+    });
+
     // 1. Create in ElizaOS
     console.log(`Creating Eliza Agent [${args.name}] at ${ELIZA_SERVER}...`);
     
@@ -91,7 +109,7 @@ export const createElizaAgent = action({
   },
 });
 
-export const sendMessage = action({
+export const sendMessage = internalAction({
   args: {
     elizaAgentId: v.string(),
     message: v.string(),

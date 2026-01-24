@@ -1,6 +1,8 @@
 import { v } from 'convex/values';
 import { mutation, query, action } from './_generated/server';
 import { DEFAULT_NAME } from './constants';
+import { internal } from './_generated/api';
+import { getOptionalUserId, requireUserId } from './util/auth';
 
 const resolveOwnerId = async (ctx: { auth: { getUserIdentity: () => Promise<{ tokenIdentifier?: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -43,6 +45,18 @@ export const generateUploadUrl = mutation({
 export const storeImage = action({
   args: { imageUrl: v.string() },
   handler: async (ctx, args) => {
+    const actorId = await requireUserId(ctx, 'Please log in to upload images.');
+    await ctx.runMutation(internal.rateLimit.consume, {
+      key: `characterSprites.storeImage:${actorId}`,
+      limit: 10,
+      windowMs: 60_000,
+    });
+    await ctx.runMutation(internal.audit.log, {
+      actorId,
+      action: 'characterSprites.storeImage',
+      metadata: { isDataUrl: args.imageUrl.startsWith('data:') },
+    });
+
     let blob: Blob;
     
     // Check if base64
@@ -50,8 +64,28 @@ export const storeImage = action({
       const base64Response = await fetch(args.imageUrl);
       blob = await base64Response.blob();
     } else {
-      // Fetch from URL
-      const response = await fetch(args.imageUrl);
+      // Fetch from URL (restricted allowlist to reduce SSRF risk)
+      const url = new URL(args.imageUrl);
+      if (url.protocol !== 'https:') {
+        throw new Error('Only https URLs are supported.');
+      }
+      const host = url.hostname.toLowerCase();
+      if (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '0.0.0.0' ||
+        host.startsWith('127.') ||
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        host.startsWith('169.254.')
+      ) {
+        throw new Error('Blocked URL host.');
+      }
+      const allowedHosts = new Set(['replicate.delivery', 'wsrv.nl']);
+      if (!allowedHosts.has(host)) {
+        throw new Error('Image host is not allowed.');
+      }
+      const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.statusText}`);
       }
@@ -79,7 +113,10 @@ export const list = query({
 
 export const listMine = query({
   handler: async (ctx) => {
-    const ownerId = await resolveOwnerId(ctx);
+    const ownerId = await getOptionalUserId(ctx);
+    if (!ownerId) {
+      return [];
+    }
     const sprites = await ctx.db
       .query('characterSprites')
       .withIndex('ownerId', (q) => q.eq('ownerId', ownerId))
@@ -99,7 +136,7 @@ export const create = mutation({
     directions: v.number(),
   },
   handler: async (ctx, args) => {
-    const ownerId = await resolveOwnerId(ctx);
+    const ownerId = await requireUserId(ctx, 'Not logged in');
     const displayName = args.displayName.trim() || 'Custom Sprite';
     if (args.frameWidth !== 32 || args.frameHeight !== 32) {
       throw new Error('Only 32x32 frame sprites are supported right now.');
@@ -134,7 +171,7 @@ export const remove = mutation({
     spriteId: v.string(),
   },
   handler: async (ctx, args) => {
-    const ownerId = await resolveOwnerId(ctx);
+    const ownerId = await requireUserId(ctx, 'Not logged in');
     const sprite = await ctx.db
       .query('characterSprites')
       .withIndex('spriteId', (q) => q.eq('spriteId', args.spriteId))

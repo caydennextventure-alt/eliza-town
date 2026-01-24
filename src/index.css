@@ -717,6 +717,7 @@ p[contenteditable='true']:empty::before {
   height: 52px;
   image-rendering: pixelated;
 }
+
 /* Custom Stardew Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 12px;

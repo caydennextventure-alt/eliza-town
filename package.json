@@ -10,6 +10,8 @@
     "dev:backend": "convex dev --tail-logs",
     "dev:frontend": "vite",
     "dashboard": "convex dashboard",
+    "assets:refresh": "node scripts/update_assets.js",
+    "assets:watch": "node scripts/watch_assets.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --verbose"
   },
   "dependencies": {
@@ -34,6 +36,7 @@
     "jszip": "^3.10.1",
     "pixi-viewport": "^5.0.1",
     "pixi.js": "^7.2.4",
+    "quickjs-emscripten": "^0.31.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-github-btn": "^1.4.0",
