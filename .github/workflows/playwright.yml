@@ -20,6 +20,3 @@ jobs:
         run: npx playwright install --with-deps
       - name: Run Playwright tests
         run: npm run test:e2e
-        env:
-          VITE_E2E_MOCKS: '1'
-          VITE_CONVEX_URL: 'http://localhost:3210'
