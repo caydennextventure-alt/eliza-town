@@ -28,6 +28,9 @@ type AssetsManifest = {
     id: string;
     name?: string;
     image: string;
+    frames?: string[];
+    animationSpeed?: number;
+    frameDelay?: number | [number, number];
     pixelWidth?: number;
     pixelHeight?: number;
     anchor?: 'top-left' | 'bottom-left' | 'center';
@@ -65,6 +68,8 @@ const resolveAssetPath = (path: string) => {
   if (path.startsWith('/')) return path;
   return `${TILESET_BASE_PATH}${encodeURI(path)}`;
 };
+
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 let cachedAssetsManifest: AssetsManifest | null = null;
 let assetsManifestPromise: Promise<AssetsManifest | null> | null = null;
@@ -887,18 +892,91 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
             continue;
           }
 
-          const texture = PIXI.Texture.from(resolveAssetPath(def.image));
-          texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-          const sprite = new PIXI.Sprite(texture);
-          sprite.width = baseWidth;
-          sprite.height = baseHeight;
+          const frames = Array.isArray((def as any).frames) ? ((def as any).frames as string[]) : null;
+          if (frames && frames.length > 0) {
+            const textures = frames.map((frame) => {
+              const frameTexture = PIXI.Texture.from(resolveAssetPath(frame));
+              frameTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+              return frameTexture;
+            });
 
-          const rotationInfo = getRotationOffset(baseWidth, baseHeight, rotation);
-          sprite.x = rotationInfo.x;
-          sprite.y = rotationInfo.y;
-          sprite.rotation = rotationInfo.angle;
+            const frameDelayRaw = (def as any).frameDelay as unknown;
+            const frameDelay =
+              typeof frameDelayRaw === 'number' && Number.isFinite(frameDelayRaw)
+                ? frameDelayRaw
+                : Array.isArray(frameDelayRaw) &&
+                    frameDelayRaw.length === 2 &&
+                    frameDelayRaw.every((v) => typeof v === 'number' && Number.isFinite(v))
+                  ? (frameDelayRaw as [number, number])
+                  : null;
 
-          holder.addChild(sprite);
+            if (frameDelay !== null) {
+              const sprite = new PIXI.Sprite(textures[0]);
+              (sprite as any).eventMode = 'none';
+              sprite.interactive = false;
+              sprite.interactiveChildren = false;
+              sprite.roundPixels = true;
+              sprite.width = baseWidth;
+              sprite.height = baseHeight;
+
+              const rotationInfo = getRotationOffset(baseWidth, baseHeight, rotation);
+              sprite.x = rotationInfo.x;
+              sprite.y = rotationInfo.y;
+              sprite.rotation = rotationInfo.angle;
+
+              let frameIndex = (Math.random() * textures.length) | 0;
+              sprite.texture = textures[frameIndex]!;
+
+              const pickDelay = () =>
+                Array.isArray(frameDelay) ? rand(frameDelay[0], frameDelay[1]) : frameDelay;
+              let next = pickDelay();
+
+              const tick = (delta: number) => {
+                next -= delta;
+                while (next <= 0) {
+                  frameIndex = (frameIndex + 1) % textures.length;
+                  sprite.texture = textures[frameIndex]!;
+                  next += pickDelay();
+                }
+              };
+              container.__tickers?.push(tick);
+              PIXI.Ticker.shared.add(tick);
+
+              holder.addChild(sprite);
+            } else {
+              const animatedSprite = new PIXI.AnimatedSprite(textures);
+              (animatedSprite as any).eventMode = 'none';
+              animatedSprite.interactive = false;
+              animatedSprite.interactiveChildren = false;
+              animatedSprite.autoUpdate = true;
+              animatedSprite.loop = true;
+              animatedSprite.animationSpeed = Number((def as any).animationSpeed ?? 0.1);
+              animatedSprite.width = baseWidth;
+              animatedSprite.height = baseHeight;
+
+              const rotationInfo = getRotationOffset(baseWidth, baseHeight, rotation);
+              animatedSprite.x = rotationInfo.x;
+              animatedSprite.y = rotationInfo.y;
+              animatedSprite.rotation = rotationInfo.angle;
+
+              holder.addChild(animatedSprite);
+              animatedSprite.play();
+            }
+          } else {
+            const texture = PIXI.Texture.from(resolveAssetPath(def.image));
+            texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+            const sprite = new PIXI.Sprite(texture);
+            sprite.width = baseWidth;
+            sprite.height = baseHeight;
+
+            const rotationInfo = getRotationOffset(baseWidth, baseHeight, rotation);
+            sprite.x = rotationInfo.x;
+            sprite.y = rotationInfo.y;
+            sprite.rotation = rotationInfo.angle;
+
+            holder.addChild(sprite);
+          }
+
           if (isGround) {
             groundObjectsContainer.addChild(holder);
           } else if (def.category === 'stamp') {

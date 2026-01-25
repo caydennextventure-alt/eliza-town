@@ -788,6 +788,13 @@
       "name": "Asset 0",
       "category": "buildings",
       "image": "assets/Tileset Asset/buildings/asset_0.png",
+      "frames": [
+        "assets/Tileset Asset/animated/asset_0_f1.png",
+        "assets/Tileset Asset/animated/asset_0_f2.png",
+        "assets/Tileset Asset/animated/asset_0_f3.png",
+        "assets/Tileset Asset/animated/asset_0_f4.png"
+      ],
+      "frameDelay": [30, 70],
       "pixelWidth": 133,
       "pixelHeight": 130,
       "anchor": "bottom-left"
@@ -797,6 +804,13 @@
       "name": "Bakery",
       "category": "buildings",
       "image": "assets/Tileset Asset/buildings/bakery.png",
+      "frames": [
+        "assets/Tileset Asset/animated/bakery f1.png",
+        "assets/Tileset Asset/animated/bakery f2.png",
+        "assets/Tileset Asset/animated/bakery f3.png",
+        "assets/Tileset Asset/animated/bakery f4.png"
+      ],
+      "frameDelay": [40, 100],
       "pixelWidth": 225,
       "pixelHeight": 225,
       "anchor": "bottom-left"
@@ -824,6 +838,13 @@
       "name": "Building 2",
       "category": "buildings",
       "image": "assets/Tileset Asset/buildings/building_2.png",
+      "frames": [
+        "assets/Tileset Asset/animated/building_2_1.png",
+        "assets/Tileset Asset/animated/building_2_2.png",
+        "assets/Tileset Asset/animated/building_2_3.png",
+        "assets/Tileset Asset/animated/building_2_4.png"
+      ],
+      "frameDelay": [30, 70],
       "pixelWidth": 160,
       "pixelHeight": 144,
       "anchor": "bottom-left"
