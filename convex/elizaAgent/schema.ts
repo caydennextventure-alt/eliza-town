@@ -7,6 +7,8 @@ export const elizaAgentTables = {
     playerId: v.optional(playerId),
     worldId: v.id('worlds'),
     elizaAgentId: v.string(),     // UUID from ElizaOS
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()), // ['Friendly', 'Curious']

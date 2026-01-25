@@ -32,6 +32,8 @@ export async function startConversationMessage(
   if (elizaAgent) {
     const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
       elizaAgentId: elizaAgent.elizaAgentId,
+      elizaServerUrl: elizaAgent.elizaServerUrl,
+      elizaAuthToken: elizaAgent.elizaAuthToken,
       // For start, we simulate an approach
       message: "*Approaches you to start a conversation*", 
       senderId: otherPlayer.id,
@@ -115,6 +117,8 @@ export async function continueConversationMessage(
     if (lastMessage && lastMessage.author === otherPlayerId) {
        const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
           elizaAgentId: elizaAgent.elizaAgentId,
+          elizaServerUrl: elizaAgent.elizaServerUrl,
+          elizaAuthToken: elizaAgent.elizaAuthToken,
           message: lastMessage.text,
           senderId: otherPlayerId,
           conversationId,
@@ -187,6 +191,8 @@ export async function leaveConversationMessage(
   if (elizaAgent) {
      const response = await ctx.runAction(apiAny.elizaAgent.actions.sendMessage, {
         elizaAgentId: elizaAgent.elizaAgentId,
+        elizaServerUrl: elizaAgent.elizaServerUrl,
+        elizaAuthToken: elizaAgent.elizaAuthToken,
         message: "*I need to leave now*",
         senderId: otherPlayerId,
         conversationId,

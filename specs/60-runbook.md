@@ -33,10 +33,22 @@ Open the app in the browser (Vite will print the local URL).
 
 ## Demo flow (optional MCP)
 
-Run one MCP server per agent:
+Run one MCP server per agent (stdio):
 
 ```bash
 ET_PLAYER_ID=p:123 CONVEX_URL=<your_convex_url> npm run mcp:werewolf
+```
+
+Or run a shared HTTP SSE server for remote agents:
+
+```bash
+MCP_TRANSPORT=sse CONVEX_URL=<your_convex_url> npm run mcp:werewolf
+```
+
+Then point each agent to:
+
+```
+http://<host>:8787/mcp?playerId=<playerId>
 ```
 
 Use the MCP tools from the spec to:

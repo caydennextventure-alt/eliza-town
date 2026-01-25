@@ -1,3 +1,4 @@
+import { createServer as createHttpServer } from 'node:http';
 import { ConvexHttpClient } from 'convex/browser';
 import { createWerewolfToolHandler } from './handlers';
 
@@ -6,6 +7,7 @@ const sdkPath = (suffix: string) => `${sdkBase}/${suffix}`;
 
 const sdkServerPath = sdkPath("server/index.js");
 const sdkStdioPath = sdkPath("server/stdio.js");
+const sdkSsePath = sdkPath("server/sse.js");
 const sdkTypesPath = sdkPath("types.js");
 
 const loadModule = async <T>(path: string): Promise<T> => {
@@ -19,20 +21,17 @@ const loadModule = async <T>(path: string): Promise<T> => {
   }
 };
 
-const [serverModule, stdioModule, typesModule] = await Promise.all([
+const [serverModule, stdioModule, sseModule, typesModule] = await Promise.all([
   loadModule<{ Server: new (...args: unknown[]) => any }>(sdkServerPath),
   loadModule<{ StdioServerTransport: new () => any }>(sdkStdioPath),
+  loadModule<{ SSEServerTransport: new (endpoint: string, res: any) => any }>(sdkSsePath),
   loadModule<{ CallToolRequestSchema: unknown; ListToolsRequestSchema: unknown }>(sdkTypesPath),
 ]);
 
 const { Server } = serverModule;
 const { StdioServerTransport } = stdioModule;
+const { SSEServerTransport } = sseModule;
 const { CallToolRequestSchema, ListToolsRequestSchema } = typesModule;
-
-const server = new Server(
-  { name: "eliza-town-werewolf", version: "0.1.0" },
-  { capabilities: { tools: {} } },
-);
 
 const tools = [
   {
@@ -737,9 +736,28 @@ const tools = [
   }
 ];
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
-});
+const createMcpServer = (options: {
+  client: ConvexHttpClient;
+  playerId: string | null;
+}) => {
+  const server = new Server(
+    { name: "eliza-town-werewolf", version: "0.1.0" },
+    { capabilities: { tools: {} } },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return { tools };
+  });
+
+  const handleToolCall = createWerewolfToolHandler({
+    client: options.client,
+    playerId: options.playerId,
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, handleToolCall);
+
+  return server;
+};
 
 const convexUrl = process.env.CONVEX_URL;
 if (!convexUrl) {
@@ -747,13 +765,82 @@ if (!convexUrl) {
 }
 
 const convex = new ConvexHttpClient(convexUrl);
-const playerId = process.env.ET_PLAYER_ID ?? null;
-const handleToolCall = createWerewolfToolHandler({
-  client: convex,
-  playerId,
-});
+const transportMode = (process.env.MCP_TRANSPORT ?? 'stdio').toLowerCase();
 
-server.setRequestHandler(CallToolRequestSchema, handleToolCall);
+const normalizePath = (value: string): string => {
+  if (!value.startsWith('/')) {
+    return `/${value}`;
+  }
+  return value.length > 1 && value.endsWith('/') ? value.slice(0, -1) : value;
+};
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+const getHeaderValue = (value: string | string[] | undefined): string | null => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return null;
+};
+
+const getPlayerIdFromRequest = (url: URL, headers: Record<string, string | string[] | undefined>): string | null => {
+  return (
+    url.searchParams.get('playerId') ??
+    url.searchParams.get('etPlayerId') ??
+    getHeaderValue(headers['x-et-player-id']) ??
+    getHeaderValue(headers['et-player-id']) ??
+    process.env.ET_PLAYER_ID ??
+    null
+  );
+};
+
+if (transportMode === 'stdio') {
+  const playerId = process.env.ET_PLAYER_ID ?? null;
+  const server = createMcpServer({ client: convex, playerId });
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+} else if (transportMode === 'sse' || transportMode === 'http' || transportMode === 'streamable-http') {
+  const host = process.env.MCP_HTTP_HOST ?? '0.0.0.0';
+  const port = Number(process.env.MCP_HTTP_PORT ?? '8787');
+  const ssePath = normalizePath(process.env.MCP_HTTP_PATH ?? '/mcp');
+  const messagePath = normalizePath(process.env.MCP_HTTP_MESSAGES_PATH ?? `${ssePath}/messages`);
+  const transports = new Map<string, { transport: any; server: any }>();
+
+  const httpServer = createHttpServer(async (req, res) => {
+    const baseUrl = `http://${req.headers.host ?? 'localhost'}`;
+    const url = new URL(req.url ?? '/', baseUrl);
+
+    if (req.method === 'GET' && url.pathname === ssePath) {
+      const playerId = getPlayerIdFromRequest(url, req.headers);
+      const server = createMcpServer({ client: convex, playerId });
+      const transport = new SSEServerTransport(messagePath, res);
+      transports.set(transport.sessionId, { transport, server });
+      res.on('close', () => {
+        transports.delete(transport.sessionId);
+        void server.close().catch(() => undefined);
+      });
+      await server.connect(transport);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === messagePath) {
+      const sessionId = url.searchParams.get('sessionId');
+      const entry = sessionId ? transports.get(sessionId) : undefined;
+      if (!entry) {
+        res.writeHead(400).end('No transport found for sessionId');
+        return;
+      }
+      await entry.transport.handlePostMessage(req, res);
+      return;
+    }
+
+    res.writeHead(404).end('Not found');
+  });
+
+  httpServer.listen(port, host, () => {
+    console.log(`Werewolf MCP SSE listening at http://${host}:${port}${ssePath}`);
+  });
+} else {
+  throw new Error(`Unknown MCP_TRANSPORT value: ${transportMode}`);
+}

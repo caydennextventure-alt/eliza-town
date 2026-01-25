@@ -52,6 +52,8 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const [identity, setIdentity] = useState('');
   const [plan, setPlan] = useState(DEFAULT_PLAN);
   const [personality, setPersonality] = useState<string[]>([]);
+  const [elizaServerUrl, setElizaServerUrl] = useState('');
+  const [elizaAuthToken, setElizaAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   
@@ -81,6 +83,8 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setIdentity('');
       setPlan(DEFAULT_PLAN);
       setPersonality([]);
+      setElizaServerUrl('');
+      setElizaAuthToken('');
       return;
     }
     if (selectableCharacters.length === 0) {
@@ -127,6 +131,8 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     setIsCreating(true);
     
     try {
+      const trimmedElizaServerUrl = elizaServerUrl.trim();
+      const trimmedElizaAuthToken = elizaAuthToken.trim();
       const result = await createElizaAgent({
         worldId,
         name: name.trim(),
@@ -134,6 +140,8 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
         identity: identity.trim(),
         plan: plan.trim(),
         personality,
+        elizaServerUrl: trimmedElizaServerUrl ? trimmedElizaServerUrl : undefined,
+        elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
       });
       
       const { inputId } = result;
@@ -326,6 +334,30 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                       rows={2}
                       className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] resize-none"
                       data-testid="agent-plan"
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Eliza Server URL (Optional)</label>
+                    <input
+                      value={elizaServerUrl}
+                      onChange={(e) => setElizaServerUrl(e.target.value)}
+                      placeholder="https://your-eliza-server.com"
+                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
+                      data-testid="agent-eliza-url"
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Eliza API Key (Optional)</label>
+                    <input
+                      type="password"
+                      value={elizaAuthToken}
+                      onChange={(e) => setElizaAuthToken(e.target.value)}
+                      placeholder="X-API-KEY"
+                      autoComplete="off"
+                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
+                      data-testid="agent-eliza-api-key"
                     />
                 </div>
             </div>

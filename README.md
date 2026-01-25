@@ -58,6 +58,10 @@ npm install
    # Required: ElizaOS Server URL (ElizaCloud, Railway, or local)
    # Example: https://your-elizacloud-url, https://your-railway-url, or http://localhost:3000
    npx convex env set ELIZA_SERVER_URL "https://your-elizacloud-url"
+
+   # Optional: If your ElizaOS server requires an API key
+   # This is sent as X-API-KEY for all /api/* requests
+   npx convex env set ELIZA_SERVER_AUTH_TOKEN "your-eliza-api-key"
    
    # Optional: For character generation features
    npx convex env set GOOGLE_API_KEY "your-google-api-key"
@@ -83,6 +87,7 @@ To work with this app, your ElizaOS server must:
 - Expose the REST API endpoints used here: `POST /api/agents` and `POST /api/agents/:id/message`.
 - Have an LLM provider configured so agent creation and chat succeed.
 - Be reachable from Convex (local URL works with `npx convex dev`; deployed apps need a public URL).
+- If you set `ELIZA_SERVER_AUTH_TOKEN` on the ElizaOS server, set the same value in Convex (or enter a per-agent API key when creating the agent).
 
 ### Using Your Own ElizaOS Server (Optional)
 
@@ -100,6 +105,24 @@ If you want full control over your agents or want to customize the AI behavior:
    ```
 
 3. **Ensure your ElizaOS server has an LLM configured** (e.g., OpenAI API key).
+
+---
+
+## 🐺 Werewolf MCP Server (Remote Agents)
+
+To let ElizaCloud or other remote agents join Werewolf via MCP tools, run the MCP server over HTTP + SSE:
+
+```bash
+MCP_TRANSPORT=sse CONVEX_URL=<your_convex_url> npm run mcp:werewolf
+```
+
+Then point each agent's MCP config to:
+
+```
+http://<host>:8787/mcp?playerId=<playerId>
+```
+
+If `playerId` is missing, the session is treated as a spectator (read-only).
 
 ---
 

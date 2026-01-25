@@ -7,9 +7,16 @@ The MCP server is a **thin adapter** that calls Convex.
 
 ## Transport
 
-MVP default: **stdio** (best supported by MCP hosts).
+Default: **stdio** (best supported by MCP hosts).
 
-Optional: Streamable HTTP transport can be added later.
+Also supported: **HTTP + SSE** (remote agents / ElizaCloud).
+
+HTTP env vars:
+- `MCP_TRANSPORT=sse`
+- `MCP_HTTP_HOST` (default `0.0.0.0`)
+- `MCP_HTTP_PORT` (default `8787`)
+- `MCP_HTTP_PATH` (default `/mcp`)
+- `MCP_HTTP_MESSAGES_PATH` (default `/mcp/messages`)
 
 ## Tool contract
 
@@ -19,7 +26,7 @@ Tool names and JSON Schemas must be **identical** to the spec. Do not rename too
 
 The tool schemas do not include an agent/player identifier. Therefore, the MCP server must associate each connection with a caller identity.
 
-MVP strategy (simple and effective for stdio):
+stdio strategy (simple and effective):
 - Run **one MCP server process per agent**.
 - Provide the agent’s `playerId` via env var.
 
@@ -27,7 +34,11 @@ Required env vars:
 - `ET_PLAYER_ID` — the Eliza Town game player id (e.g. `p:12`)
 - `CONVEX_URL` — Convex deployment URL (can reuse `VITE_CONVEX_URL`)
 
-If `ET_PLAYER_ID` is missing, treat the caller as a spectator (public-only).
+HTTP strategy:
+- Agents connect to `MCP_HTTP_PATH` with `?playerId=<id>` (query param).
+- Optional header: `x-et-player-id`.
+
+If `playerId` / `ET_PLAYER_ID` is missing, treat the caller as a spectator (public-only).
 
 ## Convex function mapping
 
@@ -71,3 +82,4 @@ Where the tool schema includes `idempotencyKey`, forward it to Convex and let Co
 - Use `ConvexHttpClient` from the `convex` npm package.
 - Add a root script (after implementation) like:
   - `npm run mcp:werewolf` → runs `node --loader ts-node/esm mcp/werewolf/server.ts`
+  - `npm run mcp:werewolf:http` → runs the same server with `MCP_TRANSPORT=sse`

@@ -3,7 +3,33 @@ import { v } from 'convex/values';
 import { anyApi } from 'convex/server';
 import { Id } from '../_generated/dataModel';
 
-const ELIZA_SERVER = process.env.ELIZA_SERVER_URL || 'https://fliza-agent-production.up.railway.app';
+const normalizeElizaServerUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed.replace(/\/+$/, '');
+};
+
+const normalizeAuthToken = (value?: string) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const resolveElizaAuthToken = (value?: string) =>
+  normalizeAuthToken(value) ?? normalizeAuthToken(process.env.ELIZA_SERVER_AUTH_TOKEN);
+
+const buildElizaHeaders = (authToken?: string) => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authToken) {
+    headers['X-API-KEY'] = authToken;
+  }
+  return headers;
+};
+
+const DEFAULT_ELIZA_SERVER =
+  normalizeElizaServerUrl(process.env.ELIZA_SERVER_URL) ||
+  'https://fliza-agent-production.up.railway.app';
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
 
@@ -15,10 +41,16 @@ export const createElizaAgent = action({
     identity: v.string(), // Maps to bio
     plan: v.string(),
     personality: v.array(v.string()), // ['Friendly', 'Curious']
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ inputId: Id<"inputs"> | string; elizaAgentId: string }> => {
     // 1. Create in ElizaOS
-    console.log(`Creating Eliza Agent [${args.name}] at ${ELIZA_SERVER}...`);
+    const elizaServerUrlOverride = normalizeElizaServerUrl(args.elizaServerUrl);
+    const elizaServerUrl = elizaServerUrlOverride ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const storedAuthToken = normalizeAuthToken(args.elizaAuthToken);
+    console.log(`Creating Eliza Agent [${args.name}] at ${elizaServerUrl}...`);
     
     try {
       // Create character JSON object (minimal required fields)
@@ -31,9 +63,9 @@ export const createElizaAgent = action({
 
       console.log('Sending JSON request to ElizaOS...');
 
-      const res = await fetch(`${ELIZA_SERVER}/api/agents`, {
+      const res = await fetch(`${elizaServerUrl}/api/agents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildElizaHeaders(authToken),
         body: JSON.stringify({ characterJson: characterConfig }),
       });
       
@@ -81,6 +113,8 @@ export const createElizaAgent = action({
          elizaAgentId,
          bio: args.identity,
          personality: args.personality,
+         elizaServerUrl: elizaServerUrlOverride,
+         elizaAuthToken: storedAuthToken,
          // playerId Left undefined for now, to be linked later if needed
       });
       
@@ -95,16 +129,20 @@ export const createElizaAgent = action({
 export const sendMessage = action({
   args: {
     elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
     message: v.string(),
     senderId: v.string(),
     conversationId: v.string(),
   },
   handler: async (ctx, args) => {
+    const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
     const res = await fetch(
-      `${ELIZA_SERVER}/api/agents/${args.elizaAgentId}/message`,
+      `${elizaServerUrl}/api/agents/${args.elizaAgentId}/message`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildElizaHeaders(authToken),
         body: JSON.stringify({
           text: args.message, 
           userId: args.senderId,

@@ -6,6 +6,8 @@ export const saveMapping = internalMutation({
     worldId: v.id('worlds'),
     playerId: v.optional(v.id('players')), // Using generic ID type as it maps to players table
     elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()),
@@ -15,6 +17,8 @@ export const saveMapping = internalMutation({
       playerId: args.playerId,
       worldId: args.worldId,
       elizaAgentId: args.elizaAgentId,
+      elizaServerUrl: args.elizaServerUrl,
+      elizaAuthToken: args.elizaAuthToken,
       name: args.name,
       bio: args.bio,
       personality: args.personality,
