@@ -90,7 +90,7 @@ type PathBorderRule = {
 let cachedPathBorderRules: PathBorderRule[] | null = null;
 let pathBorderRulesPromise: Promise<PathBorderRule[] | null> | null = null;
 const cachedPathBorderSheets: Record<string, DecalSheet> = {};
-const pathBorderSheetPromises: Record<string, Promise<DecalSheet | null>> = {};
+const pathBorderSheetPromises: Partial<Record<string, Promise<DecalSheet | null>>> = {};
 
 const loadAssetsManifest = async (): Promise<AssetsManifest | null> => {
   if (cachedAssetsManifest) return cachedAssetsManifest;
@@ -170,7 +170,8 @@ const loadPathBorderRules = async (): Promise<PathBorderRule[] | null> => {
 
 const loadPathBorderSheet = async (rule: PathBorderRule): Promise<DecalSheet | null> => {
   if (cachedPathBorderSheets[rule.name]) return cachedPathBorderSheets[rule.name];
-  if (pathBorderSheetPromises[rule.name]) return pathBorderSheetPromises[rule.name];
+  const existingPromise = pathBorderSheetPromises[rule.name];
+  if (existingPromise) return existingPromise;
   pathBorderSheetPromises[rule.name] = (async () => {
     try {
       if (!rule.sheet || !rule.sheetJson) return null;
@@ -201,7 +202,7 @@ const loadPathBorderSheet = async (rule: PathBorderRule): Promise<DecalSheet | n
       return null;
     }
   })();
-  return pathBorderSheetPromises[rule.name];
+  return pathBorderSheetPromises[rule.name]!;
 };
 
 const normalizeRotation = (rotation: number | undefined) => {
@@ -283,6 +284,11 @@ const stripExtension = (value: string) => value.replace(/\.[^/.]+$/, '');
 const isGroundCategory = (category?: string) =>
   category === 'terrain' || category === 'paths' || category === 'flooring' || category === 'tile-object';
 
+const POND_OBJECT_IDS = new Set(['pond-stamp-clean']);
+const POND_RIM_URL = 'assets/Tileset Asset/animated/pond_rim_overlay.png';
+const POND_MASK_URL = 'assets/Tileset Asset/animated/pond_water_mask.png';
+const POND_WATER_TILE_URL = 'assets/Tileset Asset/animated/water_pond_tile_calm.png';
+
 const getRotatedSize = (width: number, height: number, rotation: number) =>
   rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
 
@@ -314,7 +320,12 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
     const screenxtiles = map.bgTiles[0].length;
     const screenytiles = map.bgTiles[0][0].length;
 
-    const container = new PIXI.Container();
+    const container = new PIXI.Container() as PIXI.Container & {
+      __disposed?: boolean;
+      __tickers?: Array<(delta: number) => void>;
+    };
+    container.__disposed = false;
+    container.__tickers = [];
     const groundObjectsContainer = new PIXI.Container();
     const decalsContainer = new PIXI.Container();
     const stampObjectsContainer = new PIXI.Container();
@@ -559,8 +570,73 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
     }
     if (placedObjects.length > 0) {
       void loadAssetsManifest().then(async (assets) => {
+        if (container.__disposed) return;
         if (!assets?.objects || assets.objects.length === 0) return;
         const objectsById = new Map(assets.objects.map((obj) => [obj.id, obj]));
+
+        const waterId = terrainDecals?.waterId;
+        const waterDef = waterId ? objectsById.get(waterId) : undefined;
+        const shouldAnimateWater = !!(waterId && waterDef?.image);
+        if (shouldAnimateWater) {
+          let waterTiles = 0;
+          const mask = new PIXI.Graphics();
+          mask.beginFill(0xffffff);
+          for (const placement of placedObjects) {
+            if (placement.objectId !== waterId) continue;
+            if (
+              placement.col < 0 ||
+              placement.row < 0 ||
+              placement.col >= screenxtiles ||
+              placement.row >= screenytiles
+            ) {
+              continue;
+            }
+            mask.drawRect(
+              placement.col * map.tileDim,
+              placement.row * map.tileDim,
+              map.tileDim,
+              map.tileDim,
+            );
+            waterTiles += 1;
+          }
+          mask.endFill();
+          mask.renderable = false;
+          (mask as any).eventMode = 'none';
+
+          if (waterTiles > 0) {
+            const tex = PIXI.Texture.from(resolveAssetPath(waterDef!.image));
+            tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+            const water = new PIXI.TilingSprite(
+              tex,
+              screenxtiles * map.tileDim,
+              screenytiles * map.tileDim,
+            );
+            const tileScaleX = map.tileDim / (Number(waterDef!.pixelWidth) || map.tileDim);
+            const tileScaleY = map.tileDim / (Number(waterDef!.pixelHeight) || map.tileDim);
+            water.tileScale.set(tileScaleX, tileScaleY);
+            water.roundPixels = true;
+            (water as any).eventMode = 'none';
+            water.interactive = false;
+            water.interactiveChildren = false;
+            water.mask = mask;
+
+            groundObjectsContainer.addChild(water);
+            groundObjectsContainer.addChild(mask);
+
+            const tick = (delta: number) => {
+              water.tilePosition.x += 0.1 * delta;
+            };
+            container.__tickers?.push(tick);
+            PIXI.Ticker.shared.add(tick);
+          }
+        }
+
+        const pondRimTexture = PIXI.Texture.from(resolveAssetPath(POND_RIM_URL));
+        pondRimTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+        const pondMaskTexture = PIXI.Texture.from(resolveAssetPath(POND_MASK_URL));
+        pondMaskTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+        const pondWaterTileTexture = PIXI.Texture.from(resolveAssetPath(POND_WATER_TILE_URL));
+        pondWaterTileTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
 
         const pathRules = await loadPathBorderRules();
         if (pathRules && pathRules.length > 0) {
@@ -720,6 +796,9 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
         });
 
         for (const placement of sorted) {
+          if (shouldAnimateWater && terrainDecals?.waterId && placement.objectId === terrainDecals.waterId) {
+            continue;
+          }
           const def = objectsById.get(placement.objectId);
           if (!def) continue;
           if (!def.image) continue;
@@ -754,6 +833,59 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
           const holder = new PIXI.Container();
           holder.x = startCol * map.tileDim + offsetX + placementOffsetX;
           holder.y = startRow * map.tileDim + offsetY + placementOffsetY;
+
+          if (POND_OBJECT_IDS.has(placement.objectId)) {
+            const pond = new PIXI.Container();
+            pond.sortableChildren = true;
+            (pond as any).eventMode = 'none';
+            pond.interactive = false;
+            pond.interactiveChildren = false;
+
+            const water = new PIXI.TilingSprite(pondWaterTileTexture, baseWidth, baseHeight);
+            (water as any).eventMode = 'none';
+            water.interactive = false;
+            water.interactiveChildren = false;
+            water.zIndex = 0;
+
+            const mask = new PIXI.Sprite(pondMaskTexture);
+            mask.width = baseWidth;
+            mask.height = baseHeight;
+            // Keep the mask hidden but still usable for masking (Pixi v7).
+            mask.renderable = false;
+            (mask as any).eventMode = 'none';
+            mask.interactive = false;
+            mask.interactiveChildren = false;
+            mask.zIndex = 1;
+            water.mask = mask;
+
+            const rim = new PIXI.Sprite(pondRimTexture);
+            rim.width = baseWidth;
+            rim.height = baseHeight;
+            (rim as any).eventMode = 'none';
+            rim.interactive = false;
+            rim.interactiveChildren = false;
+            rim.zIndex = 2;
+
+            pond.addChild(water);
+            pond.addChild(mask);
+            pond.addChild(rim);
+
+            const rotationInfo = getRotationOffset(baseWidth, baseHeight, rotation);
+            pond.x = rotationInfo.x;
+            pond.y = rotationInfo.y;
+            pond.rotation = rotationInfo.angle;
+
+            const tick = (delta: number) => {
+              water.tilePosition.x += 0.04 * delta;
+              water.tilePosition.y += 0.02 * delta;
+            };
+            container.__tickers?.push(tick);
+            PIXI.Ticker.shared.add(tick);
+
+            holder.addChild(pond);
+            stampObjectsContainer.addChild(holder);
+            continue;
+          }
 
           const texture = PIXI.Texture.from(resolveAssetPath(def.image));
           texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
@@ -835,5 +967,16 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
 
   applyProps: (instance, oldProps, newProps) => {
     applyDefaultProps(instance, oldProps, newProps);
+  },
+  willUnmount: (instance) => {
+    (instance as any).__disposed = true;
+    const tickers = (instance as any).__tickers as Array<((delta: number) => void) | undefined> | undefined;
+    if (tickers) {
+      for (const ticker of tickers) {
+        if (ticker) {
+          PIXI.Ticker.shared.remove(ticker);
+        }
+      }
+    }
   },
 });
