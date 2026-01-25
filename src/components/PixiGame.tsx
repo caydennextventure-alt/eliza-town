@@ -14,6 +14,7 @@ import { DebugPath } from './DebugPath.tsx';
 import { PositionIndicator } from './PositionIndicator.tsx';
 import { SHOW_DEBUG_UI } from './Game.tsx';
 import { ServerGame } from '../hooks/serverGame.ts';
+import NightLighting from './NightLighting.tsx';
 
 export const PixiGame = (props: {
   worldId: Id<'worlds'>;
@@ -23,6 +24,7 @@ export const PixiGame = (props: {
   width: number;
   height: number;
   setSelectedElement: SelectElement;
+  isNight: boolean;
 }) => {
   // PIXI setup.
   const pixiApp = useApp();
@@ -126,6 +128,7 @@ export const PixiGame = (props: {
           historicalTime={props.historicalTime}
         />
       ))}
+      <NightLighting map={props.game.worldMap} isNight={props.isNight} />
     </PixiViewport>
   );
 };

@@ -1,5 +1,5 @@
 import PixiGame from './PixiGame.tsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useElementSize } from 'usehooks-ts';
 import { Stage } from '@pixi/react';
@@ -28,6 +28,30 @@ export default function Game() {
   const engineId = worldStatus?.engineId;
 
   const game = useServerGame(worldId);
+  const [isNight, setIsNight] = useState(false);
+  const canToggleNight = import.meta.env.DEV || SHOW_DEBUG_UI;
+
+  useEffect(() => {
+    if (!canToggleNight) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.toLowerCase() !== 'n') return;
+
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+          return;
+        }
+      }
+
+      setIsNight((prev) => !prev);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canToggleNight]);
 
   // Send a periodic heartbeat to our world to keep it alive.
   useWorldHeartbeat();
@@ -42,7 +66,18 @@ export default function Game() {
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
       <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
-        <Stage width={width} height={height} options={{ backgroundColor: 0x7ab5ff }}>
+        {canToggleNight && (
+          <div className="absolute top-2 left-2 z-10 pointer-events-auto">
+            <button
+              type="button"
+              className="border border-white/30 bg-gray-900/60 px-3 py-1 text-xs text-white hover:border-white/60"
+              onClick={() => setIsNight((prev) => !prev)}
+            >
+              Night: {isNight ? 'ON' : 'OFF'} (N)
+            </button>
+          </div>
+        )}
+        <Stage width={width} height={height} options={{ backgroundColor: isNight ? 0x0b1320 : 0x7ab5ff }}>
           <ConvexProvider client={convex}>
             <PixiGame
               game={game}
@@ -52,6 +87,7 @@ export default function Game() {
               height={height}
               historicalTime={historicalTime}
               setSelectedElement={setSelectedElement}
+              isNight={isNight}
             />
             <PetalFx />
           </ConvexProvider>
