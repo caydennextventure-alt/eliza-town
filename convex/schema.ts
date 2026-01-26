@@ -59,6 +59,7 @@ const werewolfTables = {
     eliminatedAt: v.optional(v.number()),
     revealedRole: v.optional(v.boolean()),
     ready: v.boolean(),
+    missedResponses: v.optional(v.number()),
     doctorLastProtectedPlayerId: v.optional(v.string()),
     seerHistory: v.array(
       v.object({
@@ -106,6 +107,16 @@ const werewolfTables = {
   })
     .index('byMatchAndSeq', ['matchId', 'seq'])
     .index('byMatchAndAt', ['matchId', 'at']),
+  werewolfRoundRuns: defineTable({
+    matchId: v.string(),
+    phase: v.string(),
+    phaseStartedAt: v.number(),
+    roundIndex: v.number(),
+    scheduledAt: v.number(),
+    startedAt: v.number(),
+  })
+    .index('byMatchPhaseRound', ['matchId', 'phase', 'phaseStartedAt', 'roundIndex'])
+    .index('byMatch', ['matchId']),
   werewolfBuildings: defineTable({
     matchId: v.string(),
     worldId: v.id('worlds'),

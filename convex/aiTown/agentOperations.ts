@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
-import { internalAction } from '../_generated/server';
+import { internalAction, type ActionCtx } from '../_generated/server';
+import '../util/noisyLogConfig';
 import { WorldMap, serializedWorldMap } from './worldMap';
 import { rememberConversation } from '../agent/memory';
 import { GameId, agentId, conversationId, playerId } from './ids';
@@ -14,9 +15,39 @@ import { ACTIVITIES, ACTIVITY_COOLDOWN, CONVERSATION_COOLDOWN } from '../constan
 import { anyApi } from 'convex/server';
 import { sleep } from '../util/sleep';
 import { serializedPlayer } from './player';
+import { noisyDebug } from './logging';
 
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
+
+const OCC_ERROR_FRAGMENT = 'inputs" table changed';
+const MAX_SEND_INPUT_RETRIES = 3;
+
+const isOccConflict = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(OCC_ERROR_FRAGMENT);
+};
+
+const sendInputWithRetry = async (
+  ctx: ActionCtx,
+  payload: { worldId: string; name: string; args: any },
+) => {
+  for (let attempt = 0; attempt <= MAX_SEND_INPUT_RETRIES; attempt += 1) {
+    try {
+      await ctx.runMutation(apiAny.aiTown.main.sendInput, payload);
+      return;
+    } catch (error) {
+      if (!isOccConflict(error)) {
+        throw error;
+      }
+      if (attempt >= MAX_SEND_INPUT_RETRIES) {
+        noisyDebug('Dropping aiTown input after OCC retries.', payload.name);
+        return;
+      }
+      await sleep(50 + Math.random() * 150);
+    }
+  }
+};
 
 export const agentRememberConversation = internalAction({
   args: {
@@ -37,10 +68,12 @@ export const agentRememberConversation = internalAction({
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`agentRememberConversation failed: ${message}`);
+      if (!message.includes('Conversation') || !message.includes('not found')) {
+        console.error(`agentRememberConversation failed: ${message}`);
+      }
     } finally {
       await sleep(Math.random() * 1000);
-      await ctx.runMutation(apiAny.aiTown.main.sendInput, {
+      await sendInputWithRetry(ctx, {
         worldId: args.worldId,
         name: 'finishRememberConversation',
         args: {
@@ -99,7 +132,7 @@ export const agentGenerateMessage = internalAction({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`agentGenerateMessage failed: ${message}`);
-      await ctx.runMutation(apiAny.aiTown.main.sendInput, {
+      await sendInputWithRetry(ctx, {
         worldId: args.worldId,
         name: 'agentAbortConversation',
         args: {
@@ -137,7 +170,7 @@ export const agentDoSomething = internalAction({
     if (!player.pathfinding) {
       if (recentActivity || justLeftConversation) {
         await sleep(Math.random() * 1000);
-        await ctx.runMutation(apiAny.aiTown.main.sendInput, {
+        await sendInputWithRetry(ctx, {
           worldId: args.worldId,
           name: 'finishDoSomething',
           args: {
@@ -151,7 +184,7 @@ export const agentDoSomething = internalAction({
         // TODO: have LLM choose the activity & emoji
         const activity = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
         await sleep(Math.random() * 1000);
-        await ctx.runMutation(apiAny.aiTown.main.sendInput, {
+        await sendInputWithRetry(ctx, {
           worldId: args.worldId,
           name: 'finishDoSomething',
           args: {
@@ -180,7 +213,7 @@ export const agentDoSomething = internalAction({
     // TODO: We hit a lot of OCC errors on sending inputs in this file. It's
     // easy for them to get scheduled at the same time and line up in time.
     await sleep(Math.random() * 1000);
-    await ctx.runMutation(apiAny.aiTown.main.sendInput, {
+    await sendInputWithRetry(ctx, {
       worldId: args.worldId,
       name: 'finishDoSomething',
       args: {

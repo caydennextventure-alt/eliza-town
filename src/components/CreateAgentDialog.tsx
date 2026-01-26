@@ -72,9 +72,10 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     return filtered.filter((character) => character.ownerId === userTokenIdentifier);
   }, [characters, userTokenIdentifier]);
   
-  const hasCustomCharacters = customCharacters.length > 0;
-  const hasMultipleCharacters = customCharacters.length > 1;
-  const selectableCharacters = customCharacters;
+  const isE2E = import.meta.env.VITE_E2E === '1' || import.meta.env.VITE_E2E === 'true';
+  const selectableCharacters = isE2E ? characters : customCharacters;
+  const hasCustomCharacters = selectableCharacters.length > 0;
+  const hasMultipleCharacters = selectableCharacters.length > 1;
 
   useEffect(() => {
     if (!isOpen) {
@@ -107,7 +108,11 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       return;
     }
     if (!hasCustomCharacters) {
-      setError('Create a custom character before adding an agent.');
+      setError(
+        isE2E
+          ? 'No characters available yet.'
+          : 'Create a custom character before adding an agent.',
+      );
       return;
     }
     if (!selectedId) {

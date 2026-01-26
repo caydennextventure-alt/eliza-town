@@ -22,6 +22,8 @@ const modalStyles = {
     marginRight: '-50%',
     transform: 'translate(-50%, -50%)',
     maxWidth: '60%',
+    maxHeight: '85vh',
+    overflow: 'auto',
     border: '10px solid rgb(23, 20, 33)',
     borderRadius: '0',
     background: 'rgb(35, 38, 58)',

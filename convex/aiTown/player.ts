@@ -14,6 +14,7 @@ import { stopPlayer, findRoute, blocked, movePlayer } from './movement';
 import { inputHandler } from './inputHandler';
 import { characters } from '../../data/characters';
 import { PlayerDescription } from './playerDescription';
+import { noisyLog, noisyWarn } from './logging';
 
 const isValidCharacterId = (character: string) =>
   characters.some((c) => c.name === character) || character.startsWith('custom_');
@@ -111,7 +112,7 @@ export class Player {
 
     // Stop pathfinding if we've timed out.
     if (pathfinding.started + PATHFINDING_TIMEOUT < now) {
-      console.warn(`Timing out pathfinding for ${this.id}`);
+      noisyWarn(`Timing out pathfinding for ${this.id}`);
       stopPlayer(this);
     }
 
@@ -124,15 +125,15 @@ export class Player {
     if (pathfinding.state.kind === 'needsPath' && game.numPathfinds < MAX_PATHFINDS_PER_STEP) {
       game.numPathfinds++;
       if (game.numPathfinds === MAX_PATHFINDS_PER_STEP) {
-        console.warn(`Reached max pathfinds for this step`);
+        noisyWarn(`Reached max pathfinds for this step`);
       }
       const route = findRoute(game, now, this, pathfinding.destination);
       if (route === null) {
-        console.log(`Failed to route to ${JSON.stringify(pathfinding.destination)}`);
+        noisyLog(`Failed to route to ${JSON.stringify(pathfinding.destination)}`);
         stopPlayer(this);
       } else {
         if (route.newDestination) {
-          console.warn(
+          noisyWarn(
             `Updating destination from ${JSON.stringify(
               pathfinding.destination,
             )} to ${JSON.stringify(route.newDestination)}`,
@@ -155,14 +156,14 @@ export class Player {
     // with anything.
     const candidate = pathPosition(this.pathfinding.state.path as any, now);
     if (!candidate) {
-      console.warn(`Path out of range of ${now} for ${this.id}`);
+      noisyWarn(`Path out of range of ${now} for ${this.id}`);
       return;
     }
     const { position, facing, velocity } = candidate;
     const collisionReason = blocked(game, now, position, this.id);
     if (collisionReason !== null) {
       const backoff = Math.random() * PATHFINDING_BACKOFF;
-      console.warn(`Stopping path for ${this.id}, waiting for ${backoff}ms: ${collisionReason}`);
+      noisyWarn(`Stopping path for ${this.id}, waiting for ${backoff}ms: ${collisionReason}`);
       this.pathfinding.state = {
         kind: 'waiting',
         until: now + backoff,

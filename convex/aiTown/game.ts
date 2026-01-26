@@ -25,6 +25,7 @@ import { anyApi } from 'convex/server';
 import { HistoricalObject } from '../engine/historicalObject';
 import { AgentDescription, serializedAgentDescription } from './agentDescription';
 import { parseMap, serializeMap } from '../util/object';
+import { noisyDebug } from './logging';
 
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
@@ -64,6 +65,7 @@ export class Game extends AbstractGame {
   pendingOperations: Array<{ name: string; args: any }> = [];
 
   numPathfinds: number;
+  disableAgentOperations = false;
 
   constructor(
     engine: Doc<'engines'>,
@@ -190,8 +192,10 @@ export class Game extends AbstractGame {
     for (const conversation of this.world.conversations.values()) {
       conversation.tick(this, now);
     }
-    for (const agent of this.world.agents.values()) {
-      agent.tick(this, now);
+    if (!this.disableAgentOperations) {
+      for (const agent of this.world.agents.values()) {
+        agent.tick(this, now);
+      }
     }
 
     // Save each player's location into the history buffer at the end of
@@ -228,7 +232,7 @@ export class Game extends AbstractGame {
       bufferSize += buffer.byteLength;
     }
     if (bufferSize > 0) {
-      console.debug(
+      noisyDebug(
         `Packed ${Object.entries(historicalLocations).length} history buffers in ${(
           bufferSize / 1024
         ).toFixed(2)}KiB.`,
@@ -344,8 +348,12 @@ export class Game extends AbstractGame {
       }
     }
     // Start the desired agent operations.
-    for (const operation of diff.agentOperations) {
-      await runAgentOperation(ctx, operation.name, operation.args);
+    const disableAgentOperations =
+      /^(1|true|yes)$/i.test(process.env.AITOWN_DISABLE_AGENT_OPERATIONS ?? '');
+    if (!disableAgentOperations) {
+      for (const operation of diff.agentOperations) {
+        await runAgentOperation(ctx, operation.name, operation.args);
+      }
     }
   }
 }

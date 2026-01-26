@@ -16,6 +16,7 @@ import { canAdvancePhaseEarly } from './engine/earlyAdvance';
 import type { MatchState } from './engine/state';
 import { advancePhase as advancePhaseEngine } from './engine/transitions';
 import { evaluateWinCondition } from './engine/win';
+import { getRoundCount, getRoundStartAt } from './rounds';
 import type { MatchId, PlayerId, Role } from './types';
 
 const internalScheduler = anyApi;
@@ -48,12 +49,14 @@ export function advanceMatchPhase(state: MatchState, now: number): AdvanceMatchP
   let workingState = state;
   let eliminatedPlayerId: PlayerId | undefined;
   let wolfKillTargetPlayerId: PlayerId | undefined;
+  let timeoutEliminatedPlayerIds: PlayerId[] = [];
 
   if (state.phase === 'NIGHT') {
     const resolution = resolveNight(state, now);
     workingState = resolution.nextState;
     eliminatedPlayerId = resolution.eliminatedPlayerId;
     wolfKillTargetPlayerId = resolution.wolfKillTargetPlayerId;
+    timeoutEliminatedPlayerIds = resolution.timeoutEliminatedPlayerIds;
   } else if (state.phase === 'DAY_VOTE') {
     const resolution = resolveDayVote(state, now);
     workingState = resolution.nextState;
@@ -81,6 +84,7 @@ export function advanceMatchPhase(state: MatchState, now: number): AdvanceMatchP
     now,
     eliminatedPlayerId,
     wolfKillTargetPlayerId,
+    timeoutEliminatedPlayerIds,
   });
 
   const updatedState = {
@@ -94,6 +98,7 @@ export function advanceMatchPhase(state: MatchState, now: number): AdvanceMatchP
     now,
     eliminatedPlayerId,
     wolfKillTargetPlayerId,
+    timeoutEliminatedPlayerIds,
   }).concat(narratorUpdate.events);
 
   return { nextState: updatedState, events, advanced: true };
@@ -105,6 +110,7 @@ type AdvanceEventParams = {
   now: number;
   eliminatedPlayerId?: PlayerId;
   wolfKillTargetPlayerId?: PlayerId;
+  timeoutEliminatedPlayerIds?: PlayerId[];
 };
 
 function buildAdvanceEvents(params: AdvanceEventParams): WerewolfEvent[] {
@@ -131,12 +137,19 @@ function buildAdvanceEvents(params: AdvanceEventParams): WerewolfEvent[] {
         eliminatedPlayerId: params.eliminatedPlayerId,
       }),
     );
+    const eliminatedIds = new Set<PlayerId>();
     if (params.eliminatedPlayerId) {
+      eliminatedIds.add(params.eliminatedPlayerId);
+    }
+    for (const playerId of params.timeoutEliminatedPlayerIds ?? []) {
+      eliminatedIds.add(playerId);
+    }
+    for (const playerId of eliminatedIds) {
       events.push(
         createPlayerEliminatedEvent({
           at: params.now,
-          playerId: params.eliminatedPlayerId,
-          roleRevealed: findRole(params.to, params.eliminatedPlayerId),
+          playerId,
+          roleRevealed: findRole(params.to, playerId),
         }),
       );
     }
@@ -221,7 +234,22 @@ export const advancePhase = internalMutation({
         matchId: snapshot.match._id as string,
         expectedPhase: result.nextState.phase,
         expectedPhaseEndsAt: result.nextState.phaseEndsAt,
-      });
+        });
+    }
+
+    const roundCount = getRoundCount(result.nextState.phase);
+    if (roundCount > 0) {
+      for (let roundIndex = 0; roundIndex < roundCount; roundIndex += 1) {
+        const roundStartAt = getRoundStartAt(result.nextState.phaseStartedAt, roundIndex);
+        const delayMs = Math.max(0, roundStartAt - now);
+        await ctx.scheduler.runAfter(delayMs, internalScheduler.werewolf.runner.runRound, {
+          matchId: snapshot.match._id as string,
+          phase: result.nextState.phase,
+          phaseStartedAt: result.nextState.phaseStartedAt,
+          roundIndex,
+          scheduledAt: roundStartAt,
+        });
+      }
     }
 
     return { advanced: true };

@@ -3,6 +3,7 @@ import { Doc, Id } from '../_generated/dataModel';
 import { ActionCtx, DatabaseReader, MutationCtx, internalQuery } from '../_generated/server';
 import { engine } from '../engine/schema';
 import { anyApi } from 'convex/server';
+import { noisyDebug } from '../util/noisyLog';
 
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
@@ -87,7 +88,7 @@ export abstract class AbstractGame {
     const engineUpdate = { engine, completedInputs, expectedGenerationNumber };
     await this.saveStep(ctx, engineUpdate);
 
-    console.debug(`Simulated from ${startTs} to ${currentTs} (${currentTs - startTs}ms)`);
+    noisyDebug(`Simulated from ${startTs} to ${currentTs} (${currentTs - startTs}ms)`);
   }
 }
 

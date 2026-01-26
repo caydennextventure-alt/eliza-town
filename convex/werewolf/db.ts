@@ -2,7 +2,7 @@ import type { Doc, Id } from '../_generated/dataModel';
 import type { DatabaseReader, DatabaseWriter } from '../_generated/server';
 import type { WerewolfEvent } from './engine/events';
 import type { MatchPlayerState, MatchState, NightActionState } from './engine/state';
-import type { MatchId } from './types';
+import type { EventVisibility, MatchId } from './types';
 
 type MatchDoc = Doc<'werewolfMatches'>;
 type PlayerDoc = Doc<'werewolfPlayers'>;
@@ -11,6 +11,9 @@ type EventDoc = Doc<'werewolfEvents'>;
 type MatchDocInput = Omit<MatchDoc, '_id' | '_creationTime'>;
 type PlayerDocInput = Omit<PlayerDoc, '_id' | '_creationTime'>;
 export type EventInsert = Omit<EventDoc, '_id' | '_creationTime'>;
+
+const shouldLogEvents = () => /^(1|true|yes)$/i.test(process.env.WEREWOLF_LOG_EVENTS ?? '');
+const shouldLogPrivate = () => /^(1|true|yes)$/i.test(process.env.WEREWOLF_LOG_PRIVATE ?? '');
 
 export type MatchSnapshot = {
   match: MatchDoc;
@@ -73,6 +76,7 @@ function playerDocToState(player: PlayerDoc): MatchPlayerState {
     role: player.role,
     alive: player.alive,
     ready: player.ready,
+    missedResponses: player.missedResponses ?? 0,
     eliminatedAt: player.eliminatedAt,
     revealedRole: player.revealedRole,
     doctorLastProtectedPlayerId: player.doctorLastProtectedPlayerId,
@@ -143,6 +147,7 @@ export function applyPlayerStateToDoc(
     role: state.role,
     alive: state.alive,
     ready: state.ready,
+    missedResponses: state.missedResponses,
     seerHistory: state.seerHistory,
   };
 
@@ -165,6 +170,9 @@ export async function appendMatchEvents(
 ): Promise<number[]> {
   if (events.length === 0) {
     return [];
+  }
+  if (shouldLogEvents()) {
+    await logMatchEvents(db, matchId, events);
   }
   const lastEvent = await db
     .query('werewolfEvents')
@@ -227,4 +235,86 @@ function compactNightAction(action: NightActionState): NightActionState | undefi
     next.doctorProtectTargetPlayerId = action.doctorProtectTargetPlayerId;
   }
   return Object.keys(next).length === 0 ? undefined : next;
+}
+
+async function logMatchEvents(
+  db: DatabaseWriter,
+  matchId: MatchId,
+  events: WerewolfEvent[],
+): Promise<void> {
+  const players = await db
+    .query('werewolfPlayers')
+    .withIndex('byMatchAndSeat', (q) => q.eq('matchId', matchId))
+    .collect();
+  const nameById = new Map(players.map((player) => [player.playerId, player.displayName]));
+
+  const getName = (playerId?: string | null) =>
+    playerId ? nameById.get(playerId) ?? playerId : 'none';
+  const shouldLog = (event: WerewolfEvent) => {
+    const visibility: EventVisibility = event.visibility;
+    const isPublic = visibility === 'PUBLIC';
+    return isPublic || (shouldLogPrivate() && !isPublic);
+  };
+
+  for (const event of events) {
+    if (!shouldLog(event)) {
+      continue;
+    }
+    const timestamp = new Date(event.at).toISOString();
+    const prefix = `[WEREWOLF ${matchId} ${timestamp}]`;
+    switch (event.type) {
+      case 'MATCH_CREATED': {
+        const roster = event.payload.players
+          .map((player) => `#${player.seat} ${player.displayName}`)
+          .join(', ');
+        console.log(`${prefix} MATCH_CREATED ${roster}`);
+        break;
+      }
+      case 'PHASE_CHANGED': {
+        console.log(
+          `${prefix} PHASE ${event.payload.from} -> ${event.payload.to} (day ${event.payload.dayNumber})`,
+        );
+        break;
+      }
+      case 'PUBLIC_MESSAGE': {
+        console.log(
+          `${prefix} PUBLIC ${event.payload.kind} ${getName(event.payload.playerId)}: ${event.payload.text}`,
+        );
+        break;
+      }
+      case 'WOLF_CHAT_MESSAGE': {
+        console.log(
+          `${prefix} WOLF_CHAT ${getName(event.payload.fromWolfId)}: ${event.payload.text}`,
+        );
+        break;
+      }
+      case 'VOTE_CAST': {
+        const target = getName(event.payload.targetPlayerId);
+        const reason = event.payload.reason ? ` (${event.payload.reason})` : '';
+        console.log(`${prefix} VOTE ${getName(event.payload.voterPlayerId)} -> ${target}${reason}`);
+        break;
+      }
+      case 'NIGHT_RESULT': {
+        const target = getName(event.payload.killedPlayerId);
+        console.log(
+          `${prefix} NIGHT_RESULT killed=${target} savedByDoctor=${event.payload.savedByDoctor}`,
+        );
+        break;
+      }
+      case 'PLAYER_ELIMINATED': {
+        console.log(
+          `${prefix} ELIMINATED ${getName(event.payload.playerId)} role=${event.payload.roleRevealed}`,
+        );
+        break;
+      }
+      case 'GAME_ENDED': {
+        console.log(`${prefix} GAME_ENDED winner=${event.payload.winningTeam}`);
+        break;
+      }
+      case 'NARRATOR': {
+        console.log(`${prefix} NARRATOR ${event.payload.text}`);
+        break;
+      }
+    }
+  }
 }

@@ -14,6 +14,7 @@ export function buildNarratorUpdate(params: {
   now: number;
   eliminatedPlayerId?: PlayerId;
   wolfKillTargetPlayerId?: PlayerId;
+  timeoutEliminatedPlayerIds?: PlayerId[];
 }): NarratorUpdate {
   if (params.from.phase === params.to.phase) {
     return { publicSummary: params.to.publicSummary, events: [] };
@@ -35,13 +36,19 @@ function buildPublicSummary(params: {
   to: MatchState;
   eliminatedPlayerId?: PlayerId;
   wolfKillTargetPlayerId?: PlayerId;
+  timeoutEliminatedPlayerIds?: PlayerId[];
 }): string {
   const playersRemaining = `${params.to.playersAlive} players remain.`;
   switch (params.to.phase) {
     case 'NIGHT':
       return `Night ${params.to.nightNumber} begins. ${playersRemaining}`;
     case 'DAY_ANNOUNCE': {
-      const nightOutcome = formatNightOutcome(params.to, params.eliminatedPlayerId, params.wolfKillTargetPlayerId);
+      const nightOutcome = formatNightOutcome(
+        params.to,
+        params.eliminatedPlayerId,
+        params.wolfKillTargetPlayerId,
+        params.timeoutEliminatedPlayerIds,
+      );
       return `Day ${params.to.dayNumber} dawns. ${nightOutcome} ${playersRemaining}`;
     }
     case 'DAY_OPENING':
@@ -66,15 +73,24 @@ function formatNightOutcome(
   state: MatchState,
   eliminatedPlayerId?: PlayerId,
   wolfKillTargetPlayerId?: PlayerId,
+  timeoutEliminatedPlayerIds?: PlayerId[],
 ): string {
+  const summary: string[] = [];
   if (eliminatedPlayerId) {
     const player = findPlayer(state, eliminatedPlayerId);
-    return `${player.displayName} was killed overnight (${player.role}).`;
+    summary.push(`${player.displayName} was killed overnight (${player.role}).`);
+  } else if (wolfKillTargetPlayerId) {
+    summary.push('No one died overnight. A life was saved.');
+  } else {
+    summary.push('No one died overnight.');
   }
-  if (wolfKillTargetPlayerId) {
-    return 'No one died overnight. A life was saved.';
+
+  const timeoutSummary = formatTimeoutEliminations(state, timeoutEliminatedPlayerIds ?? []);
+  if (timeoutSummary) {
+    summary.push(timeoutSummary);
   }
-  return 'No one died overnight.';
+
+  return summary.join(' ');
 }
 
 function formatVoteOutcome(state: MatchState, eliminatedPlayerId?: PlayerId): string {
@@ -83,6 +99,18 @@ function formatVoteOutcome(state: MatchState, eliminatedPlayerId?: PlayerId): st
     return `${player.displayName} was eliminated (${player.role}).`;
   }
   return 'No one was eliminated.';
+}
+
+function formatTimeoutEliminations(state: MatchState, playerIds: PlayerId[]): string | null {
+  const uniqueIds = Array.from(new Set(playerIds));
+  if (uniqueIds.length === 0) {
+    return null;
+  }
+  const entries = uniqueIds.map((playerId) => {
+    const player = findPlayer(state, playerId);
+    return `${player.displayName} (${player.role})`;
+  });
+  return `Inactivity eliminated ${entries.join(', ')}.`;
 }
 
 function findPlayer(state: MatchState, playerId: PlayerId): MatchPlayerState {

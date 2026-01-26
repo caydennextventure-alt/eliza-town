@@ -1,4 +1,5 @@
 import type { Phase, PlayerId, RequiredAction, Role } from '../types';
+import { getRoundCount, ROUND_DURATION_MS } from '../rounds';
 import { assignRoles } from './roleAssign';
 
 export type WinningTeam = 'VILLAGERS' | 'WEREWOLVES';
@@ -22,6 +23,7 @@ export type MatchPlayerState = {
   role: Role;
   alive: boolean;
   ready: boolean;
+  missedResponses: number;
   eliminatedAt?: number;
   revealedRole?: boolean;
   doctorLastProtectedPlayerId?: PlayerId;
@@ -52,15 +54,43 @@ export type MatchState = {
   playersAlive: number;
 };
 
+const parseEnvMs = (value?: string): number | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const rounded = Math.round(parsed);
+  if (rounded < 0) {
+    return undefined;
+  }
+  return rounded;
+};
+
+const readPhaseDurationMs = (phase: Phase, fallback: number): number => {
+  const raw = process.env[`WEREWOLF_PHASE_MS_${phase}`];
+  const parsed = parseEnvMs(raw);
+  if (parsed !== undefined) {
+    return parsed;
+  }
+  const roundCount = getRoundCount(phase);
+  if (roundCount > 0) {
+    return roundCount * ROUND_DURATION_MS;
+  }
+  return fallback;
+};
+
 export const PHASE_DURATIONS_MS: Record<Phase, number> = {
-  LOBBY: 30_000,
-  NIGHT: 45_000,
-  DAY_ANNOUNCE: 10_000,
-  DAY_OPENING: 120_000,
-  DAY_DISCUSSION: 90_000,
-  DAY_VOTE: 45_000,
-  DAY_RESOLUTION: 10_000,
-  ENDED: 0,
+  LOBBY: readPhaseDurationMs('LOBBY', 10_000),
+  NIGHT: readPhaseDurationMs('NIGHT', 60_000),
+  DAY_ANNOUNCE: readPhaseDurationMs('DAY_ANNOUNCE', 10_000),
+  DAY_OPENING: readPhaseDurationMs('DAY_OPENING', 15_000),
+  DAY_DISCUSSION: readPhaseDurationMs('DAY_DISCUSSION', 45_000),
+  DAY_VOTE: readPhaseDurationMs('DAY_VOTE', 15_000),
+  DAY_RESOLUTION: readPhaseDurationMs('DAY_RESOLUTION', 10_000),
+  ENDED: readPhaseDurationMs('ENDED', 0),
 };
 
 const INITIAL_PUBLIC_SUMMARY = 'Match created. Waiting in lobby.';
@@ -83,6 +113,7 @@ export function createInitialMatchState(players: MatchPlayerSeed[], now: number)
       role,
       alive: true,
       ready: false,
+      missedResponses: 0,
       seerHistory: [],
       nightAction: {},
     };

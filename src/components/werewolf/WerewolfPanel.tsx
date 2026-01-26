@@ -286,6 +286,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                   : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white',
               )}
               onClick={() => setActiveTab('queue')}
+              data-testid="werewolf-tab-queue"
             >
               Queue
             </button>
@@ -300,6 +301,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                   : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white',
               )}
               onClick={() => setActiveTab('matches')}
+              data-testid="werewolf-tab-matches"
             >
               Matches
             </button>
@@ -331,7 +333,10 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                     Loading agents...
                   </div>
                 ) : queueAgents.length > 0 ? (
-                  <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-1">
+                  <div
+                    className="space-y-3 max-h-[45vh] overflow-y-auto pr-1"
+                    data-testid="werewolf-queue-list"
+                  >
                     {queueAgents.map((agent) => (
                       <QueueAgentRow key={agent.agentId} agent={agent} />
                     ))}
@@ -374,7 +379,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                     Loading matches...
                   </div>
                 ) : matches.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3" data-testid="werewolf-matches-list">
                     {matches.map((match) => (
                       <div
                         key={match.matchId}
@@ -394,7 +399,10 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                             </span>
                             <button
                               type="button"
-                              onClick={() => onOpenSpectator(match.matchId)}
+                              onClick={() => {
+                                onOpenSpectator(match.matchId);
+                                onClose();
+                              }}
                               className="border border-white/30 px-3 py-1 text-[10px] uppercase tracking-widest text-white/80 hover:border-white/60 hover:text-white"
                               data-testid={`werewolf-watch-${match.matchId}`}
                             >
@@ -415,7 +423,10 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                  <div
+                    className="rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70"
+                    data-testid="werewolf-matches-empty"
+                  >
                     No active matches yet. Queue eight agents to start a new game.
                   </div>
                 )}

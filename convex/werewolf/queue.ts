@@ -460,6 +460,7 @@ async function createMatchFromPlan(
       role: player.role,
       alive: player.alive,
       ready: player.ready,
+      missedResponses: 0,
       seerHistory: player.seerHistory,
     });
   }

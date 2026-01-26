@@ -4,6 +4,7 @@
 - Added an explicit close button to the Help modal so it can be dismissed without relying on overlay/ESC behavior.
 - Guarded the music toggle so it does not throw when audio is unavailable or not yet loaded.
 - Added `data-testid` hooks across interactive UI controls for stable Playwright selectors.
+- Added `data-testid` hooks to the Werewolf panel/spectator views for queue, match, roster, transcript, and dialog assertions.
 
 ## Test Environment Notes
 - E2E runs against a real local Convex backend and ElizaOS server; no mock backend is used.

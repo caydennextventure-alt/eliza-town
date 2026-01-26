@@ -98,7 +98,7 @@ describe('advanceMatchPhase', () => {
     expect(narratorEvent.payload.text).toBe(expectedSummary);
   });
 
-  it('advances day vote early when all votes are in', () => {
+  it('does not advance day vote early when all votes are in', () => {
     let state = withPhase(createInitialMatchState(playerSeeds, baseTime), 'DAY_VOTE', baseTime);
     state = { ...state, dayNumber: 1 };
 
@@ -116,12 +116,12 @@ describe('advanceMatchPhase', () => {
     const now = state.phaseStartedAt + 1;
     const result = advanceMatchPhase(state, now);
 
-    expect(result.advanced).toBe(true);
-    expect(result.nextState.phase).toBe('DAY_RESOLUTION');
-    expect(result.nextState.phaseEndsAt).toBe(now + PHASE_DURATIONS_MS.DAY_RESOLUTION);
+    expect(result.advanced).toBe(false);
+    expect(result.nextState.phase).toBe('DAY_VOTE');
+    expect(result.nextState.phaseEndsAt).toBe(state.phaseEndsAt);
   });
 
-  it('advances day opening early when all openings are in', () => {
+  it('does not advance day opening early when all openings are in', () => {
     let state = withPhase(createInitialMatchState(playerSeeds, baseTime), 'DAY_OPENING', baseTime);
     state = { ...state, dayNumber: 1 };
 
@@ -139,9 +139,9 @@ describe('advanceMatchPhase', () => {
     const now = state.phaseStartedAt + 1;
     const result = advanceMatchPhase(state, now);
 
-    expect(result.advanced).toBe(true);
-    expect(result.nextState.phase).toBe('DAY_DISCUSSION');
-    expect(result.nextState.phaseEndsAt).toBe(now + PHASE_DURATIONS_MS.DAY_DISCUSSION);
+    expect(result.advanced).toBe(false);
+    expect(result.nextState.phase).toBe('DAY_OPENING');
+    expect(result.nextState.phaseEndsAt).toBe(state.phaseEndsAt);
   });
 
   it('does not advance day opening early when openings are missing', () => {
@@ -166,7 +166,7 @@ describe('advanceMatchPhase', () => {
     expect(result.nextState.phase).toBe('DAY_OPENING');
   });
 
-  it('advances lobby early when all players are ready', () => {
+  it('does not advance lobby early when all players are ready', () => {
     let state = withPhase(createInitialMatchState(playerSeeds, baseTime), 'LOBBY', baseTime);
     state = {
       ...state,
@@ -176,9 +176,9 @@ describe('advanceMatchPhase', () => {
     const now = state.phaseStartedAt + 1;
     const result = advanceMatchPhase(state, now);
 
-    expect(result.advanced).toBe(true);
-    expect(result.nextState.phase).toBe('NIGHT');
-    expect(result.nextState.phaseEndsAt).toBe(now + PHASE_DURATIONS_MS.NIGHT);
+    expect(result.advanced).toBe(false);
+    expect(result.nextState.phase).toBe('LOBBY');
+    expect(result.nextState.phaseEndsAt).toBe(state.phaseEndsAt);
   });
 
   it('does not advance lobby early when players are not all ready', () => {

@@ -22,6 +22,7 @@ import { distance } from '../util/geometry';
 import { anyApi } from 'convex/server';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
+import { noisyLog, noisyWarn } from './logging';
 
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
@@ -55,7 +56,7 @@ export class Agent {
   tick(game: Game, now: number) {
     const player = game.world.players.get(this.playerId);
     if (!player) {
-      console.warn(`Agent ${this.id} missing player ${this.playerId}, removing agent.`);
+      noisyWarn(`Agent ${this.id} missing player ${this.playerId}, removing agent.`);
       for (const conversation of [...game.world.conversations.values()]) {
         if (conversation.participants.has(this.playerId)) {
           conversation.stop(game, now);
@@ -75,7 +76,7 @@ export class Agent {
         // Wait on the operation to finish.
         return;
       }
-      console.log(`Timing out ${JSON.stringify(this.inProgressOperation)}`);
+      noisyLog(`Timing out ${JSON.stringify(this.inProgressOperation)}`);
       delete this.inProgressOperation;
     }
     const conversation = game.world.playerConversation(player);
@@ -109,7 +110,7 @@ export class Agent {
     // Check to see if we have a conversation we need to remember.
     if (this.toRemember) {
       // Fire off the action to remember the conversation.
-      console.log(`Agent ${this.id} remembering conversation ${this.toRemember}`);
+      noisyLog(`Agent ${this.id} remembering conversation ${this.toRemember}`);
       this.startOperation(game, now, 'agentRememberConversation', {
         worldId: game.worldId,
         playerId: this.playerId,
@@ -128,14 +129,14 @@ export class Agent {
         // Accept a conversation with another agent with some probability and with
         // a human unconditionally.
         if (otherPlayer.human || Math.random() < INVITE_ACCEPT_PROBABILITY) {
-          console.log(`Agent ${player.id} accepting invite from ${otherPlayer.id}`);
+          noisyLog(`Agent ${player.id} accepting invite from ${otherPlayer.id}`);
           conversation.acceptInvite(game, player);
           // Stop moving so we can start walking towards the other player.
           if (player.pathfinding) {
             delete player.pathfinding;
           }
         } else {
-          console.log(`Agent ${player.id} rejecting invite from ${otherPlayer.id}`);
+          noisyLog(`Agent ${player.id} rejecting invite from ${otherPlayer.id}`);
           conversation.rejectInvite(game, now, player);
         }
         return;
@@ -143,7 +144,7 @@ export class Agent {
       if (member.status.kind === 'walkingOver') {
         // Leave a conversation if we've been waiting for too long.
         if (member.invited + INVITE_TIMEOUT < now) {
-          console.log(`Giving up on invite to ${otherPlayer.id}`);
+          noisyLog(`Giving up on invite to ${otherPlayer.id}`);
           conversation.leave(game, now, player);
           return;
         }
@@ -169,7 +170,7 @@ export class Agent {
               y: Math.floor((player.position.y + otherPlayer.position.y) / 2),
             };
           }
-          console.log(`Agent ${player.id} walking towards ${otherPlayer.id}...`, destination);
+          noisyLog(`Agent ${player.id} walking towards ${otherPlayer.id}...`, destination);
           movePlayer(game, now, player, destination);
         }
         return;
@@ -186,7 +187,7 @@ export class Agent {
           // Send the first message if we're the initiator or if we've been waiting for too long.
           if (isInitiator || awkwardDeadline < now) {
             // Grab the lock on the conversation and send a "start" message.
-            console.log(`${player.id} initiating conversation with ${otherPlayer.id}.`);
+            noisyLog(`${player.id} initiating conversation with ${otherPlayer.id}.`);
             const messageUuid = crypto.randomUUID();
             conversation.setIsTyping(now, player, messageUuid);
             this.startOperation(game, now, 'agentGenerateMessage', {
@@ -207,7 +208,7 @@ export class Agent {
         // See if the conversation has been going on too long and decide to leave.
         const tooLongDeadline = started + MAX_CONVERSATION_DURATION;
         if (tooLongDeadline < now || conversation.numMessages > MAX_CONVERSATION_MESSAGES) {
-          console.log(`${player.id} leaving conversation with ${otherPlayer.id}.`);
+          noisyLog(`${player.id} leaving conversation with ${otherPlayer.id}.`);
           const messageUuid = crypto.randomUUID();
           conversation.setIsTyping(now, player, messageUuid);
           this.startOperation(game, now, 'agentGenerateMessage', {
@@ -234,7 +235,7 @@ export class Agent {
           return;
         }
         // Grab the lock and send a message!
-        console.log(`${player.id} continuing conversation with ${otherPlayer.id}.`);
+        noisyLog(`${player.id} continuing conversation with ${otherPlayer.id}.`);
         const messageUuid = crypto.randomUUID();
         conversation.setIsTyping(now, player, messageUuid);
         this.startOperation(game, now, 'agentGenerateMessage', {
@@ -263,7 +264,7 @@ export class Agent {
       );
     }
     const operationId = game.allocId('operations');
-    console.log(`Agent ${this.id} starting operation ${name} (${operationId})`);
+    noisyLog(`Agent ${this.id} starting operation ${name} (${operationId})`);
     game.scheduleOperation(name, { operationId, ...args } as any);
     this.inProgressOperation = {
       name,

@@ -7,6 +7,7 @@ import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
 import { SerializedPlayer } from '../aiTown/player';
 import { memoryFields } from './schema';
+import { noisyDebug } from '../util/noisyLog';
 
 // How long to wait before updating a memory's last access time.
 export const MEMORY_ACCESS_THROTTLE = 300_000; // In ms
@@ -270,7 +271,7 @@ async function calculateImportance(description: string) {
     importance = +(importanceRaw.match(/\d+/)?.[0] ?? NaN);
   }
   if (isNaN(importance)) {
-    console.debug('Could not parse memory importance from: ', importanceRaw);
+    noisyDebug('Could not parse memory importance from: ', importanceRaw);
     importance = 5;
   }
   return importance;
@@ -353,8 +354,8 @@ async function reflectOnMemories(
   if (!shouldReflect) {
     return false;
   }
-  console.debug('sum of importance score = ', sumOfImportanceScore);
-  console.debug('Reflecting...');
+  noisyDebug('sum of importance score = ', sumOfImportanceScore);
+  noisyDebug('Reflecting...');
   const prompt = ['[no prose]', '[Output only JSON]', `You are ${name}, statements about you:`];
   memories.forEach((memory, idx) => {
     prompt.push(`Statement ${idx}: ${memory.description}`);
@@ -382,7 +383,7 @@ async function reflectOnMemories(
       const relatedMemoryIds = item.statementIds.map((idx: number) => memories[idx]._id);
       const importance = await calculateImportance(item.insight);
       const { embedding } = await fetchEmbedding(item.insight);
-      console.debug('adding reflection memory...', item.insight);
+      noisyDebug('adding reflection memory...', item.insight);
       return {
         description: item.insight,
         embedding,
@@ -398,7 +399,7 @@ async function reflectOnMemories(
     });
   } catch (e) {
     console.error('error saving or parsing reflection', e);
-    console.debug('reflection', reflection);
+    noisyDebug('reflection', reflection);
     return false;
   }
   return true;

@@ -4,6 +4,16 @@ const OPENAI_EMBEDDING_DIMENSION = 1536;
 const TOGETHER_EMBEDDING_DIMENSION = 768;
 const OLLAMA_EMBEDDING_DIMENSION = 1024;
 const DEFAULT_LLM_REQUEST_TIMEOUT_MS = 20_000;
+const shouldLogLlm = () => {
+  const raw = process.env.LLM_LOGS ?? process.env.AITOWN_NOISY_LOGS ?? '';
+  return /^(1|true|yes)$/i.test(raw);
+};
+const llmDebug = (...args: unknown[]) => {
+  if (!shouldLogLlm()) {
+    return;
+  }
+  console.debug(...args);
+};
 const getRequestTimeoutMs = () => {
   const raw = process.env.LLM_REQUEST_TIMEOUT_MS;
   const parsed = raw ? Number(raw) : Number.NaN;
@@ -170,7 +180,7 @@ export async function chatCompletion(
   body.model = body.model ?? config.chatModel;
   const stopWords = body.stop ? (typeof body.stop === 'string' ? [body.stop] : body.stop) : [];
   if (config.stopWords) stopWords.push(...config.stopWords);
-  console.log(body);
+  llmDebug(body);
   const {
     result: content,
     retries,
@@ -208,7 +218,7 @@ export async function chatCompletion(
       if (content === undefined) {
         throw new Error('Unexpected result from OpenAI: ' + JSON.stringify(json));
       }
-      console.log(content);
+      llmDebug(content);
       return content;
     }
   });
@@ -230,7 +240,7 @@ export async function tryPullOllama(model: string, error: string) {
       },
       body: JSON.stringify({ name: model }),
     });
-    console.log('Pull response', await pullResp.text());
+    llmDebug('Pull response', await pullResp.text());
     throw { retry: true, error: `Dynamically pulled model. Original error: ${error}` };
   }
 }
@@ -343,7 +353,7 @@ export async function retryWithBackoff<T>(
       const retryError = e as RetryError;
       if (i < RETRY_BACKOFF.length) {
         if (retryError.retry) {
-          console.log(
+          llmDebug(
             `Attempt ${i + 1} failed, waiting ${RETRY_BACKOFF[i]}ms to retry...`,
             Date.now(),
           );

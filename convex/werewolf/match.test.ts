@@ -208,7 +208,7 @@ describe('applyMatchWolfChat', () => {
 });
 
 describe('applyMatchWolfKill', () => {
-  it('records the wolf kill target for all wolves and emits a narrator event', () => {
+  it('records the wolf kill target for the acting wolf and emits a narrator event', () => {
     const state = createInitialMatchState(playerSeeds, baseTime);
     state.phase = 'NIGHT';
     const wolves = state.players.filter((player) => player.role === 'WEREWOLF');
@@ -226,9 +226,10 @@ describe('applyMatchWolfKill', () => {
     });
 
     const updatedWolves = result.nextState.players.filter((player) => player.role === 'WEREWOLF');
-    for (const wolf of updatedWolves) {
-      expect(wolf.nightAction.wolfKillTargetPlayerId).toBe(target.playerId);
-    }
+    const updatedActor = updatedWolves.find((wolf) => wolf.playerId === wolves[0].playerId);
+    const updatedOther = updatedWolves.find((wolf) => wolf.playerId === wolves[1].playerId);
+    expect(updatedActor?.nightAction.wolfKillTargetPlayerId).toBe(target.playerId);
+    expect(updatedOther?.nightAction.wolfKillTargetPlayerId).toBeUndefined();
     expect(result.event.type).toBe('NARRATOR');
     if (result.event.type !== 'NARRATOR') {
       throw new Error('Expected a narrator event');

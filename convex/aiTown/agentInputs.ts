@@ -2,12 +2,14 @@ import { v } from 'convex/values';
 import { agentId, conversationId, parseGameId } from './ids';
 import { Player, activity } from './player';
 import { Conversation, conversationInputs } from './conversation';
+import '../util/noisyLogConfig';
 import { movePlayer } from './movement';
 import { inputHandler } from './inputHandler';
 import { point } from '../util/types';
 import { Descriptions } from '../../data/characters';
 import { AgentDescription } from './agentDescription';
 import { Agent } from './agent';
+import { noisyDebug, noisyWarn } from './logging';
 
 export const agentInputs = {
   finishRememberConversation: inputHandler({
@@ -25,7 +27,7 @@ export const agentInputs = {
         !agent.inProgressOperation ||
         agent.inProgressOperation.operationId !== args.operationId
       ) {
-        console.debug(`Agent ${agentId} isn't remembering ${args.operationId}`);
+        noisyDebug(`Agent ${agentId} isn't remembering ${args.operationId}`);
       } else {
         delete agent.inProgressOperation;
         delete agent.toRemember;
@@ -51,7 +53,7 @@ export const agentInputs = {
         !agent.inProgressOperation ||
         agent.inProgressOperation.operationId !== args.operationId
       ) {
-        console.debug(`Agent ${agentId} didn't have ${args.operationId} in progress`);
+        noisyDebug(`Agent ${agentId} didn't have ${args.operationId} in progress`);
         return null;
       }
       delete agent.inProgressOperation;
@@ -101,7 +103,7 @@ export const agentInputs = {
         !agent.inProgressOperation ||
         agent.inProgressOperation.operationId !== args.operationId
       ) {
-        console.debug(`Agent ${agentId} wasn't sending a message ${args.operationId}`);
+        noisyDebug(`Agent ${agentId} wasn't sending a message ${args.operationId}`);
         return null;
       }
       delete agent.inProgressOperation;
@@ -127,20 +129,20 @@ export const agentInputs = {
       const agentId = parseGameId('agents', args.agentId);
       const agent = game.world.agents.get(agentId);
       if (!agent) {
-        console.warn(`Couldn't find agent for abort: ${agentId}`);
+        noisyWarn(`Couldn't find agent for abort: ${agentId}`);
         return null;
       }
       if (
         !agent.inProgressOperation ||
         agent.inProgressOperation.operationId !== args.operationId
       ) {
-        console.debug(`Agent ${agentId} wasn't running ${args.operationId}`);
+        noisyDebug(`Agent ${agentId} wasn't running ${args.operationId}`);
         return null;
       }
       delete agent.inProgressOperation;
       const player = game.world.players.get(agent.playerId);
       if (!player) {
-        console.warn(`Couldn't find player for abort: ${agent.playerId}`);
+        noisyWarn(`Couldn't find player for abort: ${agent.playerId}`);
         return null;
       }
       const conversationId = parseGameId('conversations', args.conversationId);

@@ -8,3 +8,4 @@
 - Agent removal: `e2e/agent-list.spec.ts`
 - Conversations (invite, accept, reject, message, leave): `e2e/conversation.spec.ts`
 - Movement via in-game action: `e2e/movement.spec.ts`
+- Full Werewolf match (queue 8 agents, watch to completion): `e2e/werewolf-game.spec.ts`

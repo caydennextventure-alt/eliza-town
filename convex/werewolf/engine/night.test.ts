@@ -102,4 +102,44 @@ describe('night actions', () => {
     expect(eliminated.eliminatedAt).toBe(baseTime + 45_000);
     expect(resolution.nextState.playersAlive).toBe(state.playersAlive - 1);
   });
+
+  it('eliminates players with repeated missed responses at night resolution', () => {
+    let state = createInitialMatchState(playerSeeds, baseTime);
+    state.phase = 'NIGHT';
+
+    const wolf = findPlayerByRole(state, 'WEREWOLF');
+    const timeoutPlayer = state.players.find(
+      (player) => player.role !== 'WEREWOLF' && player.playerId !== wolf.playerId,
+    );
+    if (!timeoutPlayer) {
+      throw new Error('Missing timeout target');
+    }
+    const wolfTarget = state.players.find(
+      (player) =>
+        player.role !== 'WEREWOLF' && player.playerId !== timeoutPlayer.playerId,
+    );
+    if (!wolfTarget) {
+      throw new Error('Missing wolf kill target');
+    }
+
+    state = {
+      ...state,
+      players: state.players.map((player) =>
+        player.playerId === timeoutPlayer.playerId
+          ? { ...player, missedResponses: 4 }
+          : player,
+      ),
+    };
+    state = applyNightAction(state, {
+      type: 'WOLF_KILL',
+      playerId: wolf.playerId,
+      targetPlayerId: wolfTarget.playerId,
+    });
+
+    const resolution = resolveNight(state, baseTime + 45_000);
+
+    expect(resolution.timeoutEliminatedPlayerIds).toEqual([timeoutPlayer.playerId]);
+    expect(findPlayerById(resolution.nextState, timeoutPlayer.playerId).alive).toBe(false);
+    expect(findPlayerById(resolution.nextState, wolfTarget.playerId).alive).toBe(false);
+  });
 });

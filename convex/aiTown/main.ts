@@ -2,13 +2,17 @@ import { ConvexError, v } from 'convex/values';
 import { DatabaseReader, MutationCtx, internalAction, mutation, query } from '../_generated/server';
 import { insertInput } from './insertInput';
 import { Game } from './game';
+import '../util/noisyLogConfig';
 import { anyApi } from 'convex/server';
 import { sleep } from '../util/sleep';
 import { Id } from '../_generated/dataModel';
 import { ENGINE_ACTION_DURATION } from '../constants';
+import { noisyDebug } from './logging';
 
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
+const shouldDisableAgentOperations = () =>
+  /^(1|true|yes)$/i.test(process.env.AITOWN_DISABLE_AGENT_OPERATIONS ?? '');
 
 export async function createEngine(ctx: MutationCtx) {
   const now = Date.now();
@@ -102,6 +106,7 @@ export const runStep = internalAction({
         generationNumber: args.generationNumber,
       });
       const game = new Game(engine, args.worldId, gameState);
+      game.disableAgentOperations = shouldDisableAgentOperations();
 
       let now = Date.now();
       const deadline = now + args.maxDuration;
@@ -119,11 +124,11 @@ export const runStep = internalAction({
     } catch (e: unknown) {
       if (e instanceof ConvexError) {
         if (e.data.kind === 'engineNotRunning') {
-          console.debug(`Engine is not running: ${e.message}`);
+          noisyDebug(`Engine is not running: ${e.message}`);
           return;
         }
         if (e.data.kind === 'generationNumber') {
-          console.debug(`Generation number mismatch: ${e.message}`);
+          noisyDebug(`Generation number mismatch: ${e.message}`);
           return;
         }
       }

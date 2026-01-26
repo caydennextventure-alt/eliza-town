@@ -498,8 +498,12 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-widest text-white/50">Phase</div>
-                <div className="text-lg mt-1">{state.phase}</div>
-                <div className="text-xs text-white/60 mt-1">Day {state.dayNumber}</div>
+                <div className="text-lg mt-1" data-testid="werewolf-spectator-phase">
+                  {state.phase}
+                </div>
+                <div className="text-xs text-white/60 mt-1" data-testid="werewolf-spectator-day">
+                  Day {state.dayNumber}
+                </div>
               </div>
               <div className="border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-widest text-white/50">Time remaining</div>
@@ -508,19 +512,20 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                     'text-lg mt-1',
                     countdown?.isExpired ? 'text-red-200' : 'text-emerald-200',
                   )}
+                  data-testid="werewolf-spectator-countdown"
                 >
                   {countdown?.label ?? '--:--'}
                 </div>
-                <div className="text-xs text-white/60 mt-1">
+                <div className="text-xs text-white/60 mt-1" data-testid="werewolf-spectator-ends">
                   Ends {formatTimeLabel(state.phaseEndsAt)}
                 </div>
               </div>
               <div className="border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-widest text-white/50">Players</div>
-                <div className="text-lg mt-1">
+                <div className="text-lg mt-1" data-testid="werewolf-spectator-players-alive">
                   {aliveCount}/{players.length} alive
                 </div>
-                <div className="text-xs text-white/60 mt-1">
+                <div className="text-xs text-white/60 mt-1" data-testid="werewolf-spectator-match-id">
                   Match {formatMatchId(state.matchId)}
                 </div>
               </div>
@@ -530,7 +535,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
               <div className="text-[10px] uppercase tracking-widest text-white/50">
                 Public summary
               </div>
-              <p className="mt-2 text-sm text-white/80">
+              <p className="mt-2 text-sm text-white/80" data-testid="werewolf-spectator-summary">
                 {state.publicSummary || 'Awaiting the next town crier update.'}
               </p>
             </div>
@@ -539,11 +544,14 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
               <div className="space-y-4">
                 <div className="rounded border border-white/10 bg-white/5 px-4 py-3">
                   <div className="text-[10px] uppercase tracking-widest text-white/50">Roster</div>
-                  <div className="mt-2 space-y-2 text-sm">
+                  <div className="mt-2 space-y-2 text-sm" data-testid="werewolf-roster">
                     {players.map((player) => (
                       <div
                         key={player.playerId}
                         className="flex items-center justify-between border-b border-white/10 pb-2 last:border-b-0 last:pb-0"
+                        data-testid={`werewolf-roster-player-${player.playerId}`}
+                        data-player-id={player.playerId}
+                        data-seat={player.seat}
                       >
                         <div>
                           <div className="text-white/90">
@@ -572,10 +580,15 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                 <div className="rounded border border-white/10 bg-white/5 px-4 py-3">
                   <div className="text-[10px] uppercase tracking-widest text-white/50">Vote tally</div>
                   {state.phase === 'DAY_VOTE' ? (
-                    <div className="mt-2 space-y-2 text-sm">
+                    <div className="mt-2 space-y-2 text-sm" data-testid="werewolf-vote-tally">
                       {voteTally.length > 0 ? (
                         voteTally.map((entry) => (
-                          <div key={entry.targetPlayerId ?? 'abstain'} className="space-y-1">
+                          <div
+                            key={entry.targetPlayerId ?? 'abstain'}
+                            className="space-y-1"
+                            data-testid="werewolf-vote-entry"
+                            data-target-id={entry.targetPlayerId ?? 'abstain'}
+                          >
                             <div className="flex items-center justify-between">
                               <span>{entry.targetLabel}</span>
                               <span className="text-white/70">{entry.count}</span>
@@ -600,7 +613,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                   <div className="text-[10px] uppercase tracking-widest text-white/50">
                     Key moments
                   </div>
-                  <div className="mt-2 space-y-2 text-sm">
+                  <div className="mt-2 space-y-2 text-sm" data-testid="werewolf-key-moments">
                     {keyMoments.length > 0 ? (
                       keyMoments.map((moment) => (
                         <div key={moment.eventId} className="text-white/80">
@@ -619,7 +632,10 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
 
               <div className="rounded border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-widest text-white/50">Transcript</div>
-                <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-2 text-sm">
+                <div
+                  className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-2 text-sm"
+                  data-testid="werewolf-transcript"
+                >
                   {transcriptEntries.length > 0 ? (
                     transcriptEntries.map((entry) => (
                       <div
@@ -631,6 +647,8 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                           entry.kind === 'system' && 'bg-black/20',
                           entry.kind === 'narrator' && 'bg-emerald-500/10',
                         )}
+                        data-testid="werewolf-transcript-entry"
+                        data-event-id={entry.eventId}
                       >
                         <div className="flex items-center justify-between text-[10px] uppercase text-white/50">
                           <span>{entry.title}</span>
@@ -652,11 +670,17 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                 <div className="mt-1 text-[10px] text-white/50">
                   Public messages by player. Wolf chat appears in spoiler mode.
                 </div>
-                <div className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-2 text-sm">
+                <div
+                  className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-2 text-sm"
+                  data-testid="werewolf-player-dialogs"
+                >
                   {playerDialogs.map((dialog) => (
                     <div
                       key={dialog.playerId}
                       className="border border-white/10 bg-black/20 px-3 py-2"
+                      data-testid={`werewolf-player-dialog-${dialog.playerId}`}
+                      data-player-id={dialog.playerId}
+                      data-seat={dialog.seat}
                     >
                       <div className="flex items-center justify-between text-[10px] uppercase text-white/50">
                         <span>
@@ -675,6 +699,8 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                                   ? 'border-amber-200/60'
                                   : 'border-emerald-200/60',
                               )}
+                              data-testid="werewolf-player-dialog-message"
+                              data-event-id={message.eventId}
                             >
                               <div className="flex items-center justify-between text-[10px] uppercase text-white/50">
                                 <span>{message.channel === 'wolf' ? 'Wolf chat' : 'Public'}</span>

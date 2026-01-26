@@ -12,10 +12,12 @@ export type NightResolution = {
   wolfKillTargetPlayerId?: PlayerId;
   protectedPlayerId?: PlayerId;
   eliminatedPlayerId?: PlayerId;
+  timeoutEliminatedPlayerIds: PlayerId[];
   seerResult?: SeerInspection;
 };
 
 const DEFAULT_WOLF_KILL_SEED = 0x6d2b79f5;
+const MAX_MISSED_RESPONSES = 4;
 
 export function applyNightAction(state: MatchState, command: NightActionCommand): MatchState {
   assertNightPhase(state, 'Night actions');
@@ -40,7 +42,7 @@ export function applyNightAction(state: MatchState, command: NightActionCommand)
       }
 
       const nextPlayers = state.players.map((player) => {
-        if (player.role !== 'WEREWOLF' || !player.alive) {
+        if (player.playerId !== actor.playerId) {
           return player;
         }
         return {
@@ -148,10 +150,20 @@ export function resolveNight(state: MatchState, now: number): NightResolution {
       ? wolfKillTargetPlayerId
       : undefined;
 
+  const timeoutEliminatedPlayerIds = alivePlayers
+    .filter((player) => player.missedResponses >= MAX_MISSED_RESPONSES)
+    .map((player) => player.playerId)
+    .filter((playerId) => playerId !== eliminatedPlayerId);
+
+  const eliminatedSet = new Set<PlayerId>([
+    ...(eliminatedPlayerId ? [eliminatedPlayerId] : []),
+    ...timeoutEliminatedPlayerIds,
+  ]);
+
   const nextPlayers = state.players.map((player) => {
     const next: MatchPlayerState = { ...player, nightAction: {} };
 
-    if (player.playerId === eliminatedPlayerId) {
+    if (eliminatedSet.has(player.playerId)) {
       next.alive = false;
       next.eliminatedAt = now;
       next.revealedRole = true;
@@ -175,6 +187,7 @@ export function resolveNight(state: MatchState, now: number): NightResolution {
     wolfKillTargetPlayerId,
     protectedPlayerId,
     eliminatedPlayerId,
+    timeoutEliminatedPlayerIds,
     seerResult,
   };
 }
@@ -208,12 +221,21 @@ function selectWolfKillTarget(
     return undefined;
   }
 
+  const seedBase = `${state.startedAt}:${state.nightNumber}`;
   const wolfTargets = aliveWolves
     .map((player) => player.nightAction.wolfKillTargetPlayerId)
     .filter((target): target is PlayerId => typeof target === 'string');
 
   if (wolfTargets.length > 0) {
-    const targetId = selectDeterministicTarget(wolfTargets);
+    const voteCounts = new Map<PlayerId, number>();
+    for (const targetId of wolfTargets) {
+      voteCounts.set(targetId, (voteCounts.get(targetId) ?? 0) + 1);
+    }
+    const highestVoteCount = Math.max(...voteCounts.values());
+    const topTargets = Array.from(voteCounts.entries())
+      .filter(([, count]) => count === highestVoteCount)
+      .map(([targetId]) => targetId);
+    const targetId = selectRandomTarget(seedBase, topTargets, 'wolf-vote');
     const target = aliveById.get(targetId);
     if (!target || target.role === 'WEREWOLF') {
       throw new Error(`Wolf kill target ${targetId} is not eligible`);
@@ -221,27 +243,21 @@ function selectWolfKillTarget(
     return targetId;
   }
 
-  return selectDefaultWolfKillTarget(state, aliveNonWolves);
+  return selectRandomTarget(
+    seedBase,
+    aliveNonWolves.map((player) => player.playerId),
+    'wolf-default',
+  );
 }
 
-function selectDeterministicTarget(targets: PlayerId[]): PlayerId {
-  const uniqueTargets = Array.from(new Set(targets));
-  uniqueTargets.sort();
-  return uniqueTargets[0];
-}
-
-function selectDefaultWolfKillTarget(state: MatchState, candidates: MatchPlayerState[]): PlayerId {
-  let bestCandidate = candidates[0];
-  let bestScore = -1;
-  const seedBase = `${state.startedAt}:${state.nightNumber}`;
-
-  for (const candidate of candidates) {
-    const score = xxHash32(`${seedBase}:${candidate.playerId}`, DEFAULT_WOLF_KILL_SEED) >>> 0;
-    if (score > bestScore) {
-      bestScore = score;
-      bestCandidate = candidate;
-    }
+function selectRandomTarget(seedBase: string, candidates: PlayerId[], label: string): PlayerId {
+  if (candidates.length === 0) {
+    throw new Error('No eligible wolf kill targets available');
   }
-
-  return bestCandidate.playerId;
+  const uniqueTargets = Array.from(new Set(candidates));
+  uniqueTargets.sort();
+  const seed = `${seedBase}:${label}:${uniqueTargets.join(',')}`;
+  const hash = xxHash32(seed, DEFAULT_WOLF_KILL_SEED) >>> 0;
+  const index = hash % uniqueTargets.length;
+  return uniqueTargets[index];
 }

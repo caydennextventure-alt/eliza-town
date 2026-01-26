@@ -11,6 +11,7 @@ import { Game } from './game';
 import { stopPlayer, blocked, movePlayer } from './movement';
 import { ConversationMembership, serializedConversationMembership } from './conversationMembership';
 import { parseMap, serializeMap } from '../util/object';
+import { noisyLog, noisyWarn } from './logging';
 
 export class Conversation {
   id: GameId<'conversations'>;
@@ -51,7 +52,7 @@ export class Conversation {
       delete this.isTyping;
     }
     if (this.participants.size !== 2) {
-      console.warn(`Conversation ${this.id} has ${this.participants.size} participants`);
+      noisyWarn(`Conversation ${this.id} has ${this.participants.size} participants`);
       return;
     }
     const [playerId1, playerId2] = [...this.participants.keys()];
@@ -67,7 +68,7 @@ export class Conversation {
     // of them to "participating" and stop their paths.
     if (member1.status.kind === 'walkingOver' && member2.status.kind === 'walkingOver') {
       if (playerDistance < CONVERSATION_DISTANCE) {
-        console.log(`Starting conversation between ${player1.id} and ${player2.id}`);
+        noisyLog(`Starting conversation between ${player1.id} and ${player2.id}`);
 
         // First, stop the two players from moving.
         stopPlayer(player1);
@@ -126,16 +127,16 @@ export class Conversation {
     // Ensure the players still exist.
     if ([...game.world.conversations.values()].find((c) => c.participants.has(player.id))) {
       const reason = `Player ${player.id} is already in a conversation`;
-      console.log(reason);
+      noisyLog(reason);
       return { error: reason };
     }
     if ([...game.world.conversations.values()].find((c) => c.participants.has(invitee.id))) {
       const reason = `Player ${player.id} is already in a conversation`;
-      console.log(reason);
+      noisyLog(reason);
       return { error: reason };
     }
     const conversationId = game.allocId('conversations');
-    console.log(`Creating conversation ${conversationId}`);
+    noisyLog(`Creating conversation ${conversationId}`);
     game.world.conversations.set(
       conversationId,
       new Conversation({
@@ -266,7 +267,7 @@ export const conversationInputs = {
       if (!invitee) {
         throw new Error(`Invalid player ID: ${inviteeId}`);
       }
-      console.log(`Starting ${playerId} ${inviteeId}...`);
+      noisyLog(`Starting ${playerId} ${inviteeId}...`);
       const { conversationId, error } = Conversation.start(game, now, player, invitee);
       if (!conversationId) {
         // TODO: pass it back to the client for them to show an error.

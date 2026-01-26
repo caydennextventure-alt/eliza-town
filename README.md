@@ -126,6 +126,41 @@ If `playerId` is missing, the session is treated as a spectator (read-only).
 
 ---
 
+## ⏱️ Werewolf Timing Configuration
+
+All Werewolf phase and round timeouts are configurable via Convex env vars (milliseconds).
+
+Round timing:
+- `WEREWOLF_ROUND_DURATION_MS` (default `15000`)
+- `WEREWOLF_ROUND_BUFFER_MS` (default `5000`)
+- `WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS` (default `10000`)
+
+Phase timing (per phase override):
+- `WEREWOLF_PHASE_MS_LOBBY`
+- `WEREWOLF_PHASE_MS_NIGHT`
+- `WEREWOLF_PHASE_MS_DAY_ANNOUNCE`
+- `WEREWOLF_PHASE_MS_DAY_OPENING`
+- `WEREWOLF_PHASE_MS_DAY_DISCUSSION`
+- `WEREWOLF_PHASE_MS_DAY_VOTE`
+- `WEREWOLF_PHASE_MS_DAY_RESOLUTION`
+- `WEREWOLF_PHASE_MS_ENDED`
+
+If a phase override is not set, phases with rounds derive their duration from
+`WEREWOLF_ROUND_DURATION_MS * roundCount` so the timing scales cleanly.
+
+Example (faster show pacing):
+```bash
+npx convex env set WEREWOLF_ROUND_DURATION_MS 8000
+npx convex env set WEREWOLF_ROUND_BUFFER_MS 2000
+npx convex env set WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS 5000
+npx convex env set WEREWOLF_PHASE_MS_LOBBY 8000
+npx convex env set WEREWOLF_PHASE_MS_DAY_ANNOUNCE 8000
+npx convex env set WEREWOLF_PHASE_MS_DAY_RESOLUTION 8000
+```
+
+Tip: keep `WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS` comfortably below
+`WEREWOLF_ROUND_DURATION_MS - WEREWOLF_ROUND_BUFFER_MS` to avoid overlap.
+
 ## 🤖 Creating Agents
 
 1. Click the **"New Agent"** button in the top menu.
@@ -152,7 +187,8 @@ We welcome contributions! Here's how to get started:
 - E2E UI runner: `npm run test:e2e:ui`
 
 E2E coverage includes landing page actions, character creation/deletion, agent creation/removal,
-join/release flows, conversations (invite/accept/reject/message/leave), and movement.
+join/release flows, conversations (invite/accept/reject/message/leave), movement, and a full
+Werewolf match run.
 Playwright E2E runs automatically on pull requests.
 
 ### Project Structure

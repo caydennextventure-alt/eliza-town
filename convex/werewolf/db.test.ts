@@ -45,6 +45,7 @@ function basePlayerDoc(
     role: 'VILLAGER',
     alive: true,
     ready: false,
+    missedResponses: 0,
     seerHistory: [],
     ...overrides,
   };
