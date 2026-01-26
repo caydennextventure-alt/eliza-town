@@ -189,7 +189,10 @@ export default function Home() {
         <div className="w-full h-screen flex flex-col" data-testid="game-view">
           {/* Game area fills remaining space */}
           <div className="flex-grow relative overflow-hidden">
-            <Game onOpenSpectator={(matchId) => setSpectatorMatchId(matchId)} />
+            <Game
+              onOpenSpectator={(matchId) => setSpectatorMatchId(matchId)}
+              hideTestControls={werewolfPanelOpen || spectatorMatchId !== null}
+            />
           </div>
 
           {/* Minimal Overlay Controls for Game Mode */}

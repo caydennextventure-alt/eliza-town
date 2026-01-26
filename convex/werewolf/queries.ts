@@ -152,7 +152,10 @@ export function buildMatchStateView(params: {
   const viewer = resolveViewerContext(params.state.players, params.viewerPlayerId);
   const publicSummary =
     params.includeTranscriptSummary === false ? '' : params.state.publicSummary;
-  const revealAllRoles = params.includeSpoilers === true;
+  const revealAllRoles =
+    params.includeSpoilers === true ||
+    params.state.phase === 'ENDED' ||
+    params.state.endedAt !== undefined;
 
   const players = params.state.players.map((player) => ({
     playerId: player.playerId,

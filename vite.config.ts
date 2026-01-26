@@ -9,6 +9,9 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   base: '/ai-town',
   plugins: [react()],
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   resolve: {
     alias: [
       {
@@ -23,5 +26,8 @@ export default defineConfig({
   },
   server: {
     allowedHosts: ['ai-town-your-app-name.fly.dev', 'localhost', '127.0.0.1'],
+    fs: {
+      deny: ['vendor'],
+    },
   },
 });

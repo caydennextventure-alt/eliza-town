@@ -54,9 +54,10 @@ test.describe('werewolf full match', () => {
       .toBeGreaterThan(0);
 
     await expect(page.getByTestId('werewolf-roster')).toBeVisible();
-    await expect(page.getByTestId('werewolf-player-dialogs')).toBeVisible();
+    await expect(page.getByTestId('werewolf-key-moments')).toBeVisible();
+    await expect(page.getByTestId('werewolf-spectator-summary')).toBeVisible();
 
-    await expect(page.getByTestId('werewolf-spectator-phase')).toHaveText('ENDED', {
+    await expect(page.getByTestId('werewolf-spectator-phase')).toHaveText(/ended/i, {
       timeout: MATCH_END_TIMEOUT_MS,
     });
   });
