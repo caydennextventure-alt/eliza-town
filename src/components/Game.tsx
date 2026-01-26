@@ -18,9 +18,10 @@ export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
 type Props = {
   onOpenSpectator?: (matchId: string) => void;
+  hideTestControls?: boolean;
 };
 
-export default function Game({ onOpenSpectator }: Props) {
+export default function Game({ onOpenSpectator, hideTestControls = false }: Props) {
   const convex = useConvex();
   const [selectedElement, setSelectedElement] = useState<{
     kind: 'player';
@@ -69,11 +70,13 @@ export default function Game({ onOpenSpectator }: Props) {
     }
     await startConversation({ playerId: selectedElement.id, invitee: humanPlayerId });
   };
+  const showTestControls = isTestMode && !hideTestControls;
+
   return (
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
       <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
-        {isTestMode && (
+        {showTestControls && (
           <div
             className="absolute bottom-4 left-4 z-20 flex flex-col gap-3 bg-black/40 p-3 text-white text-xs max-w-[260px]"
             data-testid="test-controls"

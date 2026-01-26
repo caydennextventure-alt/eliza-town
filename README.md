@@ -71,6 +71,12 @@ Start the frontend development server:
 npm run dev
 ```
 
+Optional: seed default agents during init by setting `AUTO_SPAWN_AGENTS`:
+```bash
+AUTO_SPAWN_AGENTS=1 npm run dev
+```
+Use a number to control the count, e.g. `AUTO_SPAWN_AGENTS=5`.
+
 Visit **http://localhost:5173** to enter Eliza Town!
 
 ---

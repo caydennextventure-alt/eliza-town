@@ -16,6 +16,10 @@ npm install
 npm run dev
 ```
 
+Optional: seed default agents during init by setting `AUTO_SPAWN_AGENTS`.
+- `AUTO_SPAWN_AGENTS=1 npm run dev` (spawns full default set)
+- `AUTO_SPAWN_AGENTS=5 npm run dev` (spawns 5 defaults)
+
 ## Validation (run after every change)
 
 ```bash

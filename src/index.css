@@ -35,6 +35,18 @@
   letter-spacing: 0.02em;
 }
 
+.pixelated {
+  image-rendering: pixelated;
+}
+
+.werewolf-dance {
+  animation: werewolf-dance 0.18s ease-in-out infinite;
+}
+
+.werewolf-dance > * {
+  image-rendering: pixelated;
+}
+
 .font-system {
   font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 }
@@ -81,6 +93,18 @@
   /* Grid Colors */
   --stardew-grid: rgba(139, 107, 74, 0.15);
   --stardew-grid-hover: rgba(255, 217, 61, 0.4);
+}
+
+@keyframes werewolf-dance {
+  0% {
+    transform: translateX(-3px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  100% {
+    transform: translateX(-3px);
+  }
 }
 
 body {

@@ -38,10 +38,16 @@ type Props = {
 };
 
 type TabKey = 'queue' | 'matches';
+type MatchesFilter = 'ACTIVE' | 'ENDED' | 'ALL';
 
 const tabButtonBase =
   'rounded-sm border border-white/20 px-3 py-1 text-xs uppercase tracking-widest transition-colors';
 const MATCH_PLAYER_COUNT = 8;
+const matchesFilters: Array<{ id: MatchesFilter; label: string }> = [
+  { id: 'ACTIVE', label: 'Live' },
+  { id: 'ENDED', label: 'Replay' },
+  { id: 'ALL', label: 'All' },
+];
 
 type QueueAgent = {
   agentId: string;
@@ -198,6 +204,7 @@ function QueueAgentRow({ agent }: QueueAgentRowProps) {
 
 export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('queue');
+  const [matchesFilter, setMatchesFilter] = useState<MatchesFilter>('ACTIVE');
   const { characters } = useCharacters();
   const worldStatus = useQuery(api.world.defaultWorldStatus);
   const worldId = worldStatus?.worldId;
@@ -205,7 +212,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
   const humanTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   const matchesList = useQuery(
     api.werewolf.matchesList,
-    activeTab === 'matches' ? { status: 'ACTIVE' } : 'skip',
+    activeTab === 'matches' ? { status: matchesFilter } : 'skip',
   );
 
   const characterByName = useMemo(
@@ -245,6 +252,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
   useEffect(() => {
     if (isOpen) {
       setActiveTab('queue');
+      setMatchesFilter('ACTIVE');
     }
   }, [isOpen]);
 
@@ -348,9 +356,29 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
             </div>
           ) : (
             <div className="space-y-3" role="tabpanel">
-              <h3 className="text-xl">Matches</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-xl">Matches</h3>
+                <div className="flex flex-wrap gap-2">
+                  {matchesFilters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setMatchesFilter(filter.id)}
+                      className={clsx(
+                        tabButtonBase,
+                        matchesFilter === filter.id
+                          ? 'bg-white/20 text-white'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white',
+                      )}
+                      data-testid={`werewolf-matches-filter-${filter.id.toLowerCase()}`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="text-sm text-white/70">
-                See active matches and their current phase.
+                Browse live matches and replays to relive the story.
               </p>
               <div className="rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
                 <div className="text-xs uppercase tracking-widest text-white/50">
@@ -366,7 +394,13 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-lg">Active matches</h4>
+                  <h4 className="text-lg">
+                    {matchesFilter === 'ACTIVE'
+                      ? 'Live matches'
+                      : matchesFilter === 'ENDED'
+                        ? 'Replay matches'
+                        : 'All matches'}
+                  </h4>
                   <span className="text-[10px] uppercase text-white/40">Newest first</span>
                 </div>
                 {matchesLoading ? (
@@ -389,6 +423,16 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
+                            <span
+                              className={clsx(
+                                'text-[10px] uppercase px-2 py-0.5 border',
+                                match.phase === 'ENDED'
+                                  ? 'border-amber-300/50 text-amber-200'
+                                  : 'border-emerald-300/50 text-emerald-200',
+                              )}
+                            >
+                              {match.phase === 'ENDED' ? 'Replay' : 'Live'}
+                            </span>
                             <span className="text-[10px] uppercase px-2 py-0.5 border border-white/20 text-white/70">
                               {match.phase}
                             </span>
@@ -398,7 +442,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                               className="border border-white/30 px-3 py-1 text-[10px] uppercase tracking-widest text-white/80 hover:border-white/60 hover:text-white"
                               data-testid={`werewolf-watch-${match.matchId}`}
                             >
-                              Watch
+                              {match.phase === 'ENDED' ? 'Replay' : 'Watch'}
                             </button>
                           </div>
                         </div>
@@ -416,7 +460,11 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                   </div>
                 ) : (
                   <div className="rounded border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-                    No active matches yet. Queue eight agents to start a new game.
+                    {matchesFilter === 'ACTIVE'
+                      ? 'No live matches yet. Queue eight agents to start a new game.'
+                      : matchesFilter === 'ENDED'
+                        ? 'No replays yet. Finish a match to view it here.'
+                        : 'No matches yet. Queue eight agents to start a new game.'}
                   </div>
                 )}
               </div>

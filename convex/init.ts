@@ -25,14 +25,17 @@ const init = mutation({
       );
       return;
     }
+    const requestedAgents = args.numAgents ?? resolveAutoSpawnCount();
+    if (requestedAgents <= 0) {
+      return;
+    }
     const shouldCreate = await shouldCreateAgents(
       ctx.db,
       worldStatus.worldId,
       worldStatus.engineId,
     );
     if (shouldCreate) {
-      const toCreate = args.numAgents !== undefined ? args.numAgents : Descriptions.length;
-      for (let i = 0; i < toCreate; i++) {
+      for (let i = 0; i < requestedAgents; i++) {
         await insertInput(ctx, worldStatus.worldId, 'createAgent', {
           descriptionIndex: i % Descriptions.length,
         });
@@ -41,6 +44,22 @@ const init = mutation({
   },
 });
 export default init;
+
+function resolveAutoSpawnCount() {
+  const raw = process.env.AUTO_SPAWN_AGENTS;
+  if (!raw) {
+    return 0;
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return Descriptions.length;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return parsed;
+}
 
 async function getOrCreateDefaultWorld(ctx: MutationCtx) {
   const now = Date.now();
