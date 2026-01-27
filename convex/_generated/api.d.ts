@@ -50,6 +50,7 @@ import type * as http from "../http.js";
 import type * as init from "../init.js";
 import type * as killSwitch from "../killSwitch.js";
 import type * as maintenance from "../maintenance.js";
+import type * as maps from "../maps.js";
 import type * as messages from "../messages.js";
 import type * as music from "../music.js";
 import type * as rateLimit from "../rateLimit.js";
@@ -115,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   init: typeof init;
   killSwitch: typeof killSwitch;
   maintenance: typeof maintenance;
+  maps: typeof maps;
   messages: typeof messages;
   music: typeof music;
   rateLimit: typeof rateLimit;

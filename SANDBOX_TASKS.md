@@ -72,14 +72,17 @@
 ### Phase 1 — Object Instance（地图可交互物体）
 **目标**：系统能“识别/命中/选中”一个 objectInstance，并拿到稳定 id（为 App 绑定做准备）。
 
-- [ ] Map 数据结构：新增/完善 `interactables[]`
-  - [ ] `objectInstanceId`（稳定、可序列化）
-  - [ ] `objectType`（board/vending/tv/bulletin/custom...）
-  - [ ] `hitbox`（rect/poly）、`anchor`、`interactionRadius`
-  - [ ] `displayName` / `tags` / `metadata`
-- [ ] Map Editor：创建/编辑/删除 interactable；保存 stable id（重载不变）
-- [ ] Client hit-test：鼠标 hover/click 命中 hitbox，显示交互提示（Open/Play）
-- [ ] Object Registry：objectType → 默认 icon/提示文案/推荐模板
+- [x] Map 数据结构：新增/完善 `interactables[]`
+  - [x] `objectInstanceId`（稳定、可序列化）
+  - [x] `objectType`（board/vending/tv/bulletin/custom...）
+  - [x] `hitbox`（tile rect）
+  - [ ] `anchor`（如需从 asset 自动推导锚点/相对 hitbox，后续补）
+  - [x] `interactionRadius`
+  - [x] `displayName` / `metadata`（tags 先不做）
+- [x] Map Editor：创建/编辑/删除 interactable；保存 stable id（重载不变）
+- [x] Client hit-test：鼠标 click 命中 hitbox，显示交互提示（Phase 1 先用 placeholder modal）
+- [x] In-game Build Mode（路线 A，先试水）：在游戏里点选物体并保存/移除 interactable（MVP：按 anchor tile 选中；写入需要登录或 `ALLOW_UNAUTHENTICATED_TOWN_EDIT=1`）
+- [x] Object Registry：objectType → 默认提示文案（icon/模板推荐 Phase 2+）
 
 **DoD**
 - 地图里放一个 “board” object：访问者可点击并看到 “Open”，并能拿到 `objectInstanceId`。

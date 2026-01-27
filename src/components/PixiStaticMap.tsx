@@ -74,6 +74,238 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 let cachedAssetsManifest: AssetsManifest | null = null;
 let assetsManifestPromise: Promise<AssetsManifest | null> | null = null;
 
+type PlacedObjectHighlightEntry = {
+  holder: PIXI.Container;
+  sprite: PIXI.Sprite | null;
+  category?: string;
+};
+
+type PlacedObjectHighlightState = {
+  placementId: string;
+  holder: PIXI.Container;
+  outlineContainer: PIXI.Container;
+  tick?: (delta: number) => void;
+};
+
+type PlacedObjectLayerKey = 'ground' | 'stamp' | 'standing';
+
+type StaticMapContainer = PIXI.Container & {
+  __disposed?: boolean;
+  __tickers?: Array<(delta: number) => void>;
+  __placedObjectsById?: Map<string, PlacedObjectHighlightEntry>;
+  __placedObjectIdsByLayer?: Record<PlacedObjectLayerKey, string[]>;
+  __pickPlacementIdAt?: (worldX: number, worldY: number) => string | null;
+  __highlightPlacementId?: string | null;
+  __highlightState?: PlacedObjectHighlightState | null;
+};
+
+// Warm yellow for a softer selection outline.
+const OUTLINE_COLOR = 0xf2c94c;
+const OUTLINE_ALPHA = 0.9;
+const OUTLINE_OFFSETS: Array<[number, number]> = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+];
+
+const PICK_LAYER_ORDER: PlacedObjectLayerKey[] = ['standing', 'stamp', 'ground'];
+const NON_PICKABLE_CATEGORIES = new Set(['terrain', 'paths', 'flooring']);
+const ALPHA_HIT_THRESHOLD = 32;
+
+const setNoEvents = (displayObject: PIXI.DisplayObject) => {
+  (displayObject as any).eventMode = 'none';
+  (displayObject as any).interactive = false;
+  (displayObject as any).interactiveChildren = false;
+};
+
+type BaseTexturePixels = {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
+
+const baseTexturePixelsCache = new WeakMap<PIXI.BaseTexture, BaseTexturePixels | null>();
+
+const getBaseTexturePixels = (baseTexture: PIXI.BaseTexture): BaseTexturePixels | null => {
+  const cached = baseTexturePixelsCache.get(baseTexture);
+  if (cached !== undefined) return cached;
+
+  const valid = (baseTexture as any).valid as boolean | undefined;
+  const width = Number((baseTexture as any).width);
+  const height = Number((baseTexture as any).height);
+  if (!valid || !Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    baseTexturePixelsCache.set(baseTexture, null);
+    return null;
+  }
+
+  const resource = (baseTexture as any).resource as { source?: unknown } | undefined;
+  const source = (resource?.source ?? (baseTexture as any).source) as CanvasImageSource | undefined;
+  if (!source) {
+    baseTexturePixelsCache.set(baseTexture, null);
+    return null;
+  }
+
+  const canvas =
+    typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(width, height)
+      : (() => {
+          const c = document.createElement('canvas');
+          c.width = width;
+          c.height = height;
+          return c;
+        })();
+
+  const ctx = (canvas as any).getContext('2d', { willReadFrequently: true }) as
+    | CanvasRenderingContext2D
+    | null;
+  if (!ctx) {
+    baseTexturePixelsCache.set(baseTexture, null);
+    return null;
+  }
+
+  try {
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(source as any, 0, 0, width, height);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const pixels = { width, height, data: imageData.data };
+    baseTexturePixelsCache.set(baseTexture, pixels);
+    return pixels;
+  } catch {
+    baseTexturePixelsCache.set(baseTexture, null);
+    return null;
+  }
+};
+
+const hitTestSpriteAlpha = (sprite: PIXI.Sprite, worldX: number, worldY: number) => {
+  const bounds = sprite.getBounds();
+  if (!bounds.contains(worldX, worldY)) return false;
+
+  const width = sprite.width;
+  const height = sprite.height;
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) return false;
+
+  const worldPoint = new PIXI.Point(worldX, worldY);
+  const local = sprite.worldTransform.applyInverse(worldPoint);
+
+  const u = (local.x + sprite.anchor.x * width) / width;
+  const v = (local.y + sprite.anchor.y * height) / height;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+
+  const texture = sprite.texture;
+  const pixels = getBaseTexturePixels(texture.baseTexture);
+  if (!pixels) return true;
+
+  const frame = texture.frame;
+  const px = Math.floor(frame.x + u * frame.width);
+  const py = Math.floor(frame.y + v * frame.height);
+  if (px < 0 || py < 0 || px >= pixels.width || py >= pixels.height) return false;
+
+  const alpha = pixels.data[(py * pixels.width + px) * 4 + 3];
+  return alpha >= ALPHA_HIT_THRESHOLD;
+};
+
+const pickPlacedObjectIdAt = (container: StaticMapContainer, worldX: number, worldY: number) => {
+  if (container.__disposed) return null;
+  const idsByLayer = container.__placedObjectIdsByLayer;
+  const objectsById = container.__placedObjectsById;
+  if (!idsByLayer || !objectsById) return null;
+
+  for (const layer of PICK_LAYER_ORDER) {
+    const ids = idsByLayer[layer];
+    for (let i = ids.length - 1; i >= 0; i -= 1) {
+      const placementId = ids[i]!;
+      const entry = objectsById.get(placementId);
+      if (!entry) continue;
+      if (entry.category && NON_PICKABLE_CATEGORIES.has(entry.category)) continue;
+
+      if (entry.sprite) {
+        if (hitTestSpriteAlpha(entry.sprite, worldX, worldY)) return placementId;
+        continue;
+      }
+
+      const bounds = entry.holder.getBounds();
+      if (bounds.contains(worldX, worldY)) return placementId;
+    }
+  }
+
+  return null;
+};
+
+const clearPlacedObjectHighlight = (container: StaticMapContainer) => {
+  const highlight = container.__highlightState;
+  if (!highlight) return;
+  if (highlight.tick) {
+    PIXI.Ticker.shared.remove(highlight.tick);
+  }
+  try {
+    highlight.outlineContainer.removeFromParent();
+    highlight.outlineContainer.destroy({ children: true });
+  } catch {
+    // Ignore highlight cleanup failures.
+  }
+  container.__highlightState = null;
+};
+
+const applyPlacedObjectHighlight = (container: StaticMapContainer, placementId: string | null) => {
+  container.__highlightPlacementId = placementId;
+
+  if (container.__highlightState?.placementId === placementId) {
+    return;
+  }
+
+  clearPlacedObjectHighlight(container);
+  if (!placementId) return;
+  const entry = container.__placedObjectsById?.get(placementId);
+  if (!entry) return;
+
+  const outlineContainer = new PIXI.Container();
+  setNoEvents(outlineContainer);
+  outlineContainer.name = '__selectionOutline';
+
+  const holder = entry.holder;
+  holder.addChildAt(outlineContainer, 0);
+
+  if (entry.sprite) {
+    const base = entry.sprite;
+    const clones = OUTLINE_OFFSETS.map(([dx, dy]) => {
+      const clone = new PIXI.Sprite(base.texture);
+      setNoEvents(clone);
+      clone.roundPixels = true;
+      clone.anchor.set(base.anchor.x, base.anchor.y);
+      clone.position.set(base.x + dx, base.y + dy);
+      clone.rotation = base.rotation;
+      clone.scale.set(base.scale.x, base.scale.y);
+      clone.tint = OUTLINE_COLOR;
+      clone.alpha = OUTLINE_ALPHA;
+      outlineContainer.addChild(clone);
+      return clone;
+    });
+
+    const tick = () => {
+      const nextTexture = base.texture;
+      for (const clone of clones) {
+        clone.texture = nextTexture;
+      }
+    };
+    PIXI.Ticker.shared.add(tick);
+    container.__highlightState = { placementId, holder, outlineContainer, tick };
+    return;
+  }
+
+  const bounds = holder.getLocalBounds();
+  const g = new PIXI.Graphics();
+  setNoEvents(g);
+  g.lineStyle(2, OUTLINE_COLOR, 0.85);
+  g.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
+  outlineContainer.addChild(g);
+  container.__highlightState = { placementId, holder, outlineContainer };
+};
+
 type DecalSheet = {
   baseTexture: PIXI.BaseTexture;
   frames: Record<string, { x: number; y: number; w: number; h: number }>;
@@ -307,8 +539,14 @@ const getRotationOffset = (width: number, height: number, rotation: number) => {
 export const PixiStaticMap = PixiComponent('StaticMap', {
   create: (props: { map: WorldMap; [k: string]: any }) => {
     const map = props.map;
-    const numxtiles = Math.floor(map.tileSetDimX / map.tileDim);
-    const numytiles = Math.floor(map.tileSetDimY / map.tileDim);
+    const tileDim = Number(map.tileDim);
+    if (!Number.isFinite(tileDim) || tileDim <= 0) {
+      console.error('StaticMap: invalid tileDim', map.tileDim);
+      return new PIXI.Container();
+    }
+
+    const numxtiles = Math.floor(map.tileSetDimX / tileDim);
+    const numytiles = Math.floor(map.tileSetDimY / tileDim);
     const bt = PIXI.BaseTexture.from(map.tileSetUrl, {
       scaleMode: PIXI.SCALE_MODES.NEAREST,
     });
@@ -318,19 +556,27 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
       for (let y = 0; y < numytiles; y++) {
         tiles[x + y * numxtiles] = new PIXI.Texture(
           bt,
-          new PIXI.Rectangle(x * map.tileDim, y * map.tileDim, map.tileDim, map.tileDim),
+          new PIXI.Rectangle(x * tileDim, y * tileDim, tileDim, tileDim),
         );
       }
     }
-    const screenxtiles = map.bgTiles[0].length;
-    const screenytiles = map.bgTiles[0][0].length;
+    const screenxtiles =
+      Number.isFinite(map.width) && map.width > 0
+        ? map.width
+        : map.bgTiles?.[0]?.length ?? map.objectTiles?.[0]?.length ?? 0;
+    const screenytiles =
+      Number.isFinite(map.height) && map.height > 0
+        ? map.height
+        : map.bgTiles?.[0]?.[0]?.length ?? map.objectTiles?.[0]?.[0]?.length ?? 0;
 
-    const container = new PIXI.Container() as PIXI.Container & {
-      __disposed?: boolean;
-      __tickers?: Array<(delta: number) => void>;
-    };
+    const container = new PIXI.Container() as StaticMapContainer;
     container.__disposed = false;
     container.__tickers = [];
+    container.__placedObjectsById = new Map();
+    container.__placedObjectIdsByLayer = { ground: [], stamp: [], standing: [] };
+    container.__pickPlacementIdAt = (worldX, worldY) => pickPlacedObjectIdAt(container, worldX, worldY);
+    container.__highlightPlacementId = null;
+    container.__highlightState = null;
     const groundObjectsContainer = new PIXI.Container();
     const decalsContainer = new PIXI.Container();
     const stampObjectsContainer = new PIXI.Container();
@@ -342,15 +588,15 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
     for (let i = 0; i < screenxtiles * screenytiles; i++) {
       const x = i % screenxtiles;
       const y = Math.floor(i / screenxtiles);
-      const xPx = x * map.tileDim;
-      const yPx = y * map.tileDim;
+      const xPx = x * tileDim;
+      const yPx = y * tileDim;
 
       // Add all layers of backgrounds.
       for (const layer of allLayers) {
-        const tileIndex = layer[x][y];
+        const tileIndex = layer[x]?.[y] ?? -1;
         // Some layers may not have tiles at this location.
         if (tileIndex === -1) continue;
-        const ctile = new PIXI.Sprite(tiles[tileIndex]);
+        const ctile = new PIXI.Sprite(tiles[tileIndex] ?? PIXI.Texture.EMPTY);
         ctile.x = xPx;
         ctile.y = yPx;
         container.addChild(ctile);
@@ -838,6 +1084,7 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
           const holder = new PIXI.Container();
           holder.x = startCol * map.tileDim + offsetX + placementOffsetX;
           holder.y = startRow * map.tileDim + offsetY + placementOffsetY;
+          let highlightSprite: PIXI.Sprite | null = null;
 
           if (POND_OBJECT_IDS.has(placement.objectId)) {
             const pond = new PIXI.Container();
@@ -889,6 +1136,8 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
 
             holder.addChild(pond);
             stampObjectsContainer.addChild(holder);
+            container.__placedObjectsById?.set(placement.id, { holder, sprite: null, category: def.category });
+            container.__placedObjectIdsByLayer?.stamp.push(placement.id);
             continue;
           }
 
@@ -943,6 +1192,7 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
               PIXI.Ticker.shared.add(tick);
 
               holder.addChild(sprite);
+              highlightSprite = sprite;
             } else {
               const animatedSprite = new PIXI.AnimatedSprite(textures);
               (animatedSprite as any).eventMode = 'none';
@@ -961,6 +1211,7 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
 
               holder.addChild(animatedSprite);
               animatedSprite.play();
+              highlightSprite = animatedSprite;
             }
           } else {
             const texture = PIXI.Texture.from(resolveAssetPath(def.image));
@@ -975,6 +1226,7 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
             sprite.rotation = rotationInfo.angle;
 
             holder.addChild(sprite);
+            highlightSprite = sprite;
           }
 
           if (isGround) {
@@ -984,7 +1236,18 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
           } else {
             standingObjectsContainer.addChild(holder);
           }
+
+          const layerKey: PlacedObjectLayerKey =
+            def.category === 'stamp' ? 'stamp' : isGround ? 'ground' : 'standing';
+          container.__placedObjectsById?.set(placement.id, {
+            holder,
+            sprite: highlightSprite,
+            category: def.category,
+          });
+          container.__placedObjectIdsByLayer?.[layerKey].push(placement.id);
         }
+
+        applyPlacedObjectHighlight(container, container.__highlightPlacementId ?? null);
       });
     }
 
@@ -1045,9 +1308,13 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
 
   applyProps: (instance, oldProps, newProps) => {
     applyDefaultProps(instance, oldProps, newProps);
+    const nextHighlight = (newProps as any).highlightPlacementId as string | null | undefined;
+    applyPlacedObjectHighlight(instance as StaticMapContainer, nextHighlight ?? null);
   },
   willUnmount: (instance) => {
-    (instance as any).__disposed = true;
+    const container = instance as StaticMapContainer;
+    container.__disposed = true;
+    clearPlacedObjectHighlight(container);
     const tickers = (instance as any).__tickers as Array<((delta: number) => void) | undefined> | undefined;
     if (tickers) {
       for (const ticker of tickers) {

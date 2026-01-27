@@ -26,6 +26,26 @@ const placedObject = {
 };
 export type PlacedObject = ObjectType<typeof placedObject>;
 
+const interactableHitbox = {
+  kind: v.literal('tileRect'),
+  x: v.number(),
+  y: v.number(),
+  w: v.number(),
+  h: v.number(),
+};
+export type InteractableHitbox = ObjectType<typeof interactableHitbox>;
+
+const interactable = {
+  objectInstanceId: v.string(),
+  objectType: v.string(),
+  placedObjectId: v.optional(v.string()),
+  hitbox: v.object(interactableHitbox),
+  interactionRadius: v.optional(v.number()),
+  displayName: v.optional(v.string()),
+  metadata: v.optional(v.any()),
+};
+export type Interactable = ObjectType<typeof interactable>;
+
 export const serializedWorldMap = {
   width: v.number(),
   height: v.number(),
@@ -40,6 +60,7 @@ export const serializedWorldMap = {
   bgTiles: v.array(v.array(v.array(v.number()))),
   objectTiles: v.array(tileLayer),
   placedObjects: v.optional(v.array(v.object(placedObject))),
+  interactables: v.optional(v.array(v.object(interactable))),
   terrainDecals: v.optional(
     v.object({
       grassId: v.string(),
@@ -64,6 +85,7 @@ export class WorldMap {
   bgTiles: TileLayer[];
   objectTiles: TileLayer[];
   placedObjects: PlacedObject[];
+  interactables: Interactable[];
   terrainDecals?: { grassId: string; sandId: string; waterId?: string };
   animatedSprites: AnimatedSprite[];
 
@@ -77,6 +99,7 @@ export class WorldMap {
     this.bgTiles = serialized.bgTiles;
     this.objectTiles = serialized.objectTiles;
     this.placedObjects = serialized.placedObjects ?? [];
+    this.interactables = serialized.interactables ?? [];
     this.terrainDecals = serialized.terrainDecals ?? undefined;
     this.animatedSprites = serialized.animatedSprites;
   }
@@ -92,6 +115,7 @@ export class WorldMap {
       bgTiles: this.bgTiles,
       objectTiles: this.objectTiles,
       placedObjects: this.placedObjects,
+      interactables: this.interactables,
       terrainDecals: this.terrainDecals,
       animatedSprites: this.animatedSprites,
     };

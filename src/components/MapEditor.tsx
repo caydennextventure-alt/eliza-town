@@ -63,6 +63,18 @@ const PATH_SUBCATEGORIES = [
   { id: 'flooring', label: 'floor' },
 ] as const;
 const PROP_SUBCATEGORIES = ['nature', 'furniture', 'decorations', 'fences', 'tile-object'] as const;
+const INTERACTABLE_TYPE_OPTIONS = [
+  { id: 'board', label: 'Board' },
+  { id: 'bulletin', label: 'Bulletin' },
+  { id: 'vending', label: 'Vending' },
+  { id: 'tv', label: 'TV' },
+  { id: 'custom', label: 'Custom' },
+] as const;
+
+type InteractableTypeId = (typeof INTERACTABLE_TYPE_OPTIONS)[number]['id'];
+
+const isInteractableTypeId = (value: string): value is InteractableTypeId =>
+  INTERACTABLE_TYPE_OPTIONS.some((opt) => opt.id === value);
 
 type MapAnimatedSprite = {
   x: number;
@@ -171,6 +183,16 @@ type PlacedObject = {
   pixelOffsetY?: number;
 };
 
+type Interactable = {
+  objectInstanceId: string;
+  objectType: string;
+  placedObjectId?: string;
+  hitbox: { kind: 'tileRect'; x: number; y: number; w: number; h: number };
+  interactionRadius?: number;
+  displayName?: string;
+  metadata?: any;
+};
+
 type EditorSnapshot = {
   bgLayers: number[][][];
   collisionLayer: number[][];
@@ -186,6 +208,7 @@ type SavedMapPayload = {
   collisionLayer: number[][];
   autoCollisionEnabled?: boolean;
   placedObjects: PlacedObject[];
+  interactables?: Interactable[];
   animatedSprites: MapAnimatedSprite[];
   terrainDecals?: { grassId: string; sandId: string; waterId?: string } | null;
 };
@@ -252,6 +275,11 @@ const createBlankLayers = (count: number, width: number, height: number) =>
 const cloneLayer = (layer: number[][]) => layer.map((column) => [...column]);
 const cloneLayers = (layers: number[][][]) => layers.map((layer) => layer.map((column) => [...column]));
 const clonePlacedObjects = (objects: PlacedObject[]) => objects.map((obj) => ({ ...obj }));
+const cloneInteractables = (items: Interactable[]) =>
+  items.map((item) => ({
+    ...item,
+    hitbox: { ...item.hitbox },
+  }));
 
 const normalizeRotation = (rotation: number): ObjectRotation => {
   const normalized = ((rotation % 360) + 360) % 360;
@@ -497,6 +525,12 @@ const MapEditor = () => {
     }
   });
   const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
+  const [interactables, setInteractables] = useState<Interactable[]>([]);
+  const [interactableEditMode, setInteractableEditMode] = useState(false);
+  const [selectedInteractableId, setSelectedInteractableId] = useState<string | null>(null);
+  const [interactableTypeDraft, setInteractableTypeDraft] = useState<InteractableTypeId>('board');
+  const [interactableNameDraft, setInteractableNameDraft] = useState('');
+  const [interactableRadiusDraft, setInteractableRadiusDraft] = useState(2);
   const [activeStampId, setActiveStampId] = useState<string | null>(null);
   const [stampCaptureMode, setStampCaptureMode] = useState(false);
   const [isStampSelecting, setIsStampSelecting] = useState(false);
@@ -1041,6 +1075,49 @@ const MapEditor = () => {
     }
     return map;
   }, [tilesetObjectsForSet]);
+
+  const selectedInteractable = useMemo(() => {
+    if (!selectedInteractableId) return null;
+    return interactables.find((item) => item.objectInstanceId === selectedInteractableId) ?? null;
+  }, [interactables, selectedInteractableId]);
+
+  const selectedInteractablePlacement = useMemo(() => {
+    const placementId = selectedInteractable?.placedObjectId ?? selectedInteractableId;
+    if (!placementId) return null;
+    return placedObjects.find((placement) => placement.id === placementId) ?? null;
+  }, [placedObjects, selectedInteractable?.placedObjectId, selectedInteractableId]);
+
+  const selectedInteractableBounds = useMemo(() => {
+    if (!selectedInteractablePlacement) return null;
+    const def = objectsById.get(selectedInteractablePlacement.objectId);
+    if (!def) return null;
+    return getObjectTileBounds(def, {
+      ...selectedInteractablePlacement,
+      rotation: getPlacementRotation(selectedInteractablePlacement),
+    });
+  }, [selectedInteractablePlacement, objectsById]);
+
+  const inferInteractableType = useCallback(
+    (objectId: string): (typeof INTERACTABLE_TYPE_OPTIONS)[number]['id'] => {
+      const lower = objectId.toLowerCase();
+      if (lower.includes('bulletin')) return 'bulletin';
+      if (lower.includes('vending')) return 'vending';
+      if (lower.includes('television') || lower.includes('tv')) return 'tv';
+      if (lower.includes('board')) return 'board';
+      return 'custom';
+    },
+    [],
+  );
+
+	  useEffect(() => {
+	    if (!selectedInteractableId) return;
+	    const inferred =
+	      selectedInteractablePlacement ? inferInteractableType(selectedInteractablePlacement.objectId) : 'custom';
+	    const fromData = selectedInteractable?.objectType;
+	    setInteractableTypeDraft(fromData && isInteractableTypeId(fromData) ? fromData : inferred);
+	    setInteractableNameDraft(selectedInteractable?.displayName ?? '');
+	    setInteractableRadiusDraft(selectedInteractable?.interactionRadius ?? 2);
+	  }, [inferInteractableType, selectedInteractable, selectedInteractableId, selectedInteractablePlacement]);
 
   const zigzagTerrainOptions = useMemo(
     () => tilesetObjectsForSet.filter((obj) => obj.category === 'terrain'),
@@ -2581,6 +2658,22 @@ const MapEditor = () => {
     });
   };
 
+  const findTopPlacedObjectAt = useCallback(
+    (row: number, col: number) => {
+      for (let i = placedObjects.length - 1; i >= 0; i -= 1) {
+        const placement = placedObjects[i];
+        const objectDef = objectsById.get(placement.objectId);
+        if (!objectDef) continue;
+        const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
+        if (col >= bounds.startCol && col <= bounds.endCol && row >= bounds.startRow && row <= bounds.endRow) {
+          return placement;
+        }
+      }
+      return null;
+    },
+    [placedObjects, objectsById],
+  );
+
   const applyCollisionAt = useCallback(
     (row: number, col: number, mode: 'block' | 'clear' | 'auto') => {
       if (col < 0 || row < 0 || col >= MAP_WIDTH || row >= MAP_HEIGHT) return;
@@ -2656,6 +2749,13 @@ const MapEditor = () => {
       tileLayerIndex: layerIndex,
       collisionValue: effectiveCollisionLayer[col]?.[row] ?? -1,
     });
+
+    if (interactableEditMode) {
+      const placement = findTopPlacedObjectAt(row, col);
+      setSelectedInteractableId(placement?.id ?? null);
+      return;
+    }
+
     const tool = activeTool;
     const isStampObject = tool === 'object' && activeObject?.category === 'stamp';
     const pixelOffset = isStampObject ? getPointerPixelOffset(event) : null;
@@ -2794,10 +2894,20 @@ const MapEditor = () => {
       collisionLayer: cloneLayer(collisionLayer),
       autoCollisionEnabled,
       placedObjects: clonePlacedObjects(placedObjects),
+      interactables: cloneInteractables(interactables),
       animatedSprites: [...animatedSprites],
       terrainDecals: terrainDecalConfig ?? null,
     }),
-    [animatedSprites, bgLayers, collisionLayer, placedObjects, tileset, terrainDecalConfig, autoCollisionEnabled],
+    [
+      animatedSprites,
+      bgLayers,
+      collisionLayer,
+      interactables,
+      placedObjects,
+      tileset,
+      terrainDecalConfig,
+      autoCollisionEnabled,
+    ],
   );
 
   const applySavedPayload = useCallback((payload: SavedMapPayload) => {
@@ -2813,6 +2923,7 @@ const MapEditor = () => {
     setCollisionLayer(payload.collisionLayer ?? createBlankLayer(MAP_WIDTH, MAP_HEIGHT));
     setAutoCollisionEnabled(payload.autoCollisionEnabled ?? true);
     setPlacedObjects(normalizePlacedObjects(payload.placedObjects ?? []));
+    setInteractables(payload.interactables ?? []);
     setAnimatedSprites(payload.animatedSprites ?? []);
     if (payload.terrainDecals?.grassId && payload.terrainDecals?.sandId) {
       setDecalGrassId(normalizeLegacyId(payload.terrainDecals.grassId));
@@ -2823,6 +2934,8 @@ const MapEditor = () => {
     pendingHistoryRef.current = null;
     historyDirtyRef.current = false;
     setActiveObjectRotation(0);
+    setSelectedInteractableId(null);
+    setInteractableEditMode(false);
   }, []);
 
   useEffect(() => {
@@ -2830,6 +2943,17 @@ const MapEditor = () => {
     if (normalized !== placedObjects) {
       setPlacedObjects(normalized);
     }
+  }, [placedObjects]);
+
+  useEffect(() => {
+    const placedIds = new Set(placedObjects.map((placement) => placement.id));
+    setInteractables((prev) => {
+      const next = prev.filter((interactable) => {
+        const refId = interactable.placedObjectId ?? interactable.objectInstanceId;
+        return placedIds.has(refId);
+      });
+      return next.length === prev.length ? prev : next;
+    });
   }, [placedObjects]);
 
   const saveMapToLocal = useCallback(() => {
@@ -2865,6 +2989,49 @@ const MapEditor = () => {
       alert('Failed to load map.');
     }
   }, [applySavedPayload]);
+
+  const upsertSelectedInteractable = useCallback(() => {
+    if (!selectedInteractablePlacement || !selectedInteractableBounds) {
+      alert('Select an object first.');
+      return;
+    }
+    const objectInstanceId = selectedInteractablePlacement.id;
+    const hitbox = {
+      kind: 'tileRect' as const,
+      x: selectedInteractableBounds.startCol,
+      y: selectedInteractableBounds.startRow,
+      w: selectedInteractableBounds.endCol - selectedInteractableBounds.startCol + 1,
+      h: selectedInteractableBounds.endRow - selectedInteractableBounds.startRow + 1,
+    };
+    setInteractables((prev) => {
+      const next = prev.filter((item) => item.objectInstanceId !== objectInstanceId);
+      next.push({
+        objectInstanceId,
+        placedObjectId: objectInstanceId,
+        objectType: interactableTypeDraft,
+        hitbox,
+        interactionRadius: interactableRadiusDraft || undefined,
+        displayName: interactableNameDraft.trim() || undefined,
+      });
+      return next;
+    });
+    markHistoryDirty();
+    alert('Interactable saved.');
+  }, [
+    interactableNameDraft,
+    interactableRadiusDraft,
+    interactableTypeDraft,
+    markHistoryDirty,
+    selectedInteractableBounds,
+    selectedInteractablePlacement,
+  ]);
+
+  const removeSelectedInteractable = useCallback(() => {
+    if (!selectedInteractableId) return;
+    setInteractables((prev) => prev.filter((item) => item.objectInstanceId !== selectedInteractableId));
+    markHistoryDirty();
+    alert('Interactable removed.');
+  }, [markHistoryDirty, selectedInteractableId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2915,6 +3082,8 @@ export const bgtiles = ${JSON.stringify(bgLayers)};
 export const objmap = ${JSON.stringify([effectiveCollisionLayer])};
 
 export const placedobjects = ${JSON.stringify(placedObjects)};
+
+export const interactables = ${JSON.stringify(interactables)};
 
 export const animatedsprites = ${JSON.stringify(animatedSprites)};
 
@@ -3603,6 +3772,18 @@ export const mapheight = ${MAP_HEIGHT};
              {selectionBounds && (
                 <div className="absolute pointer-events-none border-2 border-cyan-400/80 bg-cyan-400/10" style={{ left: selectionBounds.minCol * tileSize, top: selectionBounds.minRow * tileSize, width: (selectionBounds.maxCol - selectionBounds.minCol + 1) * tileSize, height: (selectionBounds.maxRow - selectionBounds.minRow + 1) * tileSize }} />
              )}
+
+             {interactableEditMode && selectedInteractableBounds && (
+               <div
+                 className="absolute pointer-events-none border-2 border-[#ffd93d] bg-[#ffd93d]/10"
+                 style={{
+                   left: selectedInteractableBounds.startCol * tileSize,
+                   top: selectedInteractableBounds.startRow * tileSize,
+                   width: (selectedInteractableBounds.endCol - selectedInteractableBounds.startCol + 1) * tileSize,
+                   height: (selectedInteractableBounds.endRow - selectedInteractableBounds.startRow + 1) * tileSize,
+                 }}
+               />
+             )}
               </div>
             </div>
           </div>
@@ -4061,6 +4242,96 @@ export const mapheight = ${MAP_HEIGHT};
                         className="scale-70 origin-left"
                       />
                    </label>
+
+                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-20" />
+
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Bind an object as an interactable (app host)">
+                      <StardewCheckbox
+                        label="APP"
+                        checked={interactableEditMode}
+                        onChange={(checked) => {
+                          setInteractableEditMode(checked);
+                          if (!checked) setSelectedInteractableId(null);
+                        }}
+                        className="scale-70 origin-left"
+                      />
+                   </label>
+
+                   <div className="text-[#8b6b4a] text-[8px] font-display text-center">
+                      Apps: {interactables.length}
+                   </div>
+
+                   {interactableEditMode && (
+                     <div className="mt-1 rounded border border-[#6d4c30]/40 bg-[#fdf6d8] p-2">
+                       <div className="text-[8px] text-[#5a4030] font-display font-bold mb-1">
+                         Click an object to select
+                       </div>
+                       {selectedInteractablePlacement && selectedInteractableBounds ? (
+                         <div className="space-y-1">
+                           <div className="text-[7px] text-[#6d4c30] font-mono break-all">
+                             id: {selectedInteractablePlacement.id}
+                           </div>
+                           <div className="text-[7px] text-[#6d4c30] font-mono break-all">
+                             hitbox: {selectedInteractableBounds.startCol},{selectedInteractableBounds.startRow} →{' '}
+                             {selectedInteractableBounds.endCol},{selectedInteractableBounds.endRow}
+                           </div>
+
+                           <select
+                             value={interactableTypeDraft}
+                             onChange={(e) => setInteractableTypeDraft(e.target.value as InteractableTypeId)}
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                           >
+                             {INTERACTABLE_TYPE_OPTIONS.map((opt) => (
+                               <option key={opt.id} value={opt.id}>
+                                 {opt.label}
+                               </option>
+                             ))}
+                           </select>
+
+                           <input
+                             value={interactableNameDraft}
+                             onChange={(e) => setInteractableNameDraft(e.target.value)}
+                             placeholder="Display name (optional)"
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                           />
+
+                           <input
+                             type="number"
+                             min={0}
+                             max={20}
+                             value={interactableRadiusDraft}
+                             onChange={(e) => setInteractableRadiusDraft(Number(e.target.value))}
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                             placeholder="Radius"
+                           />
+
+                           <div className="flex gap-1">
+                             <button
+                               onClick={upsertSelectedInteractable}
+                               className="flex-1 bg-[#4a8f4a] border border-[#2e5e2e] text-[#f3e2b5] px-2 py-1 rounded text-[9px] hover:bg-[#5aa85a] active:scale-95 font-display uppercase tracking-wider"
+                             >
+                               Save
+                             </button>
+                             <button
+                               onClick={removeSelectedInteractable}
+                               disabled={!selectedInteractable}
+                               className={`flex-1 border px-2 py-1 rounded text-[9px] active:scale-95 font-display uppercase tracking-wider ${
+                                 selectedInteractable
+                                   ? 'bg-[#9c2a2a] border-[#6d1c1c] text-[#f3e2b5] hover:bg-[#b13434]'
+                                   : 'bg-[#d4c4a0] border-[#b99f75] text-[#8b6b4a] cursor-not-allowed'
+                               }`}
+                             >
+                               Remove
+                             </button>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="text-[8px] text-[#8b6b4a] italic">
+                           No object selected.
+                         </div>
+                       )}
+                     </div>
+                   )}
                    
                    <div className="text-[#8b6b4a] text-[8px] font-display text-center">
                       {MAP_WIDTH}×{MAP_HEIGHT}

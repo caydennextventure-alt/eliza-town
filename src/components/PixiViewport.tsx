@@ -34,7 +34,7 @@ export default PixiComponent('Viewport', {
     viewport
       .drag()
       .pinch({})
-      .wheel()
+      .wheel({ wheelZoom: true, trackpadPinch: true, smooth: 8 })
       .decelerate()
       .clamp({ direction: 'all', underflow: 'center' })
       .setZoom(-10)

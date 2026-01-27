@@ -83,6 +83,7 @@ async function getOrCreateDefaultWorld(ctx: MutationCtx) {
     bgTiles: map.bgtiles,
     objectTiles: map.objmap,
     placedObjects: map.placedobjects ?? [],
+    interactables: (map as any).interactables ?? [],
     terrainDecals: map.terraindecals ?? (map as any).terrainDecals,
     animatedSprites: map.animatedsprites,
   });

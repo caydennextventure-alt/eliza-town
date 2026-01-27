@@ -146,6 +146,11 @@ const PetalFxLayer = PixiComponent('PetalFxLayer', {
     return container;
   },
 
+  applyProps: () => {
+    // No-op: Petal FX is fully managed internally and we don't want to pass unknown props
+    // (like `count`) onto the underlying PIXI.Container (which spams console warnings).
+  },
+
   willUnmount: (container: PetalFxContainer) => {
     const app = container.__petalFxApp;
     const tick = container.__petalFxTick;
@@ -160,4 +165,3 @@ export default function PetalFx(props: { count?: number } = {}) {
   const app = useApp();
   return <PetalFxLayer app={app} count={props.count} />;
 }
-

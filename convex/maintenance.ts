@@ -131,6 +131,7 @@ export const reloadMap = mutation({
       bgTiles: map.bgtiles,
       objectTiles: map.objmap,
       placedObjects: map.placedobjects ?? [],
+      interactables: (map as any).interactables ?? [],
       terrainDecals: map.terraindecals ?? (map as any).terrainDecals,
       animatedSprites: map.animatedsprites ?? [],
     };
