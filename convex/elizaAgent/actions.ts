@@ -3,6 +3,7 @@ import type { ActionCtx } from '../_generated/server';
 import { v } from 'convex/values';
 import { anyApi } from 'convex/server';
 import { Id } from '../_generated/dataModel';
+import { sleep } from '../util/sleep';
 
 const normalizeElizaServerUrl = (value?: string) => {
   const trimmed = value?.trim();
@@ -63,12 +64,150 @@ const shouldSkipLegacy = () =>
   /^(1|true|yes)$/i.test(process.env.ELIZA_DISABLE_LEGACY ?? '') ||
   /^(1|true|yes)$/i.test(process.env.ELIZA_MESSAGING_ONLY ?? '');
 
+const shouldPollOnly = () =>
+  /^(1|true|yes)$/i.test(process.env.ELIZA_POLL_ONLY ?? '');
+
 const summarizeForLog = (value: string, limit = 200) => {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (compact.length <= limit) {
     return compact;
   }
   return `${compact.slice(0, limit)}...`;
+};
+
+const truncateBody = (value: string, limit = 1000) => {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit)}...`;
+};
+
+const pickString = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : undefined;
+  }
+  if (Array.isArray(value)) {
+    const first = value.find((entry) => typeof entry === 'string');
+    return pickString(first);
+  }
+  return undefined;
+};
+
+const pickStringFromKeys = (record: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    if (key in record) {
+      const value = pickString(record[key]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+};
+
+const normalizeAgentPayload = (payload: unknown): Record<string, unknown> | null => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+  if (Array.isArray(payload)) {
+    const first = payload.find((entry) => entry && typeof entry === 'object');
+    return (first as Record<string, unknown>) ?? null;
+  }
+  const record = payload as Record<string, unknown>;
+  if (record.data && typeof record.data === 'object') {
+    return record.data as Record<string, unknown>;
+  }
+  if (record.agent && typeof record.agent === 'object') {
+    return record.agent as Record<string, unknown>;
+  }
+  if (record.result && typeof record.result === 'object') {
+    return record.result as Record<string, unknown>;
+  }
+  return record;
+};
+
+type AgentSummary = {
+  id?: string;
+  name?: string;
+  username?: string;
+  bio?: string;
+  personality?: string[];
+  plan?: string;
+};
+
+const pickStringArray = (value: unknown): string[] | undefined => {
+  if (Array.isArray(value)) {
+    const items = value.filter((entry): entry is string => typeof entry === 'string');
+    return items.length ? items : undefined;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : undefined;
+  }
+  return undefined;
+};
+
+const extractAgentSummary = (payload: unknown): AgentSummary | null => {
+  const record = normalizeAgentPayload(payload);
+  if (!record) {
+    return null;
+  }
+  const character =
+    record.character && typeof record.character === 'object'
+      ? (record.character as Record<string, unknown>)
+      : null;
+  let id =
+    pickStringFromKeys(record, ['id', 'agentId', '_id', 'agent_id']) ??
+    (character ? pickStringFromKeys(character, ['id', 'agentId']) : undefined);
+  const name =
+    pickStringFromKeys(record, ['name', 'displayName', 'agentName']) ??
+    (character ? pickStringFromKeys(character, ['name', 'displayName']) : undefined);
+  const username =
+    pickStringFromKeys(record, ['username', 'handle', 'slug']) ??
+    (character ? pickStringFromKeys(character, ['username', 'handle', 'slug']) : undefined);
+  const bio =
+    pickStringFromKeys(record, ['bio', 'description', 'identity']) ??
+    (character ? pickStringFromKeys(character, ['bio', 'description', 'identity']) : undefined);
+  if (!id && username) {
+    id = username;
+  }
+  const personality =
+    pickStringArray(record.adjectives) ??
+    pickStringArray(record.personality) ??
+    pickStringArray(record.traits) ??
+    (character ? pickStringArray(character.adjectives ?? character.personality ?? character.traits) : undefined);
+  const plan =
+    pickStringFromKeys(record, ['plan', 'goal', 'objective']) ??
+    (character ? pickStringFromKeys(character, ['plan', 'goal', 'objective']) : undefined);
+  return { id, name, username, bio, personality, plan };
+};
+
+const extractAgentList = (payload: unknown): AgentSummary[] => {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+  if (Array.isArray(payload)) {
+    return payload.map(extractAgentSummary).filter((entry): entry is AgentSummary => Boolean(entry));
+  }
+  const record = payload as Record<string, unknown>;
+  const dataRecord =
+    record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : null;
+  const container =
+    (Array.isArray(record.data) && record.data) ||
+    (dataRecord && Array.isArray(dataRecord.agents) && dataRecord.agents) ||
+    (dataRecord && Array.isArray(dataRecord.items) && dataRecord.items) ||
+    (dataRecord && Array.isArray(dataRecord.results) && dataRecord.results) ||
+    (Array.isArray(record.agents) && record.agents) ||
+    (Array.isArray(record.items) && record.items) ||
+    (Array.isArray(record.results) && record.results) ||
+    null;
+  if (!container) {
+    return [];
+  }
+  return container
+    .map(extractAgentSummary)
+    .filter((entry): entry is AgentSummary => Boolean(entry));
 };
 
 const redactHeaders = (headers: Record<string, string>) => {
@@ -79,11 +218,37 @@ const redactHeaders = (headers: Record<string, string>) => {
   return next;
 };
 
+const safeJsonStringify = (value: unknown) => {
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_key, val) => {
+      if (val && typeof val === 'object') {
+        if (seen.has(val)) {
+          return '[Circular]';
+        }
+        seen.add(val);
+      }
+      return val;
+    });
+  } catch (error) {
+    return JSON.stringify({ error: (error as Error)?.message ?? 'Unserializable payload' });
+  }
+};
+
 const buildCurl = (url: string, headers: Record<string, string>, body: unknown) => {
   const headerFlags = Object.entries(headers).map(([key, value]) => `-H '${key}: ${value}'`);
-  const payload = JSON.stringify(body).replace(/'/g, `'\\''`);
+  const payload = safeJsonStringify(body).replace(/'/g, `'\\''`);
   return `curl -s -X POST '${url}' ${headerFlags.join(' ')} -d '${payload}'`;
 };
+
+const shouldLogElizaVerbose = () =>
+  /^(1|true|yes)$/i.test(process.env.ELIZA_API_DEBUG_VERBOSE ?? '');
+
+const shouldLogElizaCurl = () =>
+  /^(1|true|yes)$/i.test(process.env.ELIZA_API_DEBUG_CURL ?? '');
+
+const shouldAllowPollOnlySseFallback = () =>
+  /^(1|true|yes)$/i.test(process.env.ELIZA_POLL_ONLY_ALLOW_SSE ?? '');
 
 const logElizaRequest = (label: string, url: string, headers: Record<string, string>, body: any) => {
   if (!shouldLogElizaApi()) {
@@ -94,7 +259,9 @@ const logElizaRequest = (label: string, url: string, headers: Record<string, str
     headers: redactHeaders(headers),
     body,
   });
-  console.log(`[ELIZA_API_DEBUG] ${label} curl`, buildCurl(url, redactHeaders(headers), body));
+  if (shouldLogElizaCurl()) {
+    console.log(`[ELIZA_API_DEBUG] ${label} curl`, buildCurl(url, redactHeaders(headers), body));
+  }
 };
 
 const logElizaResponse = (label: string, status: number, bodyText?: string) => {
@@ -319,6 +486,43 @@ const isLikelyNotFound = (status: number, bodyText: string) => {
   return bodyText.toLowerCase().includes('endpoint not found');
 };
 
+const extractTextFromPayload = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const extracted = extractTextFromPayload(item);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const nestedCandidates = [
+    record.text,
+    record.content,
+    record.message,
+    record.response,
+    record.reply,
+    record.output,
+    record.data,
+    record.payload,
+  ];
+  for (const candidate of nestedCandidates) {
+    const extracted = extractTextFromPayload(candidate);
+    if (extracted) {
+      return extracted;
+    }
+  }
+  return null;
+};
+
 const parseLegacyResponseText = (data: any): string | null => {
   if (Array.isArray(data) && data.length > 0 && typeof data[0]?.text === 'string') {
     return data[0].text;
@@ -332,13 +536,114 @@ const parseLegacyResponseText = (data: any): string | null => {
   if (typeof data?.content === 'string') {
     return data.content;
   }
+  const extracted = extractTextFromPayload(data);
+  if (extracted) {
+    return extracted;
+  }
   return null;
 };
 
+const parseSsePayload = (payload: string): { text: string | null; error?: string } => {
+  let buffer = payload;
+  let eventName = '';
+  let dataLines: string[] = [];
+  let collectedText = '';
+  let finalText: string | null = null;
+  let errorMessage: string | undefined;
+
+  const flushEvent = () => {
+    if (!eventName && dataLines.length === 0) {
+      return;
+    }
+    const dataRaw = dataLines.join('\n');
+    let parsed: any = null;
+    if (dataRaw) {
+      try {
+        parsed = JSON.parse(dataRaw);
+      } catch {
+        parsed = null;
+      }
+    }
+    const rawText = parsed ? null : dataRaw.trim();
+    if (eventName === 'chunk') {
+      const chunk =
+        extractTextFromPayload(parsed?.chunk) ??
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.content) ??
+        extractTextFromPayload(parsed?.message);
+      if (chunk) {
+        collectedText += chunk;
+      } else if (rawText) {
+        collectedText += rawText;
+      }
+    } else if (eventName === 'done' || eventName === 'complete') {
+      const text =
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.message) ??
+        extractTextFromPayload(parsed?.content);
+      if (text) {
+        finalText = text;
+      } else if (rawText) {
+        finalText = rawText;
+      }
+    } else if (eventName === 'message' || eventName === 'agent_message') {
+      const text =
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.content) ??
+        extractTextFromPayload(parsed?.message);
+      if (text) {
+        finalText = text;
+      } else if (rawText) {
+        finalText = rawText;
+      }
+    } else if (eventName === 'error') {
+      const errorText = parsed?.error ?? parsed?.message ?? dataRaw;
+      if (typeof errorText === 'string') {
+        errorMessage = errorText;
+      }
+    } else if (!eventName) {
+      if (typeof parsed?.text === 'string' && !finalText) {
+        finalText = parsed.text;
+      } else if (rawText) {
+        collectedText += rawText;
+      }
+    }
+    eventName = '';
+    dataLines = [];
+  };
+
+  const lines = buffer.split(/\r?\n/);
+  buffer = lines.pop() ?? '';
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim();
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trim());
+    } else if (line.trim() === '') {
+      flushEvent();
+    }
+  }
+  if (buffer.length > 0) {
+    if (buffer.startsWith('event:')) {
+      eventName = buffer.slice(6).trim();
+    } else if (buffer.startsWith('data:')) {
+      dataLines.push(buffer.slice(5).trim());
+    } else if (buffer.trim() === '') {
+      flushEvent();
+    }
+  }
+  flushEvent();
+
+  return {
+    text: finalText ?? (collectedText ? collectedText : null),
+    error: errorMessage,
+  };
+};
+
 const parseSseStream = async (res: Response): Promise<{ text: string | null; error?: string }> => {
-  const reader = res.body?.getReader();
+  const reader = res.body?.getReader?.();
   if (!reader) {
-    return { text: null };
+    return parseSsePayload(await res.text());
   }
   const decoder = new TextDecoder();
   let buffer = '';
@@ -361,29 +666,49 @@ const parseSseStream = async (res: Response): Promise<{ text: string | null; err
         parsed = null;
       }
     }
+    const rawText = parsed ? null : dataRaw.trim();
     if (eventName === 'chunk') {
-      const chunk = parsed?.chunk ?? parsed?.text ?? parsed?.content;
-      if (typeof chunk === 'string') {
+      const chunk =
+        extractTextFromPayload(parsed?.chunk) ??
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.content) ??
+        extractTextFromPayload(parsed?.message);
+      if (chunk) {
         collectedText += chunk;
+      } else if (rawText) {
+        collectedText += rawText;
       }
     } else if (eventName === 'done' || eventName === 'complete') {
       const text =
-        parsed?.text ?? parsed?.message?.text ?? parsed?.message?.content ?? parsed?.content;
-      if (typeof text === 'string') {
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.message) ??
+        extractTextFromPayload(parsed?.content);
+      if (text) {
         finalText = text;
+      } else if (rawText) {
+        finalText = rawText;
       }
     } else if (eventName === 'message' || eventName === 'agent_message') {
-      const text = parsed?.text ?? parsed?.content;
-      if (typeof text === 'string') {
+      const text =
+        extractTextFromPayload(parsed?.text) ??
+        extractTextFromPayload(parsed?.content) ??
+        extractTextFromPayload(parsed?.message);
+      if (text) {
         finalText = text;
+      } else if (rawText) {
+        finalText = rawText;
       }
     } else if (eventName === 'error') {
       const errorText = parsed?.error ?? parsed?.message ?? dataRaw;
       if (typeof errorText === 'string') {
         errorMessage = errorText;
       }
-    } else if (!eventName && typeof parsed?.text === 'string' && !finalText) {
-      finalText = parsed.text;
+    } else if (!eventName) {
+      if (typeof parsed?.text === 'string' && !finalText) {
+        finalText = parsed.text;
+      } else if (rawText) {
+        collectedText += rawText;
+      }
     }
     eventName = '';
     dataLines = [];
@@ -407,12 +732,158 @@ const parseSseStream = async (res: Response): Promise<{ text: string | null; err
       }
     }
   }
+  if (buffer.length > 0) {
+    if (buffer.startsWith('event:')) {
+      eventName = buffer.slice(6).trim();
+    } else if (buffer.startsWith('data:')) {
+      dataLines.push(buffer.slice(5).trim());
+    } else if (buffer.trim() === '') {
+      flushEvent();
+    }
+  }
   flushEvent();
 
   return {
     text: finalText ?? (collectedText ? collectedText : null),
     error: errorMessage,
   };
+};
+
+type SessionMessage = {
+  id?: string;
+  content?: string;
+  authorId?: string;
+  isAgent?: boolean;
+  createdAt?: string | number;
+  metadata?: Record<string, unknown>;
+};
+
+type SessionMessagesResponse = {
+  messages?: SessionMessage[];
+  hasMore?: boolean;
+  cursors?: {
+    before?: number;
+    after?: number;
+  };
+};
+
+const selectAgentReplyFromMessages = (
+  messages: SessionMessage[] | undefined,
+  sentAtMs: number,
+): string | null => {
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+  const threshold = sentAtMs - 5_000;
+  const candidates = messages
+    .filter(
+      (message) =>
+        message?.isAgent === true &&
+        typeof message.content === 'string' &&
+        message.content.trim().length > 0,
+    )
+    .map((message) => ({
+      content: message.content!.trim(),
+      ts: parseMessageTimestamp(message.createdAt) ?? 0,
+    }));
+  if (candidates.length === 0) {
+    return null;
+  }
+  const recent = candidates.filter((candidate) => candidate.ts >= threshold);
+  const pool = recent.length > 0 ? recent : candidates;
+  pool.sort((a, b) => b.ts - a.ts);
+  return pool[0]?.content ?? null;
+};
+
+const parseMessageTimestamp = (value: string | number | undefined): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+    const normalized = trimmed.endsWith('Z') ? trimmed : `${trimmed}Z`;
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const fetchSessionMessages = async (params: {
+  elizaServerUrl: string;
+  authToken?: string;
+  sessionId: string;
+  after?: number | null;
+  limit?: number;
+  timeoutMs?: number;
+}): Promise<SessionMessagesResponse | null> => {
+  const limit = params.limit ?? 20;
+  const query = new URLSearchParams();
+  query.set('limit', String(limit));
+  if (typeof params.after === 'number' && Number.isFinite(params.after)) {
+    query.set('after', String(params.after));
+  }
+  const url = `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages?${query.toString()}`;
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: 'GET',
+      headers: buildElizaHeaders(params.authToken),
+    },
+    params.timeoutMs,
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    logElizaResponse('messages', res.status, text);
+    return null;
+  }
+  let parsed: SessionMessagesResponse | null = null;
+  try {
+    parsed = text ? (JSON.parse(text) as SessionMessagesResponse) : null;
+  } catch {
+    parsed = null;
+  }
+  return parsed;
+};
+
+const pollForSessionReply = async (params: {
+  elizaServerUrl: string;
+  authToken?: string;
+  sessionId: string;
+  sentAtMs: number;
+  timeoutMs?: number;
+}): Promise<string | null> => {
+  const deadline = params.timeoutMs ? Date.now() + params.timeoutMs : Date.now() + 5_000;
+  let afterCursor: number | null = null;
+  while (Date.now() < deadline) {
+    const remainingMs = Math.max(0, deadline - Date.now());
+    const response = await fetchSessionMessages({
+      elizaServerUrl: params.elizaServerUrl,
+      authToken: params.authToken,
+      sessionId: params.sessionId,
+      after: afterCursor,
+      limit: 20,
+      timeoutMs: Math.min(remainingMs, 5_000),
+    });
+    const messageText = selectAgentReplyFromMessages(response?.messages, params.sentAtMs);
+    if (messageText) {
+      return messageText;
+    }
+    if (response?.cursors?.after !== undefined) {
+      afterCursor = response.cursors.after;
+    }
+    if (remainingMs <= 600) {
+      break;
+    }
+    await sleep(500);
+  }
+  return null;
 };
 
 const createMessagingSession = async (params: {
@@ -536,55 +1007,160 @@ const sendMessageWithSession = async (params: {
   conversationId: string;
   timeoutMs?: number;
 }) => {
+  const sentAtMs = Date.now();
+  const pollTimeoutMs =
+    typeof params.timeoutMs === 'number' ? Math.min(5_000, params.timeoutMs) : 5_000;
   const messageSummary = summarizeForLog(params.message);
-  const messageLength = params.message.length;
-  const payload = {
-    content: messageSummary,
-    mode: 'stream',
-    metadata: {
-      senderId: params.senderId,
-      conversationId: params.conversationId,
-      messageLength,
-    },
-  };
-  const headers = {
-    ...buildElizaHeaders(params.authToken),
-    Accept: 'text/event-stream',
-  };
-  logElizaRequest(
-    'messaging',
-    `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
-    headers,
-    payload,
-  );
-  const res = await fetchWithTimeout(
-    `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
-    {
-      method: 'POST',
+  const pollOnly = shouldPollOnly();
+
+  const sendStreamRequest = async () => {
+    const payload = {
+      content: messageSummary,
+      mode: 'stream',
+    };
+    const headers = {
+      ...buildElizaHeaders(params.authToken),
+      Accept: 'text/event-stream',
+    };
+    logElizaRequest(
+      'messaging',
+      `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
       headers,
-      body: JSON.stringify({
-        content: params.message,
-        mode: 'stream',
-        metadata: {
-          senderId: params.senderId,
-          conversationId: params.conversationId,
-        },
-      }),
-    },
-    params.timeoutMs,
-  );
-  if (!res.ok) {
-    const text = await res.text();
-    logElizaResponse('messaging', res.status, text);
-    return { ok: false as const, status: res.status, body: text };
+      payload,
+    );
+    const res = await fetchWithTimeout(
+      `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          content: params.message,
+          mode: 'stream',
+        }),
+      },
+      params.timeoutMs,
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      logElizaResponse('messaging', res.status, text);
+      return { ok: false as const, status: res.status, body: text };
+    }
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/event-stream')) {
+      const textBody = await res.text();
+      let parsed: unknown = null;
+      try {
+        parsed = textBody ? JSON.parse(textBody) : null;
+      } catch {
+        parsed = null;
+      }
+      const extracted = extractTextFromPayload(parsed) ?? (textBody.trim() ? textBody.trim() : null);
+      logElizaResponse('messaging', 200, textBody);
+      if (extracted) {
+        return { ok: true as const, text: extracted };
+      }
+      const fallback = await pollForSessionReply({
+        elizaServerUrl: params.elizaServerUrl,
+        authToken: params.authToken,
+        sessionId: params.sessionId,
+        sentAtMs,
+        timeoutMs: pollTimeoutMs,
+      });
+      if (shouldLogElizaApi()) {
+        console.log('[ELIZA_API_DEBUG] messaging poll', {
+          sessionId: params.sessionId,
+          result: fallback ? 'hit' : 'miss',
+        });
+      }
+      return { ok: true as const, text: fallback };
+    }
+    const { text, error } = await parseSseStream(res);
+    if (!error && text) {
+      logElizaResponse('messaging', 200, text ?? '');
+      return { ok: true as const, text };
+    }
+    if (error) {
+      logElizaResponse('messaging', 200, error);
+    } else {
+      logElizaResponse('messaging', 200, text ?? '');
+    }
+    const fallback = await pollForSessionReply({
+      elizaServerUrl: params.elizaServerUrl,
+      authToken: params.authToken,
+      sessionId: params.sessionId,
+      sentAtMs,
+      timeoutMs: pollTimeoutMs,
+    });
+    if (shouldLogElizaApi()) {
+      console.log('[ELIZA_API_DEBUG] messaging poll', {
+        sessionId: params.sessionId,
+        result: fallback ? 'hit' : 'miss',
+      });
+    }
+    if (fallback) {
+      return { ok: true as const, text: fallback };
+    }
+    if (error) {
+      return { ok: false as const, status: 200, body: error };
+    }
+    return { ok: true as const, text: null };
+  };
+
+  if (pollOnly) {
+    const payload = {
+      content: messageSummary,
+    };
+    const headers = {
+      ...buildElizaHeaders(params.authToken),
+      Accept: 'application/json',
+    };
+    logElizaRequest(
+      'messaging',
+      `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
+      headers,
+      payload,
+    );
+    const res = await fetchWithTimeout(
+      `${params.elizaServerUrl}/api/messaging/sessions/${params.sessionId}/messages`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          content: params.message,
+        }),
+      },
+      params.timeoutMs,
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      logElizaResponse('messaging', res.status, text);
+      return { ok: false as const, status: res.status, body: text };
+    }
+    const textBody = await res.text();
+    logElizaResponse('messaging', 200, textBody);
+    const fallback = await pollForSessionReply({
+      elizaServerUrl: params.elizaServerUrl,
+      authToken: params.authToken,
+      sessionId: params.sessionId,
+      sentAtMs,
+      timeoutMs: pollTimeoutMs,
+    });
+    if (shouldLogElizaApi()) {
+      console.log('[ELIZA_API_DEBUG] messaging poll', {
+        sessionId: params.sessionId,
+        result: fallback ? 'hit' : 'miss',
+      });
+    }
+    if (fallback) {
+      return { ok: true as const, text: fallback };
+    }
+    if (shouldAllowPollOnlySseFallback()) {
+      return await sendStreamRequest();
+    }
+    // In strict poll-only mode, do not fall back to SSE. Treat a miss as a pass.
+    return { ok: true as const, text: null };
   }
-  const { text, error } = await parseSseStream(res);
-  if (error) {
-    logElizaResponse('messaging', 200, error);
-    return { ok: false as const, status: 200, body: error };
-  }
-  logElizaResponse('messaging', 200, text ?? '');
-  return { ok: true as const, text };
+  return await sendStreamRequest();
 };
 
 export const createElizaAgent = action({
@@ -692,6 +1268,58 @@ export const createElizaAgent = action({
   },
 });
 
+export const connectExistingElizaAgent = action({
+  args: {
+    worldId: v.id('worlds'),
+    name: v.string(),
+    character: v.string(),
+    identity: v.string(),
+    plan: v.string(),
+    personality: v.array(v.string()),
+    elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ inputId: Id<'inputs'> | string; elizaAgentId: string }> => {
+    const elizaServerUrlOverride = normalizeElizaServerUrl(args.elizaServerUrl);
+    const elizaServerUrl = elizaServerUrlOverride ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const storedAuthToken = normalizeAuthToken(args.elizaAuthToken);
+
+    const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
+      worldId: args.worldId,
+      name: args.name,
+      character: args.character,
+      identity: args.identity,
+      plan: args.plan,
+    });
+
+    await ctx.runMutation(apiAny.elizaAgent.mutations.saveMapping, {
+      worldId: args.worldId,
+      name: args.name,
+      elizaAgentId: args.elizaAgentId,
+      bio: args.identity,
+      personality: args.personality,
+      elizaServerUrl: elizaServerUrlOverride,
+      elizaAuthToken: storedAuthToken,
+    });
+
+    try {
+      await ensureElizaWorld({
+        ctx,
+        elizaAgentId: args.elizaAgentId,
+        elizaServerUrl,
+        authToken,
+        agentName: args.name,
+      });
+    } catch (error) {
+      console.error('Eliza world initialization failed', error);
+    }
+
+    return { inputId, elizaAgentId: args.elizaAgentId };
+  },
+});
+
 type SendMessageArgs = {
   elizaAgentId: string;
   elizaServerUrl?: string;
@@ -771,7 +1399,9 @@ export const sendElizaMessage = async (
       legacyBody = await legacyRes.text();
       logElizaResponse('legacy', legacyStatus, legacyBody);
     } else if (shouldLogElizaApi()) {
-      console.log('[ELIZA_API_DEBUG] legacy skipped', { reason: 'ELIZA_DISABLE_LEGACY' });
+      if (shouldLogElizaVerbose()) {
+        console.log('[ELIZA_API_DEBUG] legacy skipped', { reason: 'ELIZA_DISABLE_LEGACY' });
+      }
     }
 
     const session = await getOrCreateSession({
@@ -862,6 +1492,136 @@ export const sendElizaMessage = async (
     return null;
   }
 };
+
+export const fetchElizaAgentInfo = action({
+  args: {
+    elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const url = `${elizaServerUrl}/api/agents/${args.elizaAgentId}`;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: buildElizaHeaders(authToken),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    const parsed = (() => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
+    })();
+    const agent = parsed ? extractAgentSummary(parsed) : null;
+    const raw = res.ok ? (parsed ?? text) : null;
+    return {
+      ok: res.ok,
+      status: res.status,
+      agent,
+      raw,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
+
+export const fetchElizaAgentByName = action({
+  args: {
+    name: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const url = `${elizaServerUrl}/api/agents`;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: buildElizaHeaders(authToken),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    const agents = parsed ? extractAgentList(parsed) : [];
+    const target = args.name.trim().toLowerCase();
+    const exactMatches = agents.filter((agent) => {
+      const name = agent.name?.toLowerCase();
+      const username = agent.username?.toLowerCase();
+      return (name && name === target) || (username && username === target);
+    });
+    const looseMatches = exactMatches.length
+      ? exactMatches
+      : agents.filter((agent) => {
+          const name = agent.name?.toLowerCase();
+          const username = agent.username?.toLowerCase();
+          return (
+            (name && name.includes(target)) ||
+            (username && username.includes(target))
+          );
+        });
+    const chosen = looseMatches[0] ?? null;
+    const candidates = looseMatches.slice(0, 5).map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      username: agent.username,
+    }));
+    return {
+      ok: res.ok,
+      status: res.status,
+      agent: chosen,
+      candidates,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
+
+export const fetchElizaAgents = action({
+  args: {
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const url = `${elizaServerUrl}/api/agents`;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: buildElizaHeaders(authToken),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    const agents = parsed ? extractAgentList(parsed) : [];
+    return {
+      ok: res.ok,
+      status: res.status,
+      agents,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
 
 export const sendMessage = action({
   args: {

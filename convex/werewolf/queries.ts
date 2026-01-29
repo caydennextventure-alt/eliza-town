@@ -134,11 +134,17 @@ export function resolveViewerContext(
 export function filterVisibleEvents(
   events: MatchEventDoc[],
   viewer: ViewerContext,
+  includeWolfChat = false,
 ): MatchEventDoc[] {
   if (viewer.kind === 'spoiler') {
     return events;
   }
-  return events.filter((event) => isEventVisibleToViewer(event.visibility, viewer));
+  return events.filter((event) => {
+    if (includeWolfChat && viewer.kind === 'spectator' && event.visibility === 'WOLVES') {
+      return true;
+    }
+    return isEventVisibleToViewer(event.visibility, viewer);
+  });
 }
 
 export function buildMatchStateView(params: {
@@ -292,6 +298,7 @@ export const matchEventsGet = query({
     playerId: v.optional(playerId),
     matchId: v.string(),
     includeSpoilers: v.optional(v.boolean()),
+    includeWolfChat: v.optional(v.boolean()),
     afterEventId: v.optional(v.union(v.string(), v.null())),
     limit: v.optional(v.number()),
   },
@@ -303,11 +310,12 @@ export const matchEventsGet = query({
       args.playerId as PlayerId | undefined,
       args.includeSpoilers ?? false,
     );
+    const includeWolfChat = args.includeWolfChat ?? false;
     const afterSeq = parseAfterEventId(args.afterEventId ?? null);
     const limit = normalizeLimit(args.limit, DEFAULT_EVENTS_LIMIT, 1, MAX_EVENTS_LIMIT);
 
     const events = await loadMatchEvents(ctx.db, args.matchId as MatchId, afterSeq);
-    const visible = filterVisibleEvents(events, viewer);
+    const visible = filterVisibleEvents(events, viewer, includeWolfChat);
     const selected = afterSeq === null ? visible.slice(-limit) : visible.slice(0, limit);
 
     return {
@@ -315,7 +323,12 @@ export const matchEventsGet = query({
       events: selected.map((event) => ({
         eventId: String(event.seq),
         at: toIsoString(event.at),
-        visibility: event.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
+        visibility:
+          event.visibility === 'PUBLIC'
+            ? 'PUBLIC'
+            : includeWolfChat && event.visibility === 'WOLVES' && viewer.kind === 'spectator'
+              ? 'PUBLIC'
+              : 'PRIVATE',
         type: event.type,
         payload: normalizePayload(event.payload),
       })),

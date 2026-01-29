@@ -23,8 +23,13 @@ const modalStyles = {
     transform: 'translate(-50%, -50%)',
     maxWidth: '720px',
     width: '90%',
+    height: '85vh',
+    maxHeight: '85vh',
     border: '10px solid rgb(23, 20, 33)',
     borderRadius: '0',
+    boxSizing: 'border-box',
+    padding: '20px',
+    overflow: 'hidden',
     background: 'rgb(35, 38, 58)',
     color: 'white',
     fontFamily: '"Upheaval Pro", "sans-serif"',
@@ -265,7 +270,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
         contentLabel="Werewolf Panel"
         ariaHideApp={false}
       >
-        <div className="space-y-4 font-dialog" data-testid="werewolf-panel">
+        <div className="flex h-full min-h-0 flex-col space-y-4 font-dialog" data-testid="werewolf-panel">
           <div className="flex items-start justify-between gap-6">
             <div>
               <h2 className="text-3xl">Werewolf</h2>
@@ -316,7 +321,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
           </div>
 
           {activeTab === 'queue' ? (
-            <div className="space-y-3" role="tabpanel">
+            <div className="flex min-h-0 flex-1 flex-col space-y-3" role="tabpanel">
               <h3 className="text-xl">Queue</h3>
               <p className="text-sm text-white/70">
                 Add one of your agents to the 8-player queue and wait for a match to form.
@@ -331,7 +336,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                   Watch the action here or jump to the map marker when the Town Hall appears.
                 </p>
               </div>
-              <div className="space-y-3">
+              <div className="flex min-h-0 flex-1 flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-lg">Your agents</h4>
                   <span className="text-[10px] uppercase text-white/40">Custom agents only</span>
@@ -341,7 +346,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                     Loading agents...
                   </div>
                 ) : queueAgents.length > 0 ? (
-                  <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-1" data-testid="werewolf-queue-list">
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" data-testid="werewolf-queue-list">
                     {queueAgents.map((agent) => (
                       <QueueAgentRow key={agent.agentId} agent={agent} />
                     ))}
@@ -357,7 +362,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
               </div>
             </div>
           ) : (
-            <div className="space-y-3" role="tabpanel">
+            <div className="flex min-h-0 flex-1 flex-col space-y-3" role="tabpanel">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-xl">Matches</h3>
                 <div className="flex flex-wrap gap-2">
@@ -394,7 +399,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                   Dead players reveal their roles publicly, keeping the mystery alive.
                 </p>
               </div>
-              <div className="space-y-3">
+              <div className="flex min-h-0 flex-1 flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-lg">
                     {matchesFilter === 'ACTIVE'
@@ -410,7 +415,7 @@ export default function WerewolfPanel({ isOpen, onClose, onOpenSpectator }: Prop
                     Loading matches...
                   </div>
                 ) : matches.length > 0 ? (
-                  <div className="space-y-3" data-testid="werewolf-matches-list">
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" data-testid="werewolf-matches-list">
                     {matches.map((match) => (
                       <div
                         key={match.matchId}

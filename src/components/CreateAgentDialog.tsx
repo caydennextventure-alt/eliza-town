@@ -39,6 +39,15 @@ const PERSONALITY_OPTIONS = [
   'Cheerful', 'Calm', 'Adventurous', 'Creative'
 ];
 
+type ElizaAgentSummary = {
+  id?: string;
+  name?: string;
+  username?: string;
+  bio?: string;
+  personality?: string[];
+  plan?: string;
+};
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
@@ -53,15 +62,24 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const [plan, setPlan] = useState(DEFAULT_PLAN);
   const [personality, setPersonality] = useState<string[]>([]);
   const [elizaServerUrl, setElizaServerUrl] = useState('');
+  const [elizaAgentId, setElizaAgentId] = useState('');
   const [elizaAuthToken, setElizaAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  const [availableAgents, setAvailableAgents] = useState<ElizaAgentSummary[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [checkStatus, setCheckStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [agentMetadata, setAgentMetadata] = useState('');
   
   const worldStatus = useQuery(api.world.defaultWorldStatus);
   const worldId = worldStatus?.worldId;
   const userTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   
-  const createElizaAgent = useAction(api.elizaAgent.actions.createElizaAgent);
+  const connectExistingElizaAgent = useAction(api.elizaAgent.actions.connectExistingElizaAgent);
+  const fetchElizaAgentInfo = useAction(api.elizaAgent.actions.fetchElizaAgentInfo);
+  const fetchElizaAgents = useAction(api.elizaAgent.actions.fetchElizaAgents);
   const convex = useConvex();
 
   const customCharacters = useMemo(() => {
@@ -85,7 +103,12 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setPlan(DEFAULT_PLAN);
       setPersonality([]);
       setElizaServerUrl('');
+      setElizaAgentId('');
       setElizaAuthToken('');
+      setAvailableAgents([]);
+      setSelectedAgentId('');
+      setCheckStatus(null);
+      setAgentMetadata('');
       return;
     }
     if (selectableCharacters.length === 0) {
@@ -123,28 +146,37 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setError('Enter a character name.');
       return;
     }
-    if (!identity.trim()) {
-      setError('Add an identity/bio.');
+    if (!elizaServerUrl.trim()) {
+      setError('Enter the Eliza server URL.');
       return;
     }
-    if (!plan.trim()) {
-      setError('Add an activity plan.');
+    if (!elizaAgentId.trim()) {
+      setError('Select an Eliza agent.');
       return;
     }
 
     setError(null);
     setIsCreating(true);
-    
+
     try {
+      const resolvedName = name.trim();
+      if (!resolvedName) {
+        setError('Selected agent is missing a name.');
+        return;
+      }
+      const resolvedIdentity =
+        identity.trim() || `${resolvedName} is an ElizaOS agent.`;
+      const resolvedPlan = plan.trim() || DEFAULT_PLAN;
       const trimmedElizaServerUrl = elizaServerUrl.trim();
       const trimmedElizaAuthToken = elizaAuthToken.trim();
-      const result = await createElizaAgent({
+      const result = await connectExistingElizaAgent({
         worldId,
-        name: name.trim(),
+        name: resolvedName,
         character: selectedId,
-        identity: identity.trim(),
-        plan: plan.trim(),
+        identity: resolvedIdentity,
+        plan: resolvedPlan,
         personality,
+        elizaAgentId: elizaAgentId.trim(),
         elizaServerUrl: trimmedElizaServerUrl ? trimmedElizaServerUrl : undefined,
         elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
       });
@@ -169,10 +201,195 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     }
   };
 
-  const togglePersonality = (trait: string) => {
-    setPersonality(prev => 
-      prev.includes(trait) ? prev.filter(t => t !== trait) : [...prev, trait]
-    );
+  const formatAgentMetadata = (payload: unknown) => {
+    if (payload === null || payload === undefined) {
+      return '';
+    }
+    if (typeof payload === 'string') {
+      const trimmed = payload.trim();
+      if (!trimmed) {
+        return '';
+      }
+      try {
+        return JSON.stringify(JSON.parse(trimmed), null, 2);
+      } catch {
+        return payload;
+      }
+    }
+    try {
+      return JSON.stringify(payload, null, 2);
+    } catch {
+      return '';
+    }
+  };
+
+  const applyAgentMetadata = (payload: unknown) => {
+    setAgentMetadata(formatAgentMetadata(payload));
+  };
+
+  const applyAgentSummary = (agent?: ElizaAgentSummary) => {
+    if (!agent) {
+      return;
+    }
+    if (!name.trim() && agent.name) {
+      setName(agent.name);
+    }
+    if (!identity.trim() && agent.bio) {
+      setIdentity(agent.bio);
+    }
+    if (personality.length === 0 && agent.personality?.length) {
+      const normalized = agent.personality
+        .map((trait) => trait.trim().toLowerCase())
+        .filter((trait) => trait.length > 0);
+      const matched = PERSONALITY_OPTIONS.filter((trait) =>
+        normalized.includes(trait.toLowerCase()),
+      );
+      if (matched.length > 0) {
+        setPersonality(matched);
+      }
+    }
+    if (!plan.trim() && agent.plan) {
+      setPlan(agent.plan);
+    }
+  };
+
+  const handleLoadAgents = async () => {
+    const trimmedElizaServerUrl = elizaServerUrl.trim();
+    const trimmedElizaAuthToken = elizaAuthToken.trim();
+    if (!trimmedElizaServerUrl) {
+      setCheckStatus({
+        ok: false,
+        message: 'Enter the Eliza server URL to load agents.',
+      });
+      return;
+    }
+    setIsLoadingAgents(true);
+    setCheckStatus(null);
+    try {
+      const result = await fetchElizaAgents({
+        elizaServerUrl: trimmedElizaServerUrl,
+        elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
+      });
+      if (result.ok && result.agents?.length) {
+        setAvailableAgents(result.agents);
+        const defaultAgent = result.agents[0];
+        if (defaultAgent?.id) {
+          void handleSelectAgent(defaultAgent.id, defaultAgent);
+        }
+        setCheckStatus({
+          ok: true,
+          message: `Loaded ${result.agents.length} agents.`,
+        });
+      } else {
+        const statusLabel = result.status ? `HTTP ${result.status}` : 'Request failed';
+        const detail = result.message ? ` ${result.message}` : '';
+        setCheckStatus({
+          ok: false,
+          message: `Unable to load agents (${statusLabel}).${detail}`,
+        });
+      }
+    } catch (lookupError: any) {
+      setCheckStatus({
+        ok: false,
+        message: lookupError?.message ?? 'Unable to reach the Eliza server.',
+      });
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  };
+
+  const handleCheckElizaAgent = async () => {
+    const trimmedElizaServerUrl = elizaServerUrl.trim();
+    const trimmedElizaAgentId = elizaAgentId.trim();
+    const trimmedElizaAuthToken = elizaAuthToken.trim();
+    if (!trimmedElizaServerUrl) {
+      setCheckStatus({
+        ok: false,
+        message: 'Enter the Eliza server URL to verify.',
+      });
+      return;
+    }
+    if (!trimmedElizaAgentId) {
+      setCheckStatus({
+        ok: false,
+        message: 'Select an agent to verify.',
+      });
+      return;
+    }
+    setIsChecking(true);
+    setCheckStatus(null);
+    try {
+      const result = await fetchElizaAgentInfo({
+        elizaAgentId: trimmedElizaAgentId,
+        elizaServerUrl: trimmedElizaServerUrl,
+        elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
+      });
+      if (result.ok) {
+        const agentName = result.agent?.name ?? 'agent';
+        const agentId = result.agent?.id ?? trimmedElizaAgentId;
+        applyAgentSummary(result.agent ?? undefined);
+        if (result.raw !== null && result.raw !== undefined) {
+          applyAgentMetadata(result.raw);
+        } else if (result.agent) {
+          applyAgentMetadata(result.agent);
+        }
+        setCheckStatus({
+          ok: true,
+          message: `Connected to ${agentName} (${agentId}).`,
+        });
+      } else {
+        const statusLabel = result.status ? `HTTP ${result.status}` : 'Request failed';
+        const detail = result.message ? ` ${result.message}` : '';
+        setCheckStatus({
+          ok: false,
+          message: `Unable to fetch agent info (${statusLabel}).${detail}`,
+        });
+      }
+    } catch (checkError: any) {
+      setCheckStatus({
+        ok: false,
+        message: checkError?.message ?? 'Unable to reach the Eliza server.',
+      });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleSelectAgent = async (agentId: string, agentOverride?: ElizaAgentSummary) => {
+    setSelectedAgentId(agentId);
+    setElizaAgentId(agentId);
+    const selected = agentOverride ?? availableAgents.find((agent) => agent.id === agentId);
+    if (selected?.name || selected?.username || selected?.id) {
+      setName(selected.name ?? selected.username ?? selected.id ?? '');
+    }
+    applyAgentSummary(selected);
+    if (selected) {
+      applyAgentMetadata(selected);
+    } else {
+      setAgentMetadata('');
+    }
+    if (!elizaServerUrl.trim()) {
+      return;
+    }
+    try {
+      const result = await fetchElizaAgentInfo({
+        elizaAgentId: agentId,
+        elizaServerUrl: elizaServerUrl.trim(),
+        elizaAuthToken: elizaAuthToken.trim() ? elizaAuthToken.trim() : undefined,
+      });
+      if (result.ok && result.agent) {
+        applyAgentSummary(result.agent);
+      }
+      if (result.ok) {
+        if (result.raw !== null && result.raw !== undefined) {
+          applyAgentMetadata(result.raw);
+        } else if (result.agent) {
+          applyAgentMetadata(result.agent);
+        }
+      }
+    } catch {
+      // silent: verification button can be used to surface errors
+    }
   };
 
   return (
@@ -180,7 +397,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       isOpen={isOpen}
       onRequestClose={onClose}
       style={modalStyles}
-      contentLabel="Create Eliza Agent"
+      contentLabel="Connect Eliza Agent"
       ariaHideApp={false}
     >
       <div
@@ -194,7 +411,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                <img src={agentAvatar} className="w-5 h-5 opacity-80" alt="" />
              </div>
              <div>
-               <h2 className="text-xl leading-none text-[#a395b8] uppercase tracking-wide">Create Eliza Agent</h2>
+               <h2 className="text-xl leading-none text-[#a395b8] uppercase tracking-wide">Connect Eliza Agent</h2>
              </div>
           </div>
           <button
@@ -288,62 +505,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
             {/* Right Column: Form Fields */}
             <div className="w-2/3 flex flex-col gap-4 overflow-y-auto pr-2">
                  <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Name</label>
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Luna"
-                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
-                      data-testid="agent-name"
-                    />
-                 </div>
-                 
-                 <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Personality</label>
-                    <div className="flex flex-wrap gap-1.5">
-                        {PERSONALITY_OPTIONS.map(trait => (
-                            <button
-                                key={trait}
-                                onClick={() => togglePersonality(trait)}
-                                className={`px-2 py-1 text-[10px] uppercase border-2 transition-all ${
-                                    personality.includes(trait)
-                                    ? 'bg-[#3b8f6e] border-[#5ec29d] text-white shadow-[0_2px_0_#23634a] translate-y-[-1px]'
-                                    : 'bg-[#2d2438] border-[#4a3b5b] text-[#a395b8] hover:border-[#6d607d] hover:text-white'
-                                }`}
-                                data-testid={`agent-personality-${trait.toLowerCase()}`}
-                            >
-                                {trait}{personality.includes(trait) && ' ✓'}
-                            </button>
-                        ))}
-                    </div>
-                 </div>
-
-                <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Bio / Identity</label>
-                    <textarea
-                      value={identity}
-                      onChange={(e) => setIdentity(e.target.value)}
-                      placeholder="Describe who this agent is, their background..."
-                      rows={4}
-                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] resize-none"
-                      data-testid="agent-identity"
-                    />
-                </div>
-                
-                <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Initial Plan</label>
-                    <textarea
-                      value={plan}
-                      onChange={(e) => setPlan(e.target.value)}
-                      placeholder={DEFAULT_PLAN}
-                      rows={2}
-                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] resize-none"
-                      data-testid="agent-plan"
-                    />
-                </div>
-
-                <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Eliza Server URL (Optional)</label>
+                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Eliza Server URL</label>
                     <input
                       value={elizaServerUrl}
                       onChange={(e) => setElizaServerUrl(e.target.value)}
@@ -363,6 +525,91 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                       autoComplete="off"
                       className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
                       data-testid="agent-eliza-api-key"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadAgents}
+                      disabled={isLoadingAgents || !elizaServerUrl.trim()}
+                      className={`w-full border-2 border-[#4a3b5b] px-3 py-2 text-xs uppercase tracking-widest transition-colors ${
+                        isLoadingAgents
+                          ? 'cursor-wait text-white/60'
+                          : 'text-[#a395b8] hover:border-[#6d607d] hover:text-white'
+                      }`}
+                      data-testid="agent-eliza-load"
+                    >
+                      {isLoadingAgents ? 'Loading...' : 'Load Agents'}
+                    </button>
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Choose Agent</label>
+                      <select
+                        value={selectedAgentId}
+                        onChange={(e) => void handleSelectAgent(e.target.value)}
+                        className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-sm text-[#e0dce6] outline-none transition-colors"
+                        data-testid="agent-eliza-select"
+                        disabled={availableAgents.length === 0}
+                      >
+                        <option value="" disabled>
+                          {availableAgents.length === 0 ? 'No agents loaded' : 'Select an agent'}
+                        </option>
+                        {availableAgents.map((agent) => {
+                          if (!agent.id) {
+                            return null;
+                          }
+                          const label =
+                            agent.username && agent.name
+                              ? `${agent.name} (${agent.username})`
+                              : agent.name ?? agent.username ?? agent.id;
+                          return (
+                            <option key={agent.id} value={agent.id}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleCheckElizaAgent}
+                      disabled={isChecking || !elizaServerUrl.trim() || !elizaAgentId.trim()}
+                      className={`w-full border-2 border-[#4a3b5b] px-3 py-2 text-xs uppercase tracking-widest transition-colors ${
+                        isChecking
+                          ? 'cursor-wait text-white/60'
+                          : 'text-[#a395b8] hover:border-[#6d607d] hover:text-white'
+                      }`}
+                      data-testid="agent-eliza-verify"
+                    >
+                      {isChecking ? 'Checking...' : 'Verify Agent'}
+                    </button>
+                    {checkStatus ? (
+                      <div
+                        className={`px-3 py-2 text-xs border ${
+                          checkStatus.ok
+                            ? 'border-emerald-400/40 bg-emerald-900/20 text-emerald-200'
+                            : 'border-red-500/40 bg-red-900/20 text-red-200'
+                        }`}
+                        data-testid="agent-eliza-verify-result"
+                      >
+                        {checkStatus.message}
+                      </div>
+                    ) : null}
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Agent Metadata</label>
+                    <textarea
+                      value={agentMetadata}
+                      onChange={(e) => setAgentMetadata(e.target.value)}
+                      placeholder="Load or verify an agent to populate metadata."
+                      rows={8}
+                      spellCheck={false}
+                      className="w-full bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-xs text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b] font-mono"
+                      data-testid="agent-eliza-metadata"
                     />
                 </div>
             </div>
@@ -395,7 +642,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                     }`}
                     data-testid="agent-create"
                 >
-                    {isCreating ? 'Summoning...' : 'Create Agent'}
+                    {isCreating ? 'Connecting...' : 'Connect Agent'}
                 </button>
             </div>
         </div>

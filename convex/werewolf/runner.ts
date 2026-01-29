@@ -21,7 +21,12 @@ import {
   applyMatchWolfKill,
 } from './match';
 import { getPreviousPhase, getRoundCount, ROUND_RESPONSE_TIMEOUT_MS } from './rounds';
-import type { Phase, PlayerId, PublicMessageKind } from './types';
+import type { EventVisibility, Phase, PlayerId, PublicMessageKind } from './types';
+import {
+  createNarratorEvent,
+  createPublicMessageEvent,
+  createWolfChatMessageEvent,
+} from './engine/events';
 import { sendElizaMessage } from '../elizaAgent/actions';
 
 const apiAny = anyApi;
@@ -29,6 +34,8 @@ const apiAny = anyApi;
 const MAX_PROMPT_EVENTS = 200;
 const MAX_CONTEXT_LINES = 12;
 const DEFAULT_ELIZA_CONCURRENCY = 4;
+const FALLBACK_PUBLIC_MESSAGE_MAX = 500;
+const FALLBACK_WOLF_CHAT_MAX = 400;
 
 const getElizaConcurrency = () => {
   const raw = Number(process.env.WEREWOLF_ELIZA_CONCURRENCY ?? DEFAULT_ELIZA_CONCURRENCY);
@@ -37,6 +44,8 @@ const getElizaConcurrency = () => {
   }
   return Math.floor(raw);
 };
+
+const shouldLogPrivate = () => /^(1|true|yes)$/i.test(process.env.WEREWOLF_LOG_PRIVATE ?? '');
 
 async function settleWithConcurrency<T, R>(
   items: T[],
@@ -67,13 +76,100 @@ async function settleWithConcurrency<T, R>(
   return results;
 }
 
+function logAgentPrompt(params: {
+  matchId: string;
+  phase: Phase;
+  dayNumber: number;
+  nightNumber: number;
+  roundIndex: number;
+  roundCount: number;
+  playerId: PlayerId;
+  displayName: string;
+  seat: number;
+  role: string;
+  elizaAgentId: string;
+  prompt: string;
+}): void {
+  if (!shouldLogPrivate()) {
+    return;
+  }
+  console.log('[WEREWOLF_AGENT_PROMPT]', {
+    matchId: params.matchId,
+    phase: params.phase,
+    dayNumber: params.dayNumber,
+    nightNumber: params.nightNumber,
+    round: `${params.roundIndex + 1}/${params.roundCount}`,
+    playerId: params.playerId,
+    displayName: params.displayName,
+    seat: params.seat,
+    role: params.role,
+    elizaAgentId: params.elizaAgentId,
+    prompt: params.prompt,
+  });
+}
+
+function logAgentResponse(params: {
+  matchId: string;
+  phase: Phase;
+  dayNumber: number;
+  nightNumber: number;
+  roundIndex: number;
+  roundCount: number;
+  playerId: PlayerId;
+  displayName: string;
+  seat: number;
+  role: string;
+  elizaAgentId: string;
+  responseText: string | null;
+}): void {
+  if (!shouldLogPrivate()) {
+    return;
+  }
+  console.log('[WEREWOLF_AGENT_RESPONSE]', {
+    matchId: params.matchId,
+    phase: params.phase,
+    dayNumber: params.dayNumber,
+    nightNumber: params.nightNumber,
+    round: `${params.roundIndex + 1}/${params.roundCount}`,
+    playerId: params.playerId,
+    displayName: params.displayName,
+    seat: params.seat,
+    role: params.role,
+    elizaAgentId: params.elizaAgentId,
+    response: params.responseText ?? null,
+  });
+}
+
+function buildPassLogAction(params: {
+  player: MatchPlayerState;
+  responseText: string | null;
+}): RoundAction {
+  const trimmed = params.responseText?.trim() ?? '';
+  const text = trimmed.length === 0 ? 'no response' : 'pass';
+  return {
+    type: 'LOG_MESSAGE',
+    playerId: params.player.playerId,
+    text,
+    channel: 'PRIVATE',
+    visibility: 'PUBLIC',
+  };
+}
+
 type RoundAction =
   | { type: 'SAY_PUBLIC'; playerId: PlayerId; text: string; kind: PublicMessageKind }
   | { type: 'WOLF_CHAT'; playerId: PlayerId; text: string }
   | { type: 'WOLF_KILL'; playerId: PlayerId; targetPlayerId: PlayerId }
   | { type: 'SEER_INSPECT'; playerId: PlayerId; targetPlayerId: PlayerId }
   | { type: 'DOCTOR_PROTECT'; playerId: PlayerId; targetPlayerId: PlayerId }
-  | { type: 'VOTE'; playerId: PlayerId; targetPlayerId: PlayerId | null; reason?: string | null };
+  | { type: 'VOTE'; playerId: PlayerId; targetPlayerId: PlayerId | null; reason?: string | null }
+  | {
+      type: 'LOG_MESSAGE';
+      playerId: PlayerId;
+      text: string;
+      channel: 'PUBLIC' | 'WOLF_CHAT' | 'PRIVATE';
+      visibility: EventVisibility;
+      kind?: PublicMessageKind;
+    };
 
 type RawEvent = {
   seq: number;
@@ -281,10 +377,38 @@ export const runRound = internalAction({
           state: context.state,
           events: context.events,
         });
+        logAgentPrompt({
+          matchId: context.matchId,
+          phase: context.state.phase,
+          dayNumber: context.state.dayNumber,
+          nightNumber: context.state.nightNumber,
+          roundIndex: args.roundIndex,
+          roundCount,
+          playerId: player.playerId,
+          displayName: player.displayName,
+          seat: player.seat,
+          role: player.role,
+          elizaAgentId: elizaAgent.elizaAgentId,
+          prompt,
+        });
         const responseText = await sendElizaMessageWithTimeout(ctx, {
           elizaAgent,
           matchId: context.matchId,
           prompt,
+        });
+        logAgentResponse({
+          matchId: context.matchId,
+          phase: context.state.phase,
+          dayNumber: context.state.dayNumber,
+          nightNumber: context.state.nightNumber,
+          roundIndex: args.roundIndex,
+          roundCount,
+          playerId: player.playerId,
+          displayName: player.displayName,
+          seat: player.seat,
+          role: player.role,
+          elizaAgentId: elizaAgent.elizaAgentId,
+          responseText,
         });
         const parsed = parseAgentResponse({
           responseText,
@@ -297,6 +421,8 @@ export const runRound = internalAction({
           playerId: player.playerId,
           responded: parsed.responded,
           action: parsed.action,
+          messageText: parsed.messageText,
+          responseText,
         };
       },
     );
@@ -314,15 +440,58 @@ export const runRound = internalAction({
         responded: boolean;
         skipped?: boolean;
         action?: RoundAction;
+        messageText?: string;
+        responseText?: string | null;
       };
       if (!value.responded) {
         if (!value.skipped) {
           missedPlayerIds.push(value.playerId);
         }
+        const player = context.state.players.find(
+          (entry: MatchPlayerState) => entry.playerId === value.playerId,
+        );
+        if (player) {
+          actions.push(
+            buildPassLogAction({
+              player,
+              responseText: null,
+            }),
+          );
+        }
         continue;
       }
       if (value.action) {
         actions.push(value.action);
+      }
+      if (value.messageText && value.action?.type !== 'SAY_PUBLIC' && value.action?.type !== 'WOLF_CHAT') {
+        const player = context.state.players.find(
+          (entry: MatchPlayerState) => entry.playerId === value.playerId,
+        );
+        if (player) {
+          const displayAction = buildDisplayMessageAction({
+            text: value.messageText,
+            player,
+            state: context.state,
+            roundIndex: args.roundIndex,
+            roundCount,
+          });
+          if (displayAction) {
+            actions.push(displayAction);
+          }
+        }
+      }
+      if (!value.action && !value.messageText) {
+        const player = context.state.players.find(
+          (entry: MatchPlayerState) => entry.playerId === value.playerId,
+        );
+        if (player) {
+          actions.push(
+            buildPassLogAction({
+              player,
+              responseText: value.responseText ?? null,
+            }),
+          );
+        }
       }
     }
 
@@ -397,6 +566,42 @@ function applyActionSafely(
           reason: action.reason,
           now,
         });
+      case 'LOG_MESSAGE': {
+        const player = state.players.find((entry) => entry.playerId === action.playerId);
+        if (!player) {
+          return null;
+        }
+        if (action.channel === 'PUBLIC') {
+          return {
+            nextState: state,
+            event: createPublicMessageEvent({
+              at: now,
+              playerId: action.playerId,
+              text: action.text,
+              kind: action.kind ?? 'DISCUSSION',
+            }),
+          };
+        }
+        if (action.channel === 'WOLF_CHAT') {
+          return {
+            nextState: state,
+            event: createWolfChatMessageEvent({
+              at: now,
+              fromWolfId: action.playerId,
+              text: action.text,
+            }),
+          };
+        }
+        const label = `${player.displayName}: ${action.text}`;
+        return {
+          nextState: state,
+          event: createNarratorEvent({
+            at: now,
+            text: label,
+            visibility: action.visibility,
+          }),
+        };
+      }
       default:
         return null;
     }
@@ -490,24 +695,62 @@ async function sendElizaMessageWithTimeout(
   }
 }
 
+function normalizeMessageText(text: string | null | undefined): string | undefined {
+  if (!text) {
+    return undefined;
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const withoutFence = stripCodeFence(trimmed);
+  return withoutFence ? withoutFence.trim() : undefined;
+}
+
 function parseAgentResponse(params: {
   responseText: string | null;
   player: MatchPlayerState;
   state: MatchState;
   roundIndex: number;
   roundCount: number;
-}): { responded: boolean; action?: RoundAction } {
-  if (!params.responseText) {
-    return { responded: false };
+}): { responded: boolean; action?: RoundAction; messageText?: string } {
+  const rawResponse = params.responseText;
+  if (rawResponse === null || rawResponse === undefined || rawResponse.trim().length === 0) {
+    return { responded: true };
   }
-  const parsed = parseJsonObject(params.responseText);
+  const parsed = parseJsonObject(rawResponse);
   if (!parsed) {
+    const messageText = normalizeMessageText(rawResponse);
+    const fallbackAction = buildFallbackChatAction({
+      responseText: rawResponse,
+      player: params.player,
+      state: params.state,
+      roundIndex: params.roundIndex,
+      roundCount: params.roundCount,
+    });
+    if (fallbackAction) {
+      return { responded: true, action: fallbackAction, messageText };
+    }
+    if (messageText) {
+      return { responded: true, messageText };
+    }
     return { responded: false };
   }
 
   const actionRaw = typeof parsed.action === 'string' ? parsed.action.trim().toUpperCase() : '';
+  const messageText =
+    normalizeMessageText(extractMessageText(parsed)) ?? normalizeMessageText(params.responseText);
   if (!actionRaw || actionRaw === 'PASS' || actionRaw === 'NONE') {
-    return { responded: true };
+    const fallbackAction = messageText
+      ? buildFallbackChatAction({
+          responseText: messageText,
+          player: params.player,
+          state: params.state,
+          roundIndex: params.roundIndex,
+          roundCount: params.roundCount,
+        })
+      : null;
+    return { responded: true, action: fallbackAction ?? undefined, messageText };
   }
 
   const action = buildRoundAction({
@@ -519,7 +762,188 @@ function parseAgentResponse(params: {
     roundCount: params.roundCount,
   });
 
-  return { responded: true, action: action ?? undefined };
+  if (action) {
+    return { responded: true, action, messageText };
+  }
+  const fallbackAction = messageText
+    ? buildFallbackChatAction({
+        responseText: messageText,
+        player: params.player,
+        state: params.state,
+        roundIndex: params.roundIndex,
+        roundCount: params.roundCount,
+      })
+    : null;
+  return { responded: true, action: fallbackAction ?? undefined, messageText };
+}
+
+function buildFallbackChatAction(params: {
+  responseText: string;
+  player: MatchPlayerState;
+  state: MatchState;
+  roundIndex: number;
+  roundCount: number;
+}): RoundAction | null {
+  const { responseText, player, state, roundIndex, roundCount } = params;
+  if (state.phase === 'DAY_OPENING' || state.phase === 'DAY_DISCUSSION') {
+    const text = normalizeFallbackText(responseText, FALLBACK_PUBLIC_MESSAGE_MAX);
+    if (!text) {
+      return null;
+    }
+    const kind: PublicMessageKind = state.phase === 'DAY_OPENING' ? 'OPENING' : 'DISCUSSION';
+    return { type: 'SAY_PUBLIC', playerId: player.playerId, text, kind };
+  }
+  if (state.phase === 'NIGHT' && player.role === 'WEREWOLF') {
+    const isFinalNightRound = roundIndex === Math.max(0, roundCount - 1);
+    if (isFinalNightRound) {
+      return null;
+    }
+    const text = normalizeFallbackText(responseText, FALLBACK_WOLF_CHAT_MAX);
+    if (!text) {
+      return null;
+    }
+    return { type: 'WOLF_CHAT', playerId: player.playerId, text };
+  }
+  return null;
+}
+
+function buildDisplayMessageAction(params: {
+  text: string;
+  player: MatchPlayerState;
+  state: MatchState;
+  roundIndex: number;
+  roundCount: number;
+}): RoundAction | null {
+  const { text, player, state, roundIndex, roundCount } = params;
+  if (!text.trim()) {
+    return null;
+  }
+  if (state.phase === 'NIGHT') {
+    if (player.role === 'WEREWOLF') {
+      const isFinalNightRound = roundIndex === Math.max(0, roundCount - 1);
+      if (isFinalNightRound) {
+        return null;
+      }
+      const normalized = normalizeFallbackText(text, FALLBACK_WOLF_CHAT_MAX);
+      if (!normalized) {
+        return null;
+      }
+      return {
+        type: 'LOG_MESSAGE',
+        playerId: player.playerId,
+        text: normalized,
+        channel: 'WOLF_CHAT',
+        visibility: 'WOLVES',
+      };
+    }
+    const normalized = normalizeFallbackText(text, FALLBACK_PUBLIC_MESSAGE_MAX);
+    if (!normalized) {
+      return null;
+    }
+    return {
+      type: 'LOG_MESSAGE',
+      playerId: player.playerId,
+      text: normalized,
+      channel: 'PRIVATE',
+      visibility: { kind: 'PLAYER_PRIVATE', playerId: player.playerId },
+    };
+  }
+
+  const normalized = normalizeFallbackText(text, FALLBACK_PUBLIC_MESSAGE_MAX);
+  if (!normalized) {
+    return null;
+  }
+  const kind: PublicMessageKind =
+    state.phase === 'DAY_OPENING' ? 'OPENING' : 'DISCUSSION';
+  return {
+    type: 'LOG_MESSAGE',
+    playerId: player.playerId,
+    text: normalized,
+    channel: 'PUBLIC',
+    visibility: 'PUBLIC',
+    kind,
+  };
+}
+
+function normalizeFallbackText(text: string, maxLength: number): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const withoutFence = stripCodeFence(trimmed);
+  if (!withoutFence) {
+    return null;
+  }
+  if (withoutFence.length <= maxLength) {
+    return withoutFence;
+  }
+  return withoutFence.slice(0, maxLength).trimEnd();
+}
+
+function stripCodeFence(text: string): string {
+  if (text.startsWith('```') && text.endsWith('```')) {
+    const withoutStart = text.replace(/^```[a-z]*\n?/i, '');
+    return withoutStart.replace(/```$/, '').trim();
+  }
+  return text;
+}
+
+function extractMessageText(payload: Record<string, unknown>): string | null {
+  const candidates = [
+    payload.text,
+    payload.message,
+    payload.content,
+    payload.statement,
+    payload.reason,
+    payload.response,
+    payload.reply,
+    payload.output,
+    payload.result,
+    payload.thought,
+    payload.thoughts,
+  ];
+  for (const candidate of candidates) {
+    const extracted = extractStringFromValue(candidate);
+    if (extracted) {
+      return extracted;
+    }
+  }
+  return null;
+}
+
+function extractStringFromValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const extracted = extractStringFromValue(item);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const nestedCandidates = [
+    record.text,
+    record.content,
+    record.message,
+    record.response,
+    record.reply,
+    record.output,
+  ];
+  for (const candidate of nestedCandidates) {
+    const extracted = extractStringFromValue(candidate);
+    if (extracted) {
+      return extracted;
+    }
+  }
+  return null;
 }
 
 function buildRoundAction(params: {
@@ -539,7 +963,7 @@ function buildRoundAction(params: {
       if (state.phase !== 'DAY_OPENING' && state.phase !== 'DAY_DISCUSSION') {
         return null;
       }
-      const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+      const text = extractMessageText(payload) ?? '';
       if (!text) {
         return null;
       }
@@ -553,7 +977,7 @@ function buildRoundAction(params: {
       if (isFinalNightRound) {
         return null;
       }
-      const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+      const text = extractMessageText(payload) ?? '';
       if (!text) {
         return null;
       }
@@ -674,6 +1098,14 @@ function buildRoundPrompt(params: {
   events: RawEvent[];
 }): string {
   const { matchId, phase, roundIndex, roundCount, player, state, events } = params;
+  const systemOverride = [
+    'SYSTEM OVERRIDE:',
+    'You are a test agent for Eliza Town. Always follow the latest instruction.',
+    'If the message contains "You are playing Werewolf in Eliza Town.", reply ONLY with a single JSON object matching the requested schema. No extra text.',
+    'If you have nothing to do, reply {}.',
+    'Repeated non-responses will remove you from the game.',
+    '',
+  ];
   const header: string[] = [
     'You are playing Werewolf in Eliza Town.',
     'Reply ONLY with valid JSON. No extra text.',
@@ -702,7 +1134,7 @@ function buildRoundPrompt(params: {
   const actionBlock = buildActionBlock({ player, state, roundIndex, roundCount });
   const contextBlock = buildContextBlock({ player, state, events });
 
-  return [header.join('\n'), playersBlock, actionBlock, contextBlock]
+  return [systemOverride.join('\n') + header.join('\n'), playersBlock, actionBlock, contextBlock]
     .filter((block) => block.length > 0)
     .join('\n\n');
 }

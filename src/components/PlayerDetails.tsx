@@ -8,6 +8,7 @@ import { toastOnError } from '../toasts';
 import { useSendInput } from '../hooks/sendInput';
 import { GameId } from '../../convex/aiTown/ids';
 import { ServerGame } from '../hooks/serverGame';
+import { isTestMode } from '../testEnv';
 
 export default function PlayerDetails({
   worldId,
@@ -87,6 +88,11 @@ export default function PlayerDetails({
     playerStatus?.kind === 'participating' &&
     humanStatus?.kind === 'participating';
 
+  const canCancelInvite =
+    sameConversation &&
+    humanStatus?.kind === 'walkingOver' &&
+    (playerStatus?.kind === 'invited' || playerStatus?.kind === 'walkingOver');
+
   const onStartConversation = async () => {
     if (!humanPlayer || !playerId) {
       return;
@@ -118,6 +124,17 @@ export default function PlayerDetails({
   };
   const onLeaveConversation = async () => {
     if (!humanPlayer || !inConversationWithMe || !humanConversation) {
+      return;
+    }
+    await toastOnError(
+      leaveConversation({
+        playerId: humanPlayer.id,
+        conversationId: humanConversation.id,
+      }),
+    );
+  };
+  const onCancelInvite = async () => {
+    if (!humanPlayer || !humanConversation) {
       return;
     }
     await toastOnError(
@@ -174,6 +191,17 @@ export default function PlayerDetails({
         <a className="mt-6 button text-white shadow-solid text-xl cursor-pointer pointer-events-auto opacity-50">
           <div className="h-full bg-clay-700 text-center">
             <span>Walking over...</span>
+          </div>
+        </a>
+      )}
+      {isTestMode && canCancelInvite && (
+        <a
+          className="mt-4 button text-white shadow-solid text-lg cursor-pointer pointer-events-auto"
+          onClick={onCancelInvite}
+          data-testid="cancel-invite"
+        >
+          <div className="h-full bg-clay-700 text-center">
+            <span>Cancel invite</span>
           </div>
         </a>
       )}

@@ -453,7 +453,14 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
   );
   const eventsResult = useQuery(
     api.werewolf.matchEventsGet,
-    shouldLoad && matchId ? { matchId, limit: DEFAULT_EVENTS_LIMIT, includeSpoilers } : 'skip',
+    shouldLoad && matchId
+      ? {
+          matchId,
+          limit: DEFAULT_EVENTS_LIMIT,
+          includeSpoilers,
+          includeWolfChat: viewMode === 'public',
+        }
+      : 'skip',
   );
   const buildingResult = useQuery(
     api.werewolf.matchBuildingGet,
@@ -911,7 +918,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
           <div className="px-6 py-6 text-base text-white/70">Loading match details...</div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="grid min-h-0 flex-1 gap-4 overflow-hidden px-6 py-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(0,0.9fr)]">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-x-hidden overflow-y-auto px-6 py-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(0,0.9fr)] lg:overflow-hidden">
               <section className="flex min-h-0 flex-col gap-4">
                 <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-[#222a3b] bg-[#101625] p-2.5">
                 <div className="flex items-center justify-between text-[12px] uppercase tracking-[0.3em] text-white/50">
@@ -1090,6 +1097,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
                             )}
                             data-testid="werewolf-transcript-entry"
                             data-event-id={entry.eventId}
+                            data-entry-kind={entry.kind}
                           >
                             <div className="flex flex-col items-center gap-2">
                               <div className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#2b3346] bg-black/40">

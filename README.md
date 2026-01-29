@@ -14,7 +14,7 @@ Unlike standard AI Town, **Eliza Town** integrates the powerful [ElizaOS framewo
 
 ## 🚀 Key Features
 
-- **Create Custom Agents**: Use the in-game UI to spawn new agents. Connect them to your ElizaOS backend.
+- **Connect Custom Agents**: Use the in-game UI to attach existing ElizaOS agents to the world.
 - **MMO Experience**: (Coming Soon) Persistent world where players can visit each other's towns.
 - **Dynamic Conversations**: Agents remember history and context thanks to ElizaOS's memory system.
 
@@ -112,6 +112,32 @@ If you want full control over your agents or want to customize the AI behavior:
 
 3. **Ensure your ElizaOS server has an LLM configured** (e.g., OpenAI API key).
 
+### Embedding Dimension (Convex)
+
+The embeddings index dimension is configurable via env:
+
+```bash
+# OpenAI embeddings
+npx convex env set EMBEDDING_DIMENSION 1536
+
+# Together.ai embeddings
+npx convex env set EMBEDDING_DIMENSION 768
+
+# Ollama embeddings (default)
+npx convex env set EMBEDDING_DIMENSION 1024
+```
+
+Convex schema evaluation cannot read env vars directly, so we generate a static
+config file before dev runs. `npm run dev` already runs this step.
+
+To update the dimension manually (e.g., before `npx convex deploy`):
+
+```bash
+EMBEDDING_DIMENSION=1536 node scripts/set_embedding_dimension.mjs
+```
+
+Note: changing the dimension requires regenerating embeddings (wipe `memories` + `memoryEmbeddings`) because the vector index dimension must match.
+
 ---
 
 ## 🐺 Werewolf MCP Server (Remote Agents)
@@ -129,6 +155,48 @@ http://<host>:8787/mcp?playerId=<playerId>
 ```
 
 If `playerId` is missing, the session is treated as a spectator (read-only).
+
+---
+
+## 🧪 E2E Werewolf Agent (Messaging Sessions API)
+
+- Confirmed agent ID: `c7cab9c8-6c71-03a6-bd21-a694c8776023` (from `GET /api/agents`)
+- Verified response: "Hello! Yes, I can hear you. How can I assist you today?"
+- Recommended path: use the Messaging Sessions API (`/api/messaging/sessions/...`)
+
+Copy/paste flow:
+```bash
+BASE_URL="https://fliza-agent-production.up.railway.app"
+AGENT_ID="c7cab9c8-6c71-03a6-bd21-a694c8776023"
+USER_ID=$(uuidgen | tr 'A-Z' 'a-z')
+
+# 1) Create a session (copy sessionId from the response)
+curl -sS -X POST "$BASE_URL/api/messaging/sessions" \
+  -H "Content-Type: application/json" \
+  -d "{\"agentId\":\"$AGENT_ID\",\"userId\":\"$USER_ID\"}"
+
+# 2) Send a message (replace SESSION_ID)
+SESSION_ID="PASTE_SESSION_ID"
+curl -sS -X POST "$BASE_URL/api/messaging/sessions/$SESSION_ID/messages" \
+  -H "Content-Type: application/json" \
+  -d "{\"content\":\"Hello E2E Werewolf 1\"}"
+
+# 3) Read replies (poll)
+curl -sS "$BASE_URL/api/messaging/sessions/$SESSION_ID/messages?limit=20"
+```
+
+If the server requires auth, add this header to each request:
+`-H "X-API-KEY: your-key"`.
+
+Tiny chat loop script:
+```bash
+./scripts/werewolf_chat.sh
+# Overrides (optional):
+BASE_URL="https://fliza-agent-production.up.railway.app" \
+AGENT_ID="c7cab9c8-6c71-03a6-bd21-a694c8776023" \
+API_KEY="your-key" \
+./scripts/werewolf_chat.sh
+```
 
 ---
 
@@ -172,7 +240,8 @@ Tip: keep `WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS` comfortably below
 1. Click the **"New Agent"** button in the top menu.
 2. **Select a Sprite**: Browse the carousel to pick a pixel art avatar.
 3. **Define Personality**: Choose tags (e.g., Friendly, Mysterious) and write a Bio.
-4. **Spawn**: Click create, and your ElizaOS agent will appear in the world!
+4. **Connect ElizaOS**: Enter your Eliza server URL, load agents, and pick the one you want.
+5. **Connect**: Click connect, and your ElizaOS agent will appear in the world!
 
 ---
 

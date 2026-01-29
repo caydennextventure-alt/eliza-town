@@ -1,4 +1,4 @@
-import { Infer, v } from 'convex/values';
+import { ConvexError, Infer, v } from 'convex/values';
 import { Doc, Id } from '../_generated/dataModel';
 import {
   ActionCtx,
@@ -364,7 +364,26 @@ export const loadWorld = internalQuery({
     generationNumber: v.number(),
   },
   handler: async (ctx, args) => {
-    return await Game.load(ctx.db, args.worldId, args.generationNumber);
+    const isGenerationMismatch = (error: unknown) =>
+      (error instanceof ConvexError && error.data?.kind === 'generationNumber') ||
+      (typeof error === 'object' &&
+        error !== null &&
+        'data' in error &&
+        typeof (error as any).data === 'object' &&
+        (error as any).data?.kind === 'generationNumber') ||
+      (error instanceof Error &&
+        typeof error.message === 'string' &&
+        error.message.includes('Generation number mismatch'));
+
+    try {
+      return await Game.load(ctx.db, args.worldId, args.generationNumber);
+    } catch (error) {
+      if (isGenerationMismatch(error)) {
+        // Stale run step; caller can ignore.
+        return null;
+      }
+      throw error;
+    }
   },
 });
 
@@ -376,7 +395,26 @@ export const saveWorld = internalMutation({
     worldDiff: gameStateDiff,
   },
   handler: async (ctx, args) => {
-    await applyEngineUpdate(ctx, args.engineId, args.engineUpdate);
+    const isGenerationMismatch = (error: unknown) =>
+      (error instanceof ConvexError && error.data?.kind === 'generationNumber') ||
+      (typeof error === 'object' &&
+        error !== null &&
+        'data' in error &&
+        typeof (error as any).data === 'object' &&
+        (error as any).data?.kind === 'generationNumber') ||
+      (error instanceof Error &&
+        typeof error.message === 'string' &&
+        error.message.includes('Generation number mismatch'));
+
+    try {
+      await applyEngineUpdate(ctx, args.engineId, args.engineUpdate);
+    } catch (error) {
+      if (isGenerationMismatch(error)) {
+        // Ignore stale engine updates when a newer run step has already won.
+        return;
+      }
+      throw error;
+    }
     await Game.saveDiff(ctx, args.worldId, args.worldDiff);
   },
 });

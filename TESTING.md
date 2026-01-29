@@ -7,11 +7,20 @@ Convex backend and a real ElizaOS server. No mock backend is used.
 - `npm install`
 - `npx playwright install --with-deps`
 - Set Convex env: `npx convex env set ELIZA_SERVER_URL "http://localhost:3000"` (or your ElizaCloud/Railway URL).
-- (Optional) Set `E2E_ELIZA_SERVER_URL` and `E2E_ELIZA_AUTH_TOKEN` to auto-fill the Create Agent dialog in Playwright.
+- Set `E2E_ELIZA_SERVER_URL` (and `E2E_ELIZA_AUTH_TOKEN` if needed) so Playwright can load existing Eliza agents.
+  If unset, Eliza-backed E2E specs will be skipped.
+- The Werewolf E2E uses `E2E_WEREWOLF_ELIZA_SERVER_URL` (and optional `E2E_WEREWOLF_ELIZA_AUTH_TOKEN`).
+  It defaults to `https://fliza-agent-production.up.railway.app` when unset.
+- Ensure your Eliza server already has agents named `E2E Werewolf 1` → `E2E Werewolf 8` for the Werewolf E2E.
+- Optional: provide IDs if you want deterministic selection:
+  - `E2E_WEREWOLF_AGENT_IDS` (comma-separated, ordered to match `E2E Werewolf 1` → `E2E Werewolf 8`), or
+  - `E2E_WEREWOLF_AGENT_MAP` (JSON map of agent name → agent ID).
+  - Global fallbacks: `E2E_ELIZA_AGENT_IDS`, `E2E_ELIZA_AGENT_MAP`, or `E2E_ELIZA_AGENT_ID`.
+  - For the remove-agent test, set `E2E_ELIZA_REMOVE_AGENT_ID` (and optional `E2E_ELIZA_REMOVE_AGENT_NAME`).
 - Start ElizaOS in another terminal (see ElizaOS docs). Ensure `/api/agents` is reachable.
 - (Optional) Configure LLMs for ElizaOS and the game engine (Ollama is the default in Convex).
 - By default E2E uses a dedicated local Convex deployment on port 3212 (site port 3213) in anonymous mode (no prompts).
-- The Werewolf E2E test reuses fixed agent names (`E2E Werewolf 1` - `E2E Werewolf 8`). First run creates them; later runs reuse. If your Eliza server requires manually starting agents, flip the switch for those 8 once.
+- The Werewolf E2E test reuses fixed agent names (`E2E Werewolf 1` - `E2E Werewolf 8`) and connects them to existing Eliza agents by ID.
 - To print match events in Convex logs while running E2E, set `WEREWOLF_LOG_EVENTS=1`
   (passed envs are synced into the local Convex env when `dev:backend:e2e` starts).
 - Add `WEREWOLF_LOG_PRIVATE=1` to include wolf chat/private narrator lines.
@@ -34,6 +43,7 @@ Convex backend and a real ElizaOS server. No mock backend is used.
 - `WEREWOLF_ELIZA_CONCURRENCY=<n>`: limit concurrent Eliza calls during Werewolf rounds (default 4; E2E backend sets 2).
 - `ELIZA_API_DEBUG=1` or `E2E_ELIZA_DEBUG=1`: log Eliza API requests/responses (includes curl payloads with redacted keys).
 - `ELIZA_DISABLE_LEGACY=1` or `ELIZA_MESSAGING_ONLY=1`: skip legacy Eliza endpoints.
+- `ELIZA_POLL_ONLY=1`: disable SSE streaming and rely on message polling only.
 - `AITOWN_DISABLE_AGENT_OPERATIONS=1`: disable agent operations (useful for stabilizing E2E).
 - `AITOWN_NOISY_LOGS=1` or `NOISY_LOGS=1`: enable noisy logging helpers.
 - `LLM_LOGS=1`: log LLM requests/responses (also enabled by `AITOWN_NOISY_LOGS`).

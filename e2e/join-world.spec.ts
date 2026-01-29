@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { enterWorld, gotoHome, openJoinDialog, ensureCustomAgent, takeOverFirstAgent, releaseAgent, openAgentList } from './utils';
+import {
+  enterWorld,
+  gotoHome,
+  openJoinDialog,
+  ensureCustomAgent,
+  takeOverFirstAgent,
+  releaseAgent,
+  listCustomAgentEntries,
+  removeAgentsById,
+} from './utils';
+
+const hasElizaServer = !!process.env.E2E_ELIZA_SERVER_URL;
+
+test.skip(!hasElizaServer, 'E2E_ELIZA_SERVER_URL is required for join-world tests.');
 
 test('take over and release an agent', async ({ page }) => {
   await gotoHome(page);
@@ -25,20 +38,10 @@ test('join dialog empty state can route to create agent', async ({ page }) => {
     await expect(joinButton).toHaveText(/Take Over/);
   }
 
-  await openAgentList(page);
-  while (await page.locator('[data-testid^="agent-row-"]').count()) {
-    const row = page.locator('[data-testid^="agent-row-"]').first();
-    const agentName = await row.getAttribute('data-agent-name');
-    await row.locator('[data-testid^="agent-remove-"]').click();
-    await row.locator('[data-testid^="agent-confirm-remove-"]').click();
-    if (agentName) {
-      await expect(page.locator(`[data-agent-name="${agentName}"]`)).toHaveCount(0, {
-        timeout: 30000,
-      });
-    }
+  const agentEntries = await listCustomAgentEntries(page);
+  if (agentEntries.length > 0) {
+    await removeAgentsById(page, agentEntries.map((entry) => entry.agentId));
   }
-  await page.getByTestId('agent-list-done').click();
-  await expect(page.getByTestId('agent-list-dialog')).toBeHidden();
 
   await openJoinDialog(page);
   await page.getByTestId('join-world-cancel').click();

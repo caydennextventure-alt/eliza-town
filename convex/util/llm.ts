@@ -1,3 +1,5 @@
+import { EMBEDDING_DIMENSION } from './embeddingDimension';
+
 // That's right! No imports and no dependencies 🤯
 
 const OPENAI_EMBEDDING_DIMENSION = 1536;
@@ -20,7 +22,7 @@ const getRequestTimeoutMs = () => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_LLM_REQUEST_TIMEOUT_MS;
 };
 
-export const EMBEDDING_DIMENSION: number = OLLAMA_EMBEDDING_DIMENSION;
+export { EMBEDDING_DIMENSION };
 
 export function detectMismatchedLLMProvider() {
   switch (EMBEDDING_DIMENSION) {

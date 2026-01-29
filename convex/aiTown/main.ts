@@ -101,10 +101,35 @@ export const runStep = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      const { engine, gameState } = await ctx.runQuery(apiAny.aiTown.game.loadWorld, {
-        worldId: args.worldId,
-        generationNumber: args.generationNumber,
-      });
+      let engine;
+      let gameState;
+      const isGenerationMismatch = (error: unknown) =>
+        (error instanceof ConvexError && error.data?.kind === 'generationNumber') ||
+        (typeof error === 'object' &&
+          error !== null &&
+          'data' in error &&
+          typeof (error as any).data === 'object' &&
+          (error as any).data?.kind === 'generationNumber') ||
+        (error instanceof Error &&
+          typeof error.message === 'string' &&
+          error.message.includes('Generation number mismatch'));
+
+      try {
+        const result = await ctx.runQuery(apiAny.aiTown.game.loadWorld, {
+          worldId: args.worldId,
+          generationNumber: args.generationNumber,
+        });
+        if (!result) {
+          return;
+        }
+        ({ engine, gameState } = result);
+      } catch (error) {
+        if (isGenerationMismatch(error)) {
+          // Ignore stale run steps when a newer generation has already started.
+          return;
+        }
+        throw error;
+      }
       const game = new Game(engine, args.worldId, gameState);
       game.disableAgentOperations = shouldDisableAgentOperations();
 
