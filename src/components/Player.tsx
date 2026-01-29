@@ -31,7 +31,11 @@ export const Player = ({
 }) => {
   const playerCharacter = game.playerDescriptions.get(player.id)?.character;
   if (!playerCharacter) {
-    throw new Error(`Player ${player.id} has no character`);
+    if (!logged.has(player.id)) {
+      logged.add(player.id);
+      console.warn(`Player ${player.id} has no character yet`);
+    }
+    return null;
   }
   const { characters, isLoading } = useCharacters();
   const character = characters.find((c) => c.name === playerCharacter);
