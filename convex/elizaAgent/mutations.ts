@@ -11,6 +11,8 @@ export const saveMapping = internalMutation({
     elizaUserId: v.optional(v.string()),
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
+    communicationMode: v.optional(v.string()),
+    communicationVerifiedAt: v.optional(v.number()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()),
@@ -37,6 +39,12 @@ export const saveMapping = internalMutation({
       if (args.elizaAuthToken !== undefined) {
         update.elizaAuthToken = args.elizaAuthToken;
       }
+      if (args.communicationMode !== undefined) {
+        update.communicationMode = args.communicationMode;
+      }
+      if (args.communicationVerifiedAt !== undefined) {
+        update.communicationVerifiedAt = args.communicationVerifiedAt;
+      }
       if (args.elizaWorldId !== undefined) {
         update.elizaWorldId = args.elizaWorldId;
       }
@@ -54,6 +62,8 @@ export const saveMapping = internalMutation({
       elizaUserId: args.elizaUserId,
       elizaServerUrl: args.elizaServerUrl,
       elizaAuthToken: args.elizaAuthToken,
+      communicationMode: args.communicationMode,
+      communicationVerifiedAt: args.communicationVerifiedAt,
       name: args.name,
       bio: args.bio,
       personality: args.personality,

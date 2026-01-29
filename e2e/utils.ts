@@ -391,6 +391,12 @@ export const createCustomAgentWithOptions = async (
   }
   await loadElizaAgentsWithRetry(page);
   await selectElizaAgentOption(page, name, agentId);
+  const connectionButton = page.getByTestId('agent-connection-test');
+  await expect(connectionButton).toBeEnabled();
+  await connectionButton.click();
+  await expect(page.getByTestId('agent-connection-status')).toContainText('Connection verified', {
+    timeout: 90000,
+  });
   const dialog = page.getByTestId('create-agent-dialog');
   const errorBox = page.getByTestId('agent-error');
   const createButton = page.getByTestId('agent-create');
@@ -574,6 +580,16 @@ export const ensureNamedAgentsViaConvex = async (
     if (!elizaAgentId) {
       throw new Error(`Missing Eliza agent id for "${name}".`);
     }
+    const testResult = await client.action(api.elizaAgent.actions.testElizaAgentCommunication, {
+      elizaAgentId,
+      elizaServerUrl,
+      elizaAuthToken,
+    });
+    if (!testResult?.ok || !testResult?.preferredMode) {
+      throw new Error(
+        `Connection test failed for "${name}": ${testResult?.message ?? 'Unknown error'}`,
+      );
+    }
     await client.action(api.elizaAgent.actions.connectExistingElizaAgent, {
       worldId,
       name,
@@ -584,6 +600,7 @@ export const ensureNamedAgentsViaConvex = async (
       elizaAgentId,
       elizaServerUrl,
       elizaAuthToken,
+      communicationMode: testResult.preferredMode,
     });
   }
 

@@ -24,8 +24,7 @@ test('create agent with custom characters and traits', async ({ page }) => {
   await page.getByTestId('open-create-agent').click();
   await expect(page.getByTestId('create-agent-dialog')).toBeVisible();
 
-  await page.getByTestId('agent-create').click();
-  await expect(page.getByTestId('agent-error')).toBeVisible();
+  await expect(page.getByTestId('agent-create')).toBeDisabled();
 
   const elizaUrl = process.env.E2E_ELIZA_SERVER_URL;
   const elizaAgentName =
@@ -52,6 +51,13 @@ test('create agent with custom characters and traits', async ({ page }) => {
     throw new Error(`Unable to find agent option matching "${elizaAgentName}".`);
   }
   await select.selectOption(optionValue);
+
+  const connectionButton = page.getByTestId('agent-connection-test');
+  await expect(connectionButton).toBeEnabled();
+  await connectionButton.click();
+  await expect(page.getByTestId('agent-connection-status')).toContainText('Connection verified', {
+    timeout: 90000,
+  });
 
   await page.getByTestId('agent-create').click();
   await expect(page.getByTestId('create-agent-dialog')).toBeHidden({ timeout: 60000 });

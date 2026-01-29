@@ -22,9 +22,12 @@ const modalStyles = {
     transform: 'translate(-50%, -50%)',
     maxWidth: '850px', // Wider to accommodate 2 columns
     width: '90%',
+    height: '90vh',
+    maxHeight: '90vh',
     border: '4px solid #4a3b5b',
     borderRadius: '4px',
     padding: '0',
+    overflow: 'hidden',
     background: '#23202b',
     color: 'white',
     fontFamily: '"Upheaval Pro", "sans-serif"',
@@ -39,6 +42,12 @@ const PERSONALITY_OPTIONS = [
   'Cheerful', 'Calm', 'Adventurous', 'Creative'
 ];
 
+const COMMUNICATION_MODE_LABELS: Record<string, string> = {
+  legacy: 'Legacy API',
+  'messaging-stream': 'Streaming (SSE)',
+  'messaging-poll': 'Message Queue (Polling)',
+};
+
 type ElizaAgentSummary = {
   id?: string;
   name?: string;
@@ -46,6 +55,32 @@ type ElizaAgentSummary = {
   bio?: string;
   personality?: string[];
   plan?: string;
+};
+
+type CommunicationDiagnostics = {
+  ok: boolean;
+  message?: string;
+};
+
+type CommunicationTestMessage = {
+  role: 'user' | 'agent';
+  text: string;
+};
+
+type CommunicationTestResult = {
+  ok: boolean;
+  message?: string;
+  preferredMode?: string;
+  diagnostics?: {
+    legacy: CommunicationDiagnostics;
+    streaming: CommunicationDiagnostics;
+    queue: CommunicationDiagnostics;
+  };
+  conversation?: {
+    conversationId: string;
+    senderId: string;
+    messages: CommunicationTestMessage[];
+  };
 };
 
 type Props = {
@@ -72,6 +107,15 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [checkStatus, setCheckStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [agentMetadata, setAgentMetadata] = useState('');
+  const [connectionTest, setConnectionTest] = useState<CommunicationTestResult | null>(null);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testChatMessages, setTestChatMessages] = useState<CommunicationTestMessage[]>([]);
+  const [testChatInput, setTestChatInput] = useState('');
+  const [testChatError, setTestChatError] = useState<string | null>(null);
+  const [isSendingTestChat, setIsSendingTestChat] = useState(false);
+  const [testConversationId, setTestConversationId] = useState<string | null>(null);
+  const [testSenderId, setTestSenderId] = useState<string | null>(null);
   
   const worldStatus = useQuery(api.world.defaultWorldStatus);
   const worldId = worldStatus?.worldId;
@@ -80,6 +124,8 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const connectExistingElizaAgent = useAction(api.elizaAgent.actions.connectExistingElizaAgent);
   const fetchElizaAgentInfo = useAction(api.elizaAgent.actions.fetchElizaAgentInfo);
   const fetchElizaAgents = useAction(api.elizaAgent.actions.fetchElizaAgents);
+  const testElizaAgentCommunication = useAction(api.elizaAgent.actions.testElizaAgentCommunication);
+  const sendElizaTestMessage = useAction(api.elizaAgent.actions.sendElizaTestMessage);
   const convex = useConvex();
 
   const customCharacters = useMemo(() => {
@@ -109,6 +155,15 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setSelectedAgentId('');
       setCheckStatus(null);
       setAgentMetadata('');
+      setConnectionTest(null);
+      setIsTestingConnection(false);
+      setConnectionStatus(null);
+      setTestChatMessages([]);
+      setTestChatInput('');
+      setTestChatError(null);
+      setIsSendingTestChat(false);
+      setTestConversationId(null);
+      setTestSenderId(null);
       return;
     }
     if (selectableCharacters.length === 0) {
@@ -119,6 +174,16 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setSelectedId(selectableCharacters[0].name);
     }
   }, [isOpen, selectableCharacters, selectedId]);
+
+  useEffect(() => {
+    setConnectionTest(null);
+    setConnectionStatus(null);
+    setTestChatMessages([]);
+    setTestChatInput('');
+    setTestChatError(null);
+    setTestConversationId(null);
+    setTestSenderId(null);
+  }, [elizaServerUrl, elizaAgentId, elizaAuthToken]);
 
   const selectedCharacter = useMemo(
     () => selectableCharacters.find((character) => character.name === selectedId) ?? null,
@@ -154,6 +219,10 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
       setError('Select an Eliza agent.');
       return;
     }
+    if (!connectionTest?.ok || !connectionTest.preferredMode) {
+      setError('Run the connection test before adding this agent.');
+      return;
+    }
 
     setError(null);
     setIsCreating(true);
@@ -179,6 +248,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
         elizaAgentId: elizaAgentId.trim(),
         elizaServerUrl: trimmedElizaServerUrl ? trimmedElizaServerUrl : undefined,
         elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
+        communicationMode: connectionTest.preferredMode,
       });
       
       const { inputId } = result;
@@ -355,6 +425,63 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     }
   };
 
+  const handleRunConnectionTest = async () => {
+    const trimmedElizaServerUrl = elizaServerUrl.trim();
+    const trimmedElizaAgentId = elizaAgentId.trim();
+    const trimmedElizaAuthToken = elizaAuthToken.trim();
+    if (!trimmedElizaServerUrl) {
+      setConnectionStatus({
+        ok: false,
+        message: 'Enter the Eliza server URL to run the connection test.',
+      });
+      return;
+    }
+    if (!trimmedElizaAgentId) {
+      setConnectionStatus({
+        ok: false,
+        message: 'Select an agent to test.',
+      });
+      return;
+    }
+    setIsTestingConnection(true);
+    setConnectionStatus(null);
+    setTestChatError(null);
+    setTestChatInput('');
+    try {
+      const result = await testElizaAgentCommunication({
+        elizaAgentId: trimmedElizaAgentId,
+        elizaServerUrl: trimmedElizaServerUrl,
+        elizaAuthToken: trimmedElizaAuthToken ? trimmedElizaAuthToken : undefined,
+      });
+      setConnectionTest(result);
+      setTestChatMessages(result.conversation?.messages ?? []);
+      setTestConversationId(result.conversation?.conversationId ?? null);
+      setTestSenderId(result.conversation?.senderId ?? null);
+      const modeLabel = result.preferredMode
+        ? COMMUNICATION_MODE_LABELS[result.preferredMode] ?? result.preferredMode
+        : 'Unknown';
+      if (result.ok) {
+        setConnectionStatus({
+          ok: true,
+          message: `Connection verified (${modeLabel}).`,
+        });
+      } else {
+        const detail = result.message ? ` ${result.message}` : '';
+        setConnectionStatus({
+          ok: false,
+          message: `Connection test failed.${detail}`,
+        });
+      }
+    } catch (testError: any) {
+      setConnectionStatus({
+        ok: false,
+        message: testError?.message ?? 'Unable to run connection test.',
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
   const handleSelectAgent = async (agentId: string, agentOverride?: ElizaAgentSummary) => {
     setSelectedAgentId(agentId);
     setElizaAgentId(agentId);
@@ -392,6 +519,41 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
     }
   };
 
+  const handleSendTestMessage = async () => {
+    const message = testChatInput.trim();
+    if (!message) {
+      return;
+    }
+    if (!connectionTest?.preferredMode || !testConversationId || !testSenderId) {
+      setTestChatError('Run the connection test before sending messages.');
+      return;
+    }
+    setIsSendingTestChat(true);
+    setTestChatError(null);
+    setTestChatInput('');
+    setTestChatMessages((prev) => [...prev, { role: 'user', text: message }]);
+    try {
+      const result = await sendElizaTestMessage({
+        elizaAgentId: elizaAgentId.trim(),
+        elizaServerUrl: elizaServerUrl.trim(),
+        elizaAuthToken: elizaAuthToken.trim() ? elizaAuthToken.trim() : undefined,
+        message,
+        senderId: testSenderId,
+        conversationId: testConversationId,
+        preferredMode: connectionTest.preferredMode,
+      });
+      if (result.ok && result.reply) {
+        setTestChatMessages((prev) => [...prev, { role: 'agent', text: result.reply }]);
+      } else {
+        setTestChatError(result.message ?? 'No reply from agent.');
+      }
+    } catch (sendError: any) {
+      setTestChatError(sendError?.message ?? 'Unable to send test message.');
+    } finally {
+      setIsSendingTestChat(false);
+    }
+  };
+
   return (
     <ReactModal
       isOpen={isOpen}
@@ -424,7 +586,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
         </div>
 
         {/* Main Content - Two Column Layout */}
-        <div className="flex flex-1 p-4 gap-4 overflow-hidden">
+        <div className="flex flex-1 p-4 gap-4 overflow-hidden min-h-0">
             
             {/* Left Column: Preview & Selector */}
             <div className="w-1/3 flex flex-col gap-2 min-w-[180px]">
@@ -503,7 +665,7 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
             </div>
 
             {/* Right Column: Form Fields */}
-            <div className="w-2/3 flex flex-col gap-4 overflow-y-auto pr-2">
+            <div className="w-2/3 flex flex-col gap-4 overflow-y-auto pr-2 min-h-0">
                  <div className="space-y-1">
                     <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Eliza Server URL</label>
                     <input
@@ -600,6 +762,115 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                     ) : null}
                 </div>
 
+                <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleRunConnectionTest}
+                      disabled={isTestingConnection || !elizaServerUrl.trim() || !elizaAgentId.trim()}
+                      className={`w-full border-2 border-[#4a3b5b] px-3 py-2 text-xs uppercase tracking-widest transition-colors ${
+                        isTestingConnection
+                          ? 'cursor-wait text-white/60'
+                          : 'text-[#a395b8] hover:border-[#6d607d] hover:text-white'
+                      }`}
+                      data-testid="agent-connection-test"
+                    >
+                      {isTestingConnection ? 'Testing...' : 'Run Connection Test'}
+                    </button>
+                    {connectionStatus ? (
+                      <div
+                        className={`px-3 py-2 text-xs border ${
+                          connectionStatus.ok
+                            ? 'border-emerald-400/40 bg-emerald-900/20 text-emerald-200'
+                            : 'border-red-500/40 bg-red-900/20 text-red-200'
+                        }`}
+                        data-testid="agent-connection-status"
+                      >
+                        {connectionStatus.message}
+                      </div>
+                    ) : null}
+                    {connectionTest?.diagnostics ? (
+                      <div className="grid grid-cols-1 gap-2 text-xs" data-testid="agent-connection-diagnostics">
+                        {([
+                          { key: 'legacy', label: 'Legacy' },
+                          { key: 'streaming', label: 'Streaming' },
+                          { key: 'queue', label: 'Message Queue' },
+                        ] as const).map((entry) => {
+                          const diag = connectionTest.diagnostics?.[entry.key];
+                          if (!diag) {
+                            return null;
+                          }
+                          return (
+                            <div
+                              key={entry.key}
+                              className={`border px-3 py-2 break-words ${
+                                diag.ok
+                                  ? 'border-emerald-400/30 bg-emerald-900/10 text-emerald-200'
+                                  : 'border-red-500/30 bg-red-900/10 text-red-200'
+                              }`}
+                              data-testid={`agent-connection-${entry.key}`}
+                            >
+                              <span className="font-bold">{entry.label}:</span>{' '}
+                              {diag.ok ? 'OK' : 'Failed'}
+                              {diag.message ? ` - ${diag.message}` : ''}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">
+                        Test Conversation
+                      </label>
+                      <div
+                        className="bg-[#1a1821] border-2 border-[#2d2438] p-2 text-xs text-[#e0dce6] max-h-40 overflow-y-auto space-y-2"
+                        data-testid="agent-test-chat"
+                      >
+                        {testChatMessages.length > 0 ? (
+                          testChatMessages.map((message, index) => (
+                            <div key={`${message.role}-${index}`} className="flex gap-2 min-w-0">
+                              <span className="text-[#6d607d] uppercase text-[10px]">
+                                {message.role === 'user' ? 'You' : 'Agent'}
+                              </span>
+                              <span className="break-words whitespace-pre-wrap">{message.text}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-[#6d607d] text-[10px]">
+                            Run the connection test to see the greeting and introduction replies.
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          value={testChatInput}
+                          onChange={(e) => setTestChatInput(e.target.value)}
+                          placeholder="Send a test message..."
+                          className="flex-1 bg-[#1a1821] border-2 border-[#2d2438] focus:border-[#4a3b5b] px-3 py-2 text-xs text-[#e0dce6] outline-none transition-colors placeholder:text-[#4a3b5b]"
+                          data-testid="agent-test-input"
+                          disabled={!connectionTest?.ok || isSendingTestChat}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSendTestMessage}
+                          disabled={!connectionTest?.ok || isSendingTestChat || !testChatInput.trim()}
+                          className={`border-2 border-[#4a3b5b] px-3 py-2 text-xs uppercase tracking-widest transition-colors ${
+                            isSendingTestChat
+                              ? 'cursor-wait text-white/60'
+                              : 'text-[#a395b8] hover:border-[#6d607d] hover:text-white'
+                          }`}
+                          data-testid="agent-test-send"
+                        >
+                          {isSendingTestChat ? 'Sending...' : 'Send'}
+                        </button>
+                      </div>
+                      {testChatError ? (
+                        <div className="text-xs text-red-300" data-testid="agent-test-error">
+                          {testChatError}
+                        </div>
+                      ) : null}
+                    </div>
+                </div>
+
                 <div className="space-y-1">
                     <label className="text-xs uppercase tracking-widest text-[#6d607d] font-bold">Agent Metadata</label>
                     <textarea
@@ -636,9 +907,9 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
                 </button>
                 <button
                     onClick={handleCreate}
-                    disabled={isCreating}
+                    disabled={isCreating || !connectionTest?.ok}
                     className={`px-6 py-2 bg-[#3b8f6e] border-b-4 border-[#23634a] text-white text-xs uppercase font-bold tracking-widest hover:bg-[#46a881] hover:translate-y-[-1px] active:translate-y-[1px] active:border-b-0 transition-all ${
-                        isCreating ? 'opacity-50 cursor-wait' : ''
+                        isCreating || !connectionTest?.ok ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                     data-testid="agent-create"
                 >

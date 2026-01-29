@@ -136,6 +136,35 @@ type AgentSummary = {
   plan?: string;
 };
 
+type CommunicationMode = 'legacy' | 'messaging-stream' | 'messaging-poll';
+
+type CommunicationDiagnostics = {
+  ok: boolean;
+  message?: string;
+};
+
+type CommunicationTestMessage = {
+  role: 'user' | 'agent';
+  text: string;
+};
+
+const normalizeCommunicationMode = (value?: string): CommunicationMode | null => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'legacy') {
+    return 'legacy';
+  }
+  if (normalized === 'messaging-stream' || normalized === 'stream' || normalized === 'streaming') {
+    return 'messaging-stream';
+  }
+  if (normalized === 'messaging-poll' || normalized === 'poll' || normalized === 'queue') {
+    return 'messaging-poll';
+  }
+  return null;
+};
+
 const pickStringArray = (value: unknown): string[] | undefined => {
   if (Array.isArray(value)) {
     const items = value.filter((entry): entry is string => typeof entry === 'string');
@@ -541,6 +570,56 @@ const parseLegacyResponseText = (data: any): string | null => {
     return extracted;
   }
   return null;
+};
+
+const sendLegacyMessage = async (params: {
+  elizaServerUrl: string;
+  authToken?: string;
+  elizaAgentId: string;
+  message: string;
+  userId: string;
+  conversationId: string;
+  timeoutMs?: number;
+}): Promise<{ ok: boolean; text: string | null; status: number; body?: string }> => {
+  const messageSummary = summarizeForLog(params.message);
+  const messageLength = params.message.length;
+  const legacyPayload = {
+    entityId: params.userId,
+    roomId: params.conversationId,
+    content: { text: messageSummary, source: 'api' },
+    text: messageSummary,
+    userId: params.userId,
+    messageLength,
+  };
+  logElizaRequest(
+    'legacy',
+    `${params.elizaServerUrl}/api/agents/${params.elizaAgentId}/message`,
+    buildElizaHeaders(params.authToken),
+    legacyPayload,
+  );
+  const legacyRes = await fetchWithTimeout(
+    `${params.elizaServerUrl}/api/agents/${params.elizaAgentId}/message`,
+    {
+      method: 'POST',
+      headers: buildElizaHeaders(params.authToken),
+      body: JSON.stringify({
+        entityId: params.userId,
+        roomId: params.conversationId,
+        content: { text: params.message, source: 'api' },
+        text: params.message,
+        userId: params.userId,
+      }),
+    },
+    params.timeoutMs,
+  );
+  const status = legacyRes.status;
+  if (legacyRes.ok) {
+    const data = await legacyRes.json();
+    return { ok: true, text: parseLegacyResponseText(data), status };
+  }
+  const body = await legacyRes.text();
+  logElizaResponse('legacy', status, body);
+  return { ok: false, text: null, status, body };
 };
 
 const parseSsePayload = (payload: string): { text: string | null; error?: string } => {
@@ -998,6 +1077,10 @@ const getOrCreateSession = async (params: {
   return await createMessagingSession(params);
 };
 
+type SessionSendResult =
+  | { ok: true; text: string | null; modeUsed: 'stream' | 'poll' | 'direct' }
+  | { ok: false; status: number; body: string; modeUsed: 'stream' | 'poll' | 'direct' };
+
 const sendMessageWithSession = async (params: {
   elizaServerUrl: string;
   authToken?: string;
@@ -1006,14 +1089,23 @@ const sendMessageWithSession = async (params: {
   senderId: string;
   conversationId: string;
   timeoutMs?: number;
-}) => {
+  mode?: 'auto' | 'stream' | 'poll';
+  allowPollFallback?: boolean;
+  allowStreamFallback?: boolean;
+}): Promise<SessionSendResult> => {
   const sentAtMs = Date.now();
   const pollTimeoutMs =
     typeof params.timeoutMs === 'number' ? Math.min(5_000, params.timeoutMs) : 5_000;
   const messageSummary = summarizeForLog(params.message);
-  const pollOnly = shouldPollOnly();
+  const requestedMode = params.mode ?? 'auto';
+  const pollOnly =
+    requestedMode === 'poll' ? true : requestedMode === 'stream' ? false : shouldPollOnly();
+  const allowPollFallback = params.allowPollFallback ?? true;
+  const allowStreamFallback =
+    params.allowStreamFallback ??
+    (requestedMode === 'auto' ? shouldAllowPollOnlySseFallback() : false);
 
-  const sendStreamRequest = async () => {
+  const sendStreamRequest = async (): Promise<SessionSendResult> => {
     const payload = {
       content: messageSummary,
       mode: 'stream',
@@ -1043,7 +1135,7 @@ const sendMessageWithSession = async (params: {
     if (!res.ok) {
       const text = await res.text();
       logElizaResponse('messaging', res.status, text);
-      return { ok: false as const, status: res.status, body: text };
+      return { ok: false as const, status: res.status, body: text, modeUsed: 'stream' };
     }
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.includes('text/event-stream')) {
@@ -1057,8 +1149,37 @@ const sendMessageWithSession = async (params: {
       const extracted = extractTextFromPayload(parsed) ?? (textBody.trim() ? textBody.trim() : null);
       logElizaResponse('messaging', 200, textBody);
       if (extracted) {
-        return { ok: true as const, text: extracted };
+        return { ok: true as const, text: extracted, modeUsed: 'direct' };
       }
+      if (allowPollFallback) {
+        const fallback = await pollForSessionReply({
+          elizaServerUrl: params.elizaServerUrl,
+          authToken: params.authToken,
+          sessionId: params.sessionId,
+          sentAtMs,
+          timeoutMs: pollTimeoutMs,
+        });
+        if (shouldLogElizaApi()) {
+          console.log('[ELIZA_API_DEBUG] messaging poll', {
+            sessionId: params.sessionId,
+            result: fallback ? 'hit' : 'miss',
+          });
+        }
+        return { ok: true as const, text: fallback, modeUsed: 'poll' };
+      }
+      return { ok: true as const, text: null, modeUsed: 'direct' };
+    }
+    const { text, error } = await parseSseStream(res);
+    if (!error && text) {
+      logElizaResponse('messaging', 200, text ?? '');
+      return { ok: true as const, text, modeUsed: 'stream' };
+    }
+    if (error) {
+      logElizaResponse('messaging', 200, error);
+    } else {
+      logElizaResponse('messaging', 200, text ?? '');
+    }
+    if (allowPollFallback) {
       const fallback = await pollForSessionReply({
         elizaServerUrl: params.elizaServerUrl,
         authToken: params.authToken,
@@ -1072,38 +1193,14 @@ const sendMessageWithSession = async (params: {
           result: fallback ? 'hit' : 'miss',
         });
       }
-      return { ok: true as const, text: fallback };
-    }
-    const { text, error } = await parseSseStream(res);
-    if (!error && text) {
-      logElizaResponse('messaging', 200, text ?? '');
-      return { ok: true as const, text };
+      if (fallback) {
+        return { ok: true as const, text: fallback, modeUsed: 'poll' };
+      }
     }
     if (error) {
-      logElizaResponse('messaging', 200, error);
-    } else {
-      logElizaResponse('messaging', 200, text ?? '');
+      return { ok: false as const, status: 200, body: error, modeUsed: 'stream' };
     }
-    const fallback = await pollForSessionReply({
-      elizaServerUrl: params.elizaServerUrl,
-      authToken: params.authToken,
-      sessionId: params.sessionId,
-      sentAtMs,
-      timeoutMs: pollTimeoutMs,
-    });
-    if (shouldLogElizaApi()) {
-      console.log('[ELIZA_API_DEBUG] messaging poll', {
-        sessionId: params.sessionId,
-        result: fallback ? 'hit' : 'miss',
-      });
-    }
-    if (fallback) {
-      return { ok: true as const, text: fallback };
-    }
-    if (error) {
-      return { ok: false as const, status: 200, body: error };
-    }
-    return { ok: true as const, text: null };
+    return { ok: true as const, text: null, modeUsed: 'stream' };
   };
 
   if (pollOnly) {
@@ -1134,7 +1231,7 @@ const sendMessageWithSession = async (params: {
     if (!res.ok) {
       const text = await res.text();
       logElizaResponse('messaging', res.status, text);
-      return { ok: false as const, status: res.status, body: text };
+      return { ok: false as const, status: res.status, body: text, modeUsed: 'poll' };
     }
     const textBody = await res.text();
     logElizaResponse('messaging', 200, textBody);
@@ -1152,13 +1249,13 @@ const sendMessageWithSession = async (params: {
       });
     }
     if (fallback) {
-      return { ok: true as const, text: fallback };
+      return { ok: true as const, text: fallback, modeUsed: 'poll' };
     }
-    if (shouldAllowPollOnlySseFallback()) {
+    if (allowStreamFallback) {
       return await sendStreamRequest();
     }
     // In strict poll-only mode, do not fall back to SSE. Treat a miss as a pass.
-    return { ok: true as const, text: null };
+    return { ok: true as const, text: null, modeUsed: 'poll' };
   }
   return await sendStreamRequest();
 };
@@ -1173,6 +1270,7 @@ export const createElizaAgent = action({
     personality: v.array(v.string()), // ['Friendly', 'Curious']
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
+    communicationMode: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ inputId: Id<"inputs"> | string; elizaAgentId: string }> => {
     // 1. Create in ElizaOS
@@ -1180,6 +1278,7 @@ export const createElizaAgent = action({
     const elizaServerUrl = elizaServerUrlOverride ?? DEFAULT_ELIZA_SERVER;
     const authToken = resolveElizaAuthToken(args.elizaAuthToken);
     const storedAuthToken = normalizeAuthToken(args.elizaAuthToken);
+    const normalizedMode = normalizeCommunicationMode(args.communicationMode);
     console.log(`Creating Eliza Agent [${args.name}] at ${elizaServerUrl}...`);
     
     try {
@@ -1245,6 +1344,8 @@ export const createElizaAgent = action({
          personality: args.personality,
          elizaServerUrl: elizaServerUrlOverride,
          elizaAuthToken: storedAuthToken,
+         communicationMode: normalizedMode ?? undefined,
+         communicationVerifiedAt: normalizedMode ? Date.now() : undefined,
          // playerId Left undefined for now, to be linked later if needed
       });
 
@@ -1279,12 +1380,17 @@ export const connectExistingElizaAgent = action({
     elizaAgentId: v.string(),
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
+    communicationMode: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ inputId: Id<'inputs'> | string; elizaAgentId: string }> => {
     const elizaServerUrlOverride = normalizeElizaServerUrl(args.elizaServerUrl);
     const elizaServerUrl = elizaServerUrlOverride ?? DEFAULT_ELIZA_SERVER;
     const authToken = resolveElizaAuthToken(args.elizaAuthToken);
     const storedAuthToken = normalizeAuthToken(args.elizaAuthToken);
+    const normalizedMode = normalizeCommunicationMode(args.communicationMode);
+    if (!normalizedMode) {
+      throw new Error('Run the connection test before adding this agent.');
+    }
 
     const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
       worldId: args.worldId,
@@ -1302,6 +1408,8 @@ export const connectExistingElizaAgent = action({
       personality: args.personality,
       elizaServerUrl: elizaServerUrlOverride,
       elizaAuthToken: storedAuthToken,
+      communicationMode: normalizedMode,
+      communicationVerifiedAt: Date.now(),
     });
 
     try {
@@ -1328,6 +1436,8 @@ type SendMessageArgs = {
   senderId: string;
   conversationId: string;
   timeoutMs?: number;
+  preferredMode?: string;
+  strictMode?: boolean;
 };
 
 export const sendElizaMessage = async (
@@ -1341,6 +1451,25 @@ export const sendElizaMessage = async (
   let legacyStatus = 0;
   let legacyBody = '';
   const skipLegacy = shouldSkipLegacy();
+  const requestedMode = normalizeCommunicationMode(args.preferredMode);
+  let storedMode: CommunicationMode | null = null;
+  if (!requestedMode) {
+    try {
+      const mapping = await ctx.runQuery(apiAny.elizaAgent.queries.getByElizaAgentId, {
+        elizaAgentId: args.elizaAgentId,
+      });
+      storedMode = normalizeCommunicationMode(mapping?.communicationMode ?? undefined);
+    } catch (error) {
+      if (shouldLogElizaApi()) {
+        console.log('[ELIZA_API_DEBUG] communication mode lookup failed', {
+          elizaAgentId: args.elizaAgentId,
+          error: (error as Error)?.message ?? error,
+        });
+      }
+    }
+  }
+  const preferredMode = requestedMode ?? storedMode;
+  const strictMode = args.strictMode === true;
 
   try {
     let elizaUserId = args.senderId;
@@ -1357,52 +1486,51 @@ export const sendElizaMessage = async (
       console.error('Eliza world ensure failed', error);
     }
 
-    if (!skipLegacy) {
-      const messageSummary = summarizeForLog(args.message);
-      const messageLength = args.message.length;
-      const legacyPayload = {
-        entityId: elizaUserId,
-        roomId: args.conversationId,
-        content: { text: messageSummary, source: 'api' },
-        text: messageSummary,
-        userId: elizaUserId,
-        messageLength,
-      };
-      logElizaRequest(
-        'legacy',
-        `${elizaServerUrl}/api/agents/${args.elizaAgentId}/message`,
-        buildElizaHeaders(authToken),
-        legacyPayload,
-      );
-      const legacyRes = await fetchWithTimeout(
-        `${elizaServerUrl}/api/agents/${args.elizaAgentId}/message`,
-        {
-          method: 'POST',
-          headers: buildElizaHeaders(authToken),
-          body: JSON.stringify({
-            entityId: elizaUserId,
-            roomId: args.conversationId,
-            content: { text: args.message, source: 'api' },
-            text: args.message,
-            userId: elizaUserId,
-          }),
-        },
-        remainingMs(),
-      );
-
-      legacyStatus = legacyRes.status;
-      if (legacyRes.ok) {
-        const data = await legacyRes.json();
-        return parseLegacyResponseText(data);
+    const tryLegacy = async (): Promise<string | null> => {
+      if (skipLegacy) {
+        if (shouldLogElizaApi() && shouldLogElizaVerbose()) {
+          console.log('[ELIZA_API_DEBUG] legacy skipped', { reason: 'ELIZA_DISABLE_LEGACY' });
+        }
+        return null;
       }
+      const legacyResult = await sendLegacyMessage({
+        elizaServerUrl,
+        authToken,
+        elizaAgentId: args.elizaAgentId,
+        message: args.message,
+        userId: elizaUserId,
+        conversationId: args.conversationId,
+        timeoutMs: remainingMs(),
+      });
+      legacyStatus = legacyResult.status;
+      legacyBody = legacyResult.body ?? '';
+      return legacyResult.text;
+    };
 
-      legacyBody = await legacyRes.text();
-      logElizaResponse('legacy', legacyStatus, legacyBody);
-    } else if (shouldLogElizaApi()) {
-      if (shouldLogElizaVerbose()) {
-        console.log('[ELIZA_API_DEBUG] legacy skipped', { reason: 'ELIZA_DISABLE_LEGACY' });
+    const allowLegacy = !skipLegacy;
+    const allowMessaging = preferredMode !== 'legacy' || !strictMode;
+    const preferLegacyFirst = allowLegacy && (preferredMode === null || preferredMode === 'legacy');
+
+    if (preferLegacyFirst) {
+      const legacyReply = await tryLegacy();
+      if (legacyReply) {
+        return legacyReply;
+      }
+      if (preferredMode === 'legacy' && strictMode) {
+        return null;
       }
     }
+
+    if (!allowMessaging) {
+      return null;
+    }
+
+    const messagingMode =
+      preferredMode === 'messaging-poll'
+        ? 'poll'
+        : preferredMode === 'messaging-stream'
+          ? 'stream'
+          : 'auto';
 
     const session = await getOrCreateSession({
       ctx,
@@ -1421,6 +1549,9 @@ export const sendElizaMessage = async (
       conversationId: args.conversationId,
       sessionId: session.sessionId,
       timeoutMs: remainingMs(),
+      mode: messagingMode,
+      allowPollFallback: strictMode && messagingMode === 'stream' ? false : undefined,
+      allowStreamFallback: strictMode && messagingMode === 'poll' ? false : undefined,
     });
     if (!firstAttempt.ok) {
       if (firstAttempt.status === 404 || firstAttempt.status === 410) {
@@ -1441,6 +1572,9 @@ export const sendElizaMessage = async (
           conversationId: args.conversationId,
           sessionId: refreshed.sessionId,
           timeoutMs: remainingMs(),
+          mode: messagingMode,
+          allowPollFallback: strictMode && messagingMode === 'stream' ? false : undefined,
+          allowStreamFallback: strictMode && messagingMode === 'poll' ? false : undefined,
         });
         if (!retry.ok) {
           console.error('Eliza Chat Error', {
@@ -1467,6 +1601,12 @@ export const sendElizaMessage = async (
         legacyBody,
         sessionError: firstAttempt.body,
       });
+      if (!strictMode && allowLegacy) {
+        const legacyReply = await tryLegacy();
+        if (legacyReply) {
+          return legacyReply;
+        }
+      }
       return null;
     }
     await ctx.runMutation(apiAny.elizaAgent.mutations.saveSession, {
@@ -1479,7 +1619,16 @@ export const sendElizaMessage = async (
       expiresAt: session.expiresAt,
       lastUsedAt: Date.now(),
     });
-    return firstAttempt.text;
+    if (firstAttempt.text) {
+      return firstAttempt.text;
+    }
+    if (!strictMode && allowLegacy) {
+      const legacyReply = await tryLegacy();
+      if (legacyReply) {
+        return legacyReply;
+      }
+    }
+    return null;
   } catch (error: any) {
     if (isAbortError(error)) {
       return null;
@@ -1492,6 +1641,259 @@ export const sendElizaMessage = async (
     return null;
   }
 };
+
+export const testElizaAgentCommunication = action({
+  args: {
+    elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
+    const authToken = resolveElizaAuthToken(args.elizaAuthToken);
+    const pingMessage =
+      'Eliza Town connection test ping. Please reply with a short acknowledgement.';
+    const helloMessage = 'Hello, this is Eliza Town. Are you there?';
+    const introMessage = 'Can you introduce yourself?';
+    const diagnostics: {
+      legacy: CommunicationDiagnostics;
+      streaming: CommunicationDiagnostics;
+      queue: CommunicationDiagnostics;
+    } = {
+      legacy: { ok: false, message: 'Not tested.' },
+      streaming: { ok: false, message: 'Not tested.' },
+      queue: { ok: false, message: 'Not tested.' },
+    };
+    const diagnosticTimeoutMs = 8_000;
+    const handshakeTimeoutMs = 12_000;
+    const userId = await getOrCreateElizaOwnerId(ctx);
+
+    if (shouldSkipLegacy()) {
+      diagnostics.legacy = {
+        ok: false,
+        message: 'Legacy messaging disabled by server configuration.',
+      };
+    } else {
+      try {
+        const legacyResult = await sendLegacyMessage({
+          elizaServerUrl,
+          authToken,
+          elizaAgentId: args.elizaAgentId,
+          message: pingMessage,
+          userId,
+          conversationId: `eliza-test:${createUuid()}:legacy`,
+          timeoutMs: diagnosticTimeoutMs,
+        });
+        if (legacyResult.text) {
+          diagnostics.legacy = { ok: true, message: legacyResult.text };
+        } else if (legacyResult.ok) {
+          diagnostics.legacy = { ok: false, message: 'Legacy response was empty.' };
+        } else {
+          diagnostics.legacy = {
+            ok: false,
+            message: legacyResult.body
+              ? `Legacy error: ${summarizeForLog(legacyResult.body, 200)}`
+              : `Legacy error (HTTP ${legacyResult.status}).`,
+          };
+        }
+      } catch (error: any) {
+        diagnostics.legacy = {
+          ok: false,
+          message: error?.message ?? 'Legacy request failed.',
+        };
+      }
+    }
+
+    try {
+      const conversationId = `eliza-test:${createUuid()}:stream`;
+      const session = await createMessagingSession({
+        ctx,
+        elizaAgentId: args.elizaAgentId,
+        elizaServerUrl,
+        authToken,
+        conversationId,
+        userId,
+        timeoutMs: diagnosticTimeoutMs,
+      });
+      const streamResult = await sendMessageWithSession({
+        elizaServerUrl,
+        authToken,
+        message: pingMessage,
+        senderId: userId,
+        conversationId,
+        sessionId: session.sessionId,
+        timeoutMs: diagnosticTimeoutMs,
+        mode: 'stream',
+        allowPollFallback: false,
+      });
+      if (streamResult.ok && streamResult.text && streamResult.modeUsed === 'stream') {
+        diagnostics.streaming = { ok: true, message: streamResult.text };
+      } else if (streamResult.ok && streamResult.text) {
+        diagnostics.streaming = {
+          ok: false,
+          message: 'Streaming did not return SSE data.',
+        };
+      } else if (!streamResult.ok) {
+        diagnostics.streaming = {
+          ok: false,
+          message: streamResult.body
+            ? `Streaming error: ${summarizeForLog(streamResult.body, 200)}`
+            : `Streaming error (HTTP ${streamResult.status}).`,
+        };
+      } else {
+        diagnostics.streaming = { ok: false, message: 'Streaming response was empty.' };
+      }
+    } catch (error: any) {
+      diagnostics.streaming = {
+        ok: false,
+        message: error?.message ?? 'Streaming test failed.',
+      };
+    }
+
+    try {
+      const conversationId = `eliza-test:${createUuid()}:queue`;
+      const session = await createMessagingSession({
+        ctx,
+        elizaAgentId: args.elizaAgentId,
+        elizaServerUrl,
+        authToken,
+        conversationId,
+        userId,
+        timeoutMs: diagnosticTimeoutMs,
+      });
+      const queueResult = await sendMessageWithSession({
+        elizaServerUrl,
+        authToken,
+        message: pingMessage,
+        senderId: userId,
+        conversationId,
+        sessionId: session.sessionId,
+        timeoutMs: diagnosticTimeoutMs,
+        mode: 'poll',
+        allowStreamFallback: false,
+      });
+      if (queueResult.ok && queueResult.text && queueResult.modeUsed === 'poll') {
+        diagnostics.queue = { ok: true, message: queueResult.text };
+      } else if (!queueResult.ok) {
+        diagnostics.queue = {
+          ok: false,
+          message: queueResult.body
+            ? `Queue error: ${summarizeForLog(queueResult.body, 200)}`
+            : `Queue error (HTTP ${queueResult.status}).`,
+        };
+      } else {
+        diagnostics.queue = { ok: false, message: 'Queue response was empty.' };
+      }
+    } catch (error: any) {
+      diagnostics.queue = {
+        ok: false,
+        message: error?.message ?? 'Queue test failed.',
+      };
+    }
+
+    const preferredMode: CommunicationMode | null = diagnostics.streaming.ok
+      ? 'messaging-stream'
+      : diagnostics.queue.ok
+        ? 'messaging-poll'
+        : diagnostics.legacy.ok
+          ? 'legacy'
+          : null;
+
+    if (!preferredMode) {
+      return {
+        ok: false,
+        message: 'No supported communication method responded.',
+        diagnostics,
+      };
+    }
+
+    const conversationId = `eliza-test:${createUuid()}:handshake`;
+    const senderId = `eliza-test-user:${createUuid()}`;
+    const messages: CommunicationTestMessage[] = [
+      { role: 'user', text: helloMessage },
+    ];
+    const helloReply = await sendElizaMessage(ctx, {
+      elizaAgentId: args.elizaAgentId,
+      elizaServerUrl,
+      elizaAuthToken: args.elizaAuthToken,
+      message: helloMessage,
+      senderId,
+      conversationId,
+      timeoutMs: handshakeTimeoutMs,
+      preferredMode,
+      strictMode: true,
+    });
+    if (!helloReply) {
+      return {
+        ok: false,
+        message: 'No reply to the greeting prompt.',
+        preferredMode,
+        diagnostics,
+        conversation: { conversationId, senderId, messages },
+      };
+    }
+    messages.push({ role: 'agent', text: helloReply });
+
+    messages.push({ role: 'user', text: introMessage });
+    const introReply = await sendElizaMessage(ctx, {
+      elizaAgentId: args.elizaAgentId,
+      elizaServerUrl,
+      elizaAuthToken: args.elizaAuthToken,
+      message: introMessage,
+      senderId,
+      conversationId,
+      timeoutMs: handshakeTimeoutMs,
+      preferredMode,
+      strictMode: true,
+    });
+    if (!introReply) {
+      return {
+        ok: false,
+        message: 'No reply to the introduction prompt.',
+        preferredMode,
+        diagnostics,
+        conversation: { conversationId, senderId, messages },
+      };
+    }
+    messages.push({ role: 'agent', text: introReply });
+
+    return {
+      ok: true,
+      preferredMode,
+      diagnostics,
+      conversation: { conversationId, senderId, messages },
+    };
+  },
+});
+
+export const sendElizaTestMessage = action({
+  args: {
+    elizaAgentId: v.string(),
+    elizaServerUrl: v.optional(v.string()),
+    elizaAuthToken: v.optional(v.string()),
+    message: v.string(),
+    senderId: v.string(),
+    conversationId: v.string(),
+    preferredMode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const response = await sendElizaMessage(ctx, {
+      elizaAgentId: args.elizaAgentId,
+      elizaServerUrl: args.elizaServerUrl,
+      elizaAuthToken: args.elizaAuthToken,
+      message: args.message,
+      senderId: args.senderId,
+      conversationId: args.conversationId,
+      timeoutMs: 12_000,
+      preferredMode: args.preferredMode,
+      strictMode: true,
+    });
+    if (!response) {
+      return { ok: false, message: 'No reply from agent.' };
+    }
+    return { ok: true, reply: response };
+  },
+});
 
 export const fetchElizaAgentInfo = action({
   args: {

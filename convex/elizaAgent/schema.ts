@@ -11,6 +11,8 @@ export const elizaAgentTables = {
     elizaUserId: v.optional(v.string()),
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
+    communicationMode: v.optional(v.string()),
+    communicationVerifiedAt: v.optional(v.number()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()), // ['Friendly', 'Curious']
