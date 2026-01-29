@@ -1,5 +1,5 @@
 import PixiGame from './PixiGame.tsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useElementSize } from 'usehooks-ts';
 import { Stage } from '@pixi/react';
@@ -15,6 +15,9 @@ import PetalFx from './PetalFx.tsx';
 import ReactModal from 'react-modal';
 import type { Interactable } from '../../convex/aiTown/worldMap.ts';
 import { toastOnError } from '../toasts.ts';
+import { toast } from 'react-toastify';
+import { Id } from '../../convex/_generated/dataModel';
+import { useAssetsManifest } from '../hooks/useAssetsManifest.ts';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
@@ -52,51 +55,159 @@ const modalStyles = {
   },
 };
 
-export default function Game() {
+type GameProps = {
+  worldId?: Id<'worlds'>;
+  worldKind?: 'lobby' | 'room';
+  // Tool states passed from parent
+  isNight?: boolean;
+  buildMode?: boolean;
+  buildSelectedObjectInstanceId?: string | null;
+  onBuildSelect?: (objectInstanceId: string | null) => void;
+  roomBuildMode?: boolean;
+  roomBuildCategory?: 'floor' | 'furniture' | 'deco';
+  roomBuildSelectedObjectId?: string | null;
+  roomBuildRotation?: number;
+  roomBuildPreviewItem?: {
+    id: string;
+    image: string;
+    category?: string;
+    pixelWidth?: number;
+    pixelHeight?: number;
+    anchor?: 'top-left' | 'bottom-left' | 'center';
+    scale?: number;
+  } | null;
+  // Profile card callback
+  onPlayerClick?: (playerId: string) => void;
+};
+
+export default function Game({
+  worldId,
+  worldKind,
+  isNight: isNightProp,
+  buildMode: buildModeProp,
+  buildSelectedObjectInstanceId: buildSelectedObjectInstanceIdProp,
+  onBuildSelect,
+  roomBuildMode: roomBuildModeProp,
+  roomBuildCategory: roomBuildCategoryProp,
+  roomBuildSelectedObjectId: roomBuildSelectedObjectIdProp,
+  roomBuildRotation: roomBuildRotationProp,
+  roomBuildPreviewItem: roomBuildPreviewItemProp,
+  onPlayerClick,
+}: GameProps) {
   const convex = useConvex();
+
+  // Use props if provided, otherwise use internal state (for backward compatibility)
+  const [internalIsNight, setInternalIsNight] = useState(false);
+  const [internalBuildMode, setInternalBuildMode] = useState(false);
+  const [internalBuildSelectedObjectInstanceId, setInternalBuildSelectedObjectInstanceId] = useState<string | null>(null);
+  const [internalRoomBuildMode, setInternalRoomBuildMode] = useState(false);
+  const [roomBuildCategory, setRoomBuildCategory] = useState<'floor' | 'furniture' | 'deco'>('floor');
+  const [internalRoomBuildSelectedObjectId, setInternalRoomBuildSelectedObjectId] = useState<string | null>(null);
+  const [internalRoomBuildRotation, setInternalRoomBuildRotation] = useState(0);
+
+  // Resolve prop vs internal state
+  const isNight = isNightProp ?? internalIsNight;
+  const buildMode = buildModeProp ?? internalBuildMode;
+  const buildSelectedObjectInstanceId = buildSelectedObjectInstanceIdProp ?? internalBuildSelectedObjectInstanceId;
+  const setBuildSelectedObjectInstanceId = onBuildSelect ?? setInternalBuildSelectedObjectInstanceId;
+  const roomBuildMode = roomBuildModeProp ?? internalRoomBuildMode;
+  const effectiveRoomBuildCategory = roomBuildCategoryProp ?? roomBuildCategory;
+  // For roomBuildSelectedObjectId, use prop if it was explicitly passed (even if null)
+  const roomBuildSelectedObjectId = roomBuildSelectedObjectIdProp !== undefined ? roomBuildSelectedObjectIdProp : internalRoomBuildSelectedObjectId;
+  const roomBuildRotation = roomBuildRotationProp ?? internalRoomBuildRotation;
+
+  // These are still managed internally but not exposed in UI
+  const [buildTypeDraft, setBuildTypeDraft] = useState<InteractableTypeId>('board');
+  const [buildNameDraft, setBuildNameDraft] = useState('');
+  const [buildRadiusDraft, setBuildRadiusDraft] = useState(2);
+
   const [selectedElement, setSelectedElement] = useState<{
     kind: 'player';
     id: GameId<'players'>;
   }>();
+
+  // Wrapper to also call onPlayerClick when a player is selected
+  const handleSelectElement = (element: { kind: 'player'; id: GameId<'players'> } | undefined) => {
+    setSelectedElement(element);
+    if (element?.kind === 'player' && onPlayerClick) {
+      onPlayerClick(element.id);
+    }
+  };
   const [activeInteractable, setActiveInteractable] = useState<Interactable | null>(null);
-  const [buildMode, setBuildMode] = useState(false);
-  const [buildSelectedObjectInstanceId, setBuildSelectedObjectInstanceId] = useState<string | null>(
-    null,
-  );
-  const [buildTypeDraft, setBuildTypeDraft] = useState<InteractableTypeId>('board');
-  const [buildNameDraft, setBuildNameDraft] = useState('');
-  const [buildRadiusDraft, setBuildRadiusDraft] = useState(2);
   const [gameWrapperRef, { width, height }] = useElementSize();
 
-  const worldStatus = useQuery(api.world.defaultWorldStatus);
-  const worldId = worldStatus?.worldId;
+  // Check if UI is controlled externally (new layout) or internally (old layout)
+  const isExternallyControlled = isNightProp !== undefined || buildModeProp !== undefined;
+
+  const worldStatus = useQuery(api.world.worldStatusForWorld, worldId ? { worldId } : 'skip');
   const engineId = worldStatus?.engineId;
   const upsertInteractable = useMutation(api.maps.upsertInteractable);
   const removeInteractable = useMutation(api.maps.removeInteractable);
+  const upsertPlacedObject = useMutation(api.maps.upsertPlacedObject);
+  const removePlacedObject = useMutation(api.maps.removePlacedObject);
+  const counterState = useQuery(
+    api.appTemplates.getCounter,
+    worldId && activeInteractable?.objectType === 'board'
+      ? { worldId, objectInstanceId: activeInteractable.objectInstanceId }
+      : 'skip',
+  );
+  const incrementCounter = useMutation(api.appTemplates.incrementCounter);
 
   const game = useServerGame(worldId);
-  const [isNight, setIsNight] = useState(false);
-  const canToggleNight = import.meta.env.DEV || SHOW_DEBUG_UI;
-  const canUseBuildMode = import.meta.env.DEV || SHOW_DEBUG_UI;
+  const canToggleNight = !isExternallyControlled && (import.meta.env.DEV || SHOW_DEBUG_UI);
+  const canUseBuildMode = !isExternallyControlled && (import.meta.env.DEV || SHOW_DEBUG_UI);
+  const canUseRoomBuilder = !isExternallyControlled && (import.meta.env.DEV || SHOW_DEBUG_UI) && worldKind === 'room';
 
+  const { manifest } = useAssetsManifest();
+  const palette = useMemo(() => {
+    const objects = manifest?.objects ?? [];
+    const byCategory = (cat: string) => objects.filter((o) => o.category === cat);
+    return {
+      floor: byCategory('flooring').slice(0, 48),
+      furniture: byCategory('furniture').slice(0, 48),
+      deco: byCategory('decorations').slice(0, 48),
+    };
+  }, [manifest?.objects]);
+
+  const roomBuildPreviewItem = useMemo(() => {
+    if (roomBuildPreviewItemProp) return roomBuildPreviewItemProp;
+    if (!roomBuildSelectedObjectId) return null;
+    const found = (manifest?.objects ?? []).find((o) => o.id === roomBuildSelectedObjectId);
+    if (!found) return null;
+    return {
+      id: found.id,
+      image: found.image,
+      category: found.category,
+      pixelWidth: found.pixelWidth,
+      pixelHeight: found.pixelHeight,
+      anchor: found.anchor,
+      scale: (found as any).scale,
+    };
+  }, [manifest?.objects, roomBuildPreviewItemProp, roomBuildSelectedObjectId]);
+
+  useEffect(() => {
+    setSelectedElement(undefined);
+    setActiveInteractable(null);
+    if (!isExternallyControlled) {
+      setInternalBuildMode(false);
+      setInternalBuildSelectedObjectInstanceId(null);
+      setInternalRoomBuildMode(false);
+    }
+  }, [worldId, isExternallyControlled]);
+
+  // Keyboard shortcuts only work in internal mode (old layout)
   useEffect(() => {
     if (!canToggleNight) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key.toLowerCase() !== 'n') return;
-
       const target = event.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          return;
-        }
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
       }
-
-      setIsNight((prev) => !prev);
+      setInternalIsNight((prev) => !prev);
     };
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [canToggleNight]);
@@ -104,33 +215,45 @@ export default function Game() {
   useEffect(() => {
     if (!canUseBuildMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key.toLowerCase() !== 'b') return;
-
       const target = event.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          return;
-        }
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
       }
-
-      setBuildMode((prev) => {
+      setInternalBuildMode((prev) => {
         const next = !prev;
-        if (!next) {
-          setBuildSelectedObjectInstanceId(null);
-        }
+        if (!next) setInternalBuildSelectedObjectInstanceId(null);
         return next;
       });
     };
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [canUseBuildMode]);
 
+  useEffect(() => {
+    if (!canUseRoomBuilder) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+      }
+      if (key === 'p') {
+        setInternalRoomBuildMode((prev) => !prev);
+      } else if (key === 'r') {
+        setInternalRoomBuildRotation((prev) => (prev + (event.shiftKey ? -90 : 90) + 360) % 360);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canUseRoomBuilder]);
+
   // Send a periodic heartbeat to our world to keep it alive.
-  useWorldHeartbeat();
+  useWorldHeartbeat(worldId);
 
   const worldState = useQuery(api.world.worldState, worldId ? { worldId } : 'skip');
   const { historicalTime, timeManager } = useHistoricalTime(worldState?.engine);
@@ -153,10 +276,23 @@ export default function Game() {
     return game.worldMap.placedObjects.find((placement) => placement.id === placementId) ?? null;
   }, [buildSelectedObjectInstanceId, game, selectedInteractable?.objectInstanceId, selectedInteractable?.placedObjectId]);
 
+  const seededDraftForSelectionRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!buildMode) return;
-    if (!buildSelectedObjectInstanceId) return;
-    if (!game) return;
+    if (!buildMode || !buildSelectedObjectInstanceId) {
+      seededDraftForSelectionRef.current = null;
+      return;
+    }
+
+    if (!selectedPlacedObject && !selectedInteractable) {
+      return;
+    }
+
+    if (seededDraftForSelectionRef.current === buildSelectedObjectInstanceId) {
+      return;
+    }
+
+    seededDraftForSelectionRef.current = buildSelectedObjectInstanceId;
 
     const inferred: InteractableTypeId = (() => {
       const lower = (selectedPlacedObject?.objectId ?? '').toLowerCase();
@@ -174,7 +310,6 @@ export default function Game() {
   }, [
     buildMode,
     buildSelectedObjectInstanceId,
-    game,
     selectedInteractable?.displayName,
     selectedInteractable?.interactionRadius,
     selectedInteractable?.objectType,
@@ -212,12 +347,53 @@ export default function Game() {
         },
       }),
     );
+    toast.success('Saved');
   };
 
   const removeBuildSelection = async () => {
     if (!selectedPlacedObject) return;
     const objectInstanceId = selectedInteractable?.objectInstanceId ?? selectedPlacedObject.id;
     await toastOnError(removeInteractable({ worldId, objectInstanceId }));
+    toast.success('Removed');
+  };
+
+  const placeRoomObjectAt = async (tileX: number, tileY: number) => {
+    if (!worldId) return;
+    const objectId = roomBuildSelectedObjectId;
+    if (!objectId) return;
+
+    // Floor paints are deterministic by tile so it behaves like tile painting.
+    const placementId =
+      effectiveRoomBuildCategory === 'floor'
+        ? `floor-${tileX}-${tileY}`
+        : `obj-${tileX}-${tileY}-${Date.now()}`;
+
+    await toastOnError(
+      upsertPlacedObject({
+        worldId,
+        placement: {
+          id: placementId,
+          objectId,
+          col: tileX,
+          row: tileY,
+          rotation: effectiveRoomBuildCategory === 'floor' ? 0 : roomBuildRotation,
+        },
+      }),
+    );
+  };
+
+  const removeRoomObjectAt = async (tileX: number, tileY: number) => {
+    if (!worldId) return;
+    // Remove top-most non-floor object at this tile; fall back to floor tile removal only if no other found.
+    const placed = [...(game.worldMap.placedObjects ?? [])];
+    for (let i = placed.length - 1; i >= 0; i -= 1) {
+      const p = placed[i]!;
+      if (p.col !== tileX || p.row !== tileY) continue;
+      if (p.id.startsWith('floor-')) continue;
+      await toastOnError(removePlacedObject({ worldId, placementId: p.id }));
+      return;
+    }
+    await toastOnError(removePlacedObject({ worldId, placementId: `floor-${tileX}-${tileY}` }));
   };
 
   const interactableLabel = (interactable: Interactable) => {
@@ -233,14 +409,19 @@ export default function Game() {
   return (
     <>
       {SHOW_DEBUG_UI && <DebugTimeManager timeManager={timeManager} width={200} height={100} />}
-      <div className="w-full h-full relative overflow-hidden bg-brown-900" ref={gameWrapperRef}>
-        {(canToggleNight || canUseBuildMode) && (
+      <div
+        className="w-full h-full relative overflow-hidden bg-brown-900"
+        ref={gameWrapperRef}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Old UI: only shown when not externally controlled */}
+        {!isExternallyControlled && (canToggleNight || canUseBuildMode) && (
           <div className="absolute top-2 left-2 z-10 pointer-events-auto flex flex-col gap-2">
             {canToggleNight && (
               <button
                 type="button"
                 className="border border-white/30 bg-gray-900/60 px-3 py-1 text-xs text-white hover:border-white/60"
-                onClick={() => setIsNight((prev) => !prev)}
+                onClick={() => setInternalIsNight((prev) => !prev)}
               >
                 Night: {isNight ? 'ON' : 'OFF'} (N)
               </button>
@@ -249,20 +430,87 @@ export default function Game() {
               <button
                 type="button"
                 className="border border-white/30 bg-gray-900/60 px-3 py-1 text-xs text-white hover:border-white/60"
-                onClick={() =>
-                  setBuildMode((prev) => {
+                onClick={() => {
+                  setInternalBuildMode((prev) => {
                     const next = !prev;
-                    if (!next) setBuildSelectedObjectInstanceId(null);
+                    if (!next) setInternalBuildSelectedObjectInstanceId(null);
                     return next;
-                  })
-                }
+                  });
+                }}
               >
                 Build: {buildMode ? 'ON' : 'OFF'} (B)
               </button>
             )}
+            {canUseRoomBuilder && (
+              <button
+                type="button"
+                className="border border-white/30 bg-gray-900/60 px-3 py-1 text-xs text-white hover:border-white/60"
+                onClick={() => setInternalRoomBuildMode((prev) => !prev)}
+              >
+                Room Builder: {roomBuildMode ? 'ON' : 'OFF'} (P)
+              </button>
+            )}
           </div>
         )}
-        <Stage width={width} height={height} options={{ backgroundColor: isNight ? 0x0b1320 : 0x7ab5ff }}>
+
+        {/* Old room builder panel: only shown when not externally controlled */}
+        {!isExternallyControlled && roomBuildMode && (
+          <div className="absolute top-2 right-2 z-10 pointer-events-auto w-[340px] max-h-[80vh] overflow-auto border border-white/20 bg-gray-900/70 p-3 text-white">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-bold">Room Builder</div>
+              <div className="text-xs opacity-80">R rotate ({roomBuildRotation}°)</div>
+            </div>
+            <div className="mt-2 flex gap-2 text-xs">
+              <button
+                className={`px-2 py-1 border ${roomBuildCategory === 'floor' ? 'border-white' : 'border-white/30'} `}
+                onClick={() => setRoomBuildCategory('floor')}
+              >
+                Floor
+              </button>
+              <button
+                className={`px-2 py-1 border ${roomBuildCategory === 'furniture' ? 'border-white' : 'border-white/30'} `}
+                onClick={() => setRoomBuildCategory('furniture')}
+              >
+                Furniture
+              </button>
+              <button
+                className={`px-2 py-1 border ${roomBuildCategory === 'deco' ? 'border-white' : 'border-white/30'} `}
+                onClick={() => setRoomBuildCategory('deco')}
+              >
+                Deco
+              </button>
+            </div>
+            <div className="mt-2 text-xs opacity-80">
+              Click to place. Shift+Click to remove.
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {(roomBuildCategory === 'floor'
+                ? palette.floor
+                : roomBuildCategory === 'furniture'
+                  ? palette.furniture
+                  : palette.deco
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  className={`border p-2 text-left text-[10px] leading-tight ${
+                    roomBuildSelectedObjectId === item.id ? 'border-white' : 'border-white/20'
+                  }`}
+                  onClick={() => setInternalRoomBuildSelectedObjectId(item.id)}
+                  title={item.name ?? item.id}
+                >
+                  <div className="font-mono break-all">{item.id}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <Stage
+          width={width}
+          height={height}
+          options={{
+            backgroundColor: worldKind === 'room' ? 0x000000 : isNight ? 0x0b1320 : 0x7ab5ff,
+          }}
+        >
           <ConvexProvider client={convex}>
             <PixiGame
               game={game}
@@ -271,12 +519,18 @@ export default function Game() {
               width={width}
               height={height}
               historicalTime={historicalTime}
-              setSelectedElement={setSelectedElement}
+              setSelectedElement={handleSelectElement}
               isNight={isNight}
               onInteractableClick={(interactable) => setActiveInteractable(interactable)}
               buildMode={buildMode}
               buildSelectedPlacementId={buildSelectedPlacementId}
               onBuildSelect={(objectInstanceId) => setBuildSelectedObjectInstanceId(objectInstanceId)}
+              roomBuildMode={roomBuildMode}
+              roomBuildPreviewItem={roomBuildPreviewItem}
+              roomBuildRotation={roomBuildRotation}
+              onRoomBuildTile={(tileX, tileY, remove) =>
+                remove ? void removeRoomObjectAt(tileX, tileY) : void placeRoomObjectAt(tileX, tileY)
+              }
             />
             <PetalFx />
           </ConvexProvider>
@@ -299,7 +553,32 @@ export default function Game() {
                 type: {activeInteractable.objectType}
               </div>
               <div className="text-sm opacity-90">
-                Phase 1 placeholder: later 这里会变成 Lobby / Session UI。
+                {activeInteractable.objectType === 'board' ? (
+                  <div className="space-y-3">
+                    <div className="text-sm opacity-90">Template MVP: Counter</div>
+                    <div className="text-2xl font-bold font-mono">
+                      {counterState ? counterState.count : '…'}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="border border-white/30 bg-gray-900/60 px-4 py-2 text-sm text-white hover:border-white/60"
+                        onClick={async () => {
+                          await toastOnError(
+                            incrementCounter({
+                              worldId,
+                              objectInstanceId: activeInteractable.objectInstanceId,
+                            }),
+                          );
+                        }}
+                      >
+                        +1
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  'Phase 1 placeholder: later 这里会变成 Lobby / Session UI。'
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <button
@@ -314,11 +593,12 @@ export default function Game() {
           )}
         </ReactModal>
 
-        {buildMode && (
+        {/* Old build mode panel: only shown when not externally controlled */}
+        {!isExternallyControlled && buildMode && (
           <div className="absolute top-16 left-2 z-10 pointer-events-auto w-80 border border-white/20 bg-gray-950/70 p-3 text-white">
             <div className="text-sm font-bold font-display">Build Mode</div>
             <div className="text-[11px] opacity-80 mt-1">
-              Click an object (anchor tile) to select. Save requires login unless Convex env sets{' '}
+              Click an object to select (pixel hit-test). Save requires login unless Convex env sets{' '}
               <span className="font-mono">ALLOW_UNAUTHENTICATED_TOWN_EDIT=1</span>.
             </div>
             <div className="mt-2 space-y-2">

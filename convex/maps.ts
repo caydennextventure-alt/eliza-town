@@ -20,7 +20,18 @@ const interactableValidator = v.object({
   metadata: v.optional(v.any()),
 });
 
+const placedObjectValidator = v.object({
+  id: v.string(),
+  objectId: v.string(),
+  col: v.number(),
+  row: v.number(),
+  rotation: v.optional(v.number()),
+  pixelOffsetX: v.optional(v.number()),
+  pixelOffsetY: v.optional(v.number()),
+});
+
 const MAX_INTERACTABLES = 200;
+const MAX_PLACED_OBJECTS = 10000;
 
 function assertFiniteNumber(value: number, name: string) {
   if (!Number.isFinite(value)) {
@@ -115,3 +126,65 @@ export const removeInteractable = mutation({
   },
 });
 
+export const upsertPlacedObject = mutation({
+  args: {
+    worldId: v.id('worlds'),
+    placement: placedObjectValidator,
+  },
+  handler: async (ctx, args) => {
+    const actorId = await getOptionalUserId(ctx);
+    if (!actorId && !allowUnauthenticatedEdits()) {
+      throw new ConvexError('Not logged in');
+    }
+
+    const mapDoc = await ctx.db
+      .query('maps')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .first();
+    if (!mapDoc) {
+      throw new ConvexError(`No map for world: ${args.worldId}`);
+    }
+
+    const { placement } = args;
+    if (placement.id.length > 128) throw new ConvexError('placement.id too long.');
+    if (placement.objectId.length > 128) throw new ConvexError('placement.objectId too long.');
+    assertFiniteNumber(placement.col, 'placement.col');
+    assertFiniteNumber(placement.row, 'placement.row');
+    if (placement.col < 0 || placement.row < 0 || placement.col >= mapDoc.width || placement.row >= mapDoc.height) {
+      throw new ConvexError('Placement must be within the map.');
+    }
+
+    const existing = mapDoc.placedObjects ?? [];
+    const next = existing.filter((item: any) => item.id !== placement.id);
+    next.push(placement);
+    if (next.length > MAX_PLACED_OBJECTS) {
+      throw new ConvexError('Too many placed objects.');
+    }
+
+    await ctx.db.patch(mapDoc._id, { placedObjects: next });
+  },
+});
+
+export const removePlacedObject = mutation({
+  args: {
+    worldId: v.id('worlds'),
+    placementId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const actorId = await getOptionalUserId(ctx);
+    if (!actorId && !allowUnauthenticatedEdits()) {
+      throw new ConvexError('Not logged in');
+    }
+
+    const mapDoc = await ctx.db
+      .query('maps')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .first();
+    if (!mapDoc) {
+      throw new ConvexError(`No map for world: ${args.worldId}`);
+    }
+
+    const next = (mapDoc.placedObjects ?? []).filter((item: any) => item.id !== args.placementId);
+    await ctx.db.patch(mapDoc._id, { placedObjects: next });
+  },
+});

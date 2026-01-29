@@ -68,6 +68,18 @@ export const defaultWorldStatus = query({
   },
 });
 
+export const worldStatusForWorld = query({
+  args: {
+    worldId: v.id('worlds'),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('worldStatus')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .unique();
+  },
+});
+
 export const heartbeatWorld = mutation({
   args: {
     worldId: v.id('worlds'),

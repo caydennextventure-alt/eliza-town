@@ -62,6 +62,7 @@ const PATH_BORDER_PACK = {
 } as const;
 const TILESET_BASE_URL = import.meta.env.BASE_URL ?? '/';
 const TILESET_BASE_PATH = TILESET_BASE_URL.endsWith('/') ? TILESET_BASE_URL : `${TILESET_BASE_URL}/`;
+const ONE_PIXEL_PNG_PREFIX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
 
 const resolveAssetPath = (path: string) => {
   if (path.startsWith('http') || path.startsWith('data:')) return path;
@@ -97,6 +98,9 @@ type StaticMapContainer = PIXI.Container & {
   __pickPlacementIdAt?: (worldX: number, worldY: number) => string | null;
   __highlightPlacementId?: string | null;
   __highlightState?: PlacedObjectHighlightState | null;
+  __tilesetBaseTexture?: PIXI.BaseTexture;
+  __onTilesetLoaded?: () => void;
+  __onTilesetError?: (error: unknown) => void;
 };
 
 // Warm yellow for a softer selection outline.
@@ -347,6 +351,45 @@ const loadAssetsManifest = async (): Promise<AssetsManifest | null> => {
   return assetsManifestPromise;
 };
 
+const waitForBaseTextureReady = (baseTexture: PIXI.BaseTexture): Promise<boolean> => {
+  const valid = Boolean((baseTexture as any).valid);
+  const width = Number((baseTexture as any).width);
+  const height = Number((baseTexture as any).height);
+  if (valid && width > 1 && height > 1) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    function cleanup() {
+      baseTexture.off('loaded', onLoaded);
+      baseTexture.off('error', onError as any);
+    }
+
+    function onLoaded() {
+      cleanup();
+      resolve(true);
+    }
+
+    function onError() {
+      cleanup();
+      resolve(false);
+    }
+
+    baseTexture.once('loaded', onLoaded);
+    baseTexture.once('error', onError as any);
+
+    // Avoid missing the event if the texture flips to valid between our initial check and
+    // installing listeners.
+    const postValid = Boolean((baseTexture as any).valid);
+    const postWidth = Number((baseTexture as any).width);
+    const postHeight = Number((baseTexture as any).height);
+    if (postValid && postWidth > 1 && postHeight > 1) {
+      cleanup();
+      resolve(true);
+    }
+  });
+};
+
 const loadDecalSheet = async (key: DecalSheetKey): Promise<DecalSheet | null> => {
   if (cachedDecalSheets[key]) return cachedDecalSheets[key]!;
   if (decalSheetPromises[key]) return decalSheetPromises[key]!;
@@ -370,6 +413,8 @@ const loadDecalSheet = async (key: DecalSheetKey): Promise<DecalSheet | null> =>
       const baseTexture = PIXI.BaseTexture.from(resolveAssetPath(sheet.png), {
         scaleMode: PIXI.SCALE_MODES.NEAREST,
       });
+      const ready = await waitForBaseTextureReady(baseTexture);
+      if (!ready) return null;
       const result = { baseTexture, frames, tileSize, width: maxX, height: maxY };
       cachedDecalSheets[key] = result;
       return result;
@@ -431,6 +476,8 @@ const loadPathBorderSheet = async (rule: PathBorderRule): Promise<DecalSheet | n
       const baseTexture = PIXI.BaseTexture.from(resolveAssetPath(pngPath), {
         scaleMode: PIXI.SCALE_MODES.NEAREST,
       });
+      const ready = await waitForBaseTextureReady(baseTexture);
+      if (!ready) return null;
       const sheet = { baseTexture, frames, tileSize, width: maxX, height: maxY };
       cachedPathBorderSheets[rule.name] = sheet;
       return sheet;
@@ -521,6 +568,23 @@ const stripExtension = (value: string) => value.replace(/\.[^/.]+$/, '');
 const isGroundCategory = (category?: string) =>
   category === 'terrain' || category === 'paths' || category === 'flooring' || category === 'tile-object';
 
+const inferPlacedObjectScale = (object: NonNullable<AssetsManifest['objects']>[number]) => {
+  const declared = Number((object as any).scale);
+  if (Number.isFinite(declared) && declared > 0) return declared;
+  // Interior "Builders Assets" are authored for 16px tiles; our world renders at 32px.
+  if (typeof object.image === 'string') {
+    const decoded = (() => {
+      try {
+        return decodeURI(object.image);
+      } catch {
+        return object.image;
+      }
+    })();
+    if (decoded.includes('assets/interior/Builders Assets/')) return 2;
+  }
+  return 1;
+};
+
 const POND_OBJECT_IDS = new Set(['pond-stamp-clean']);
 const POND_RIM_URL = 'assets/Tileset Asset/animated/pond_rim_overlay.png';
 const POND_MASK_URL = 'assets/Tileset Asset/animated/pond_water_mask.png';
@@ -529,12 +593,133 @@ const POND_WATER_TILE_URL = 'assets/Tileset Asset/animated/water_pond_tile_calm.
 const getRotatedSize = (width: number, height: number, rotation: number) =>
   rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
 
+const parsedAnimatedSpritesheets = new Map<string, Promise<PIXI.Spritesheet | null>>();
+
+const loadAnimatedSpritesheet = (sheet: string): Promise<PIXI.Spritesheet | null> => {
+  const existing = parsedAnimatedSpritesheets.get(sheet);
+  if (existing) return existing;
+
+  const animation = (animations as any)[sheet] as { spritesheet: any; url: string } | undefined;
+  if (!animation) {
+    return Promise.resolve(null);
+  }
+
+  const { spritesheet, url } = animation;
+  const baseTexture = PIXI.BaseTexture.from(url, { scaleMode: PIXI.SCALE_MODES.NEAREST });
+
+  const promise = new Promise<PIXI.Spritesheet | null>((resolve) => {
+    const finalize = (result: PIXI.Spritesheet | null) => {
+      baseTexture.off('loaded', onLoaded);
+      baseTexture.off('error', onError);
+      resolve(result);
+    };
+
+    const parse = () => {
+      try {
+        const sheetObj = new PIXI.Spritesheet(baseTexture, spritesheet);
+        sheetObj
+          .parse()
+          .then(() => finalize(sheetObj))
+          .catch((error) => {
+            console.warn('Failed to parse spritesheet', sheet, error);
+            finalize(null);
+          });
+      } catch (error) {
+        console.warn('Failed to create spritesheet', sheet, error);
+        finalize(null);
+      }
+    };
+
+    const onLoaded = () => parse();
+    const onError = (error: unknown) => {
+      console.warn('Failed to load spritesheet texture', sheet, error);
+      finalize(null);
+    };
+
+    if (baseTexture.valid) {
+      parse();
+      return;
+    }
+
+    baseTexture.once('loaded', onLoaded);
+    baseTexture.once('error', onError);
+  });
+
+  parsedAnimatedSpritesheets.set(sheet, promise);
+  return promise;
+};
+
 const getRotationOffset = (width: number, height: number, rotation: number) => {
   if (rotation === 90) return { x: 0, y: width, angle: Math.PI / 2 };
   if (rotation === 180) return { x: width, y: height, angle: Math.PI };
   if (rotation === 270) return { x: height, y: 0, angle: Math.PI * 1.5 };
   return { x: 0, y: 0, angle: 0 };
 };
+
+type EncodedTileSet = NonNullable<WorldMap['encodedTileSets']>[number];
+
+const getEncodedTileTexture = (() => {
+  const cache = new Map<string, Map<number, PIXI.Texture | null>>();
+  return async (encodedId: number, tileSets: EncodedTileSet[]): Promise<PIXI.Texture | null> => {
+    if (encodedId === 0) return null;
+    const sorted = [...tileSets].sort((a, b) => a.firstId - b.firstId);
+    const cacheKey = sorted.map((s) => `${s.firstId}:${s.url}:${s.cols}:${s.tileSize}`).join('|');
+    let perMap = cache.get(cacheKey);
+    if (!perMap) {
+      perMap = new Map();
+      cache.set(cacheKey, perMap);
+    }
+    const cached = perMap.get(encodedId);
+    if (cached !== undefined) return cached;
+
+    let chosen: EncodedTileSet | null = null;
+    for (let i = 0; i < sorted.length; i += 1) {
+      const current = sorted[i]!;
+      const next = sorted[i + 1];
+      if (encodedId >= current.firstId && (!next || encodedId < next.firstId)) {
+        chosen = current;
+        break;
+      }
+    }
+    if (!chosen) {
+      perMap.set(encodedId, null);
+      return null;
+    }
+
+    const localIndex = encodedId - chosen.firstId;
+    if (localIndex < 0) {
+      perMap.set(encodedId, null);
+      return null;
+    }
+
+    const baseTexture = PIXI.BaseTexture.from(resolveAssetPath(chosen.url), {
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+    });
+    const ready = await waitForBaseTextureReady(baseTexture);
+    if (!ready) {
+      perMap.set(encodedId, null);
+      return null;
+    }
+
+    const cols = Math.max(1, Math.floor(chosen.cols));
+    const tileSize = Math.max(1, Math.floor(chosen.tileSize));
+    const tx = localIndex % cols;
+    const ty = Math.floor(localIndex / cols);
+
+    const width = Number((baseTexture as any).width);
+    const height = Number((baseTexture as any).height);
+    const frameX = tx * tileSize;
+    const frameY = ty * tileSize;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || frameX + tileSize > width || frameY + tileSize > height) {
+      perMap.set(encodedId, null);
+      return null;
+    }
+
+    const tex = new PIXI.Texture(baseTexture, new PIXI.Rectangle(frameX, frameY, tileSize, tileSize));
+    perMap.set(encodedId, tex);
+    return tex;
+  };
+})();
 
 export const PixiStaticMap = PixiComponent('StaticMap', {
   create: (props: { map: WorldMap; [k: string]: any }) => {
@@ -545,21 +730,9 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
       return new PIXI.Container();
     }
 
-    const numxtiles = Math.floor(map.tileSetDimX / tileDim);
-    const numytiles = Math.floor(map.tileSetDimY / tileDim);
     const bt = PIXI.BaseTexture.from(map.tileSetUrl, {
       scaleMode: PIXI.SCALE_MODES.NEAREST,
     });
-
-    const tiles = [];
-    for (let x = 0; x < numxtiles; x++) {
-      for (let y = 0; y < numytiles; y++) {
-        tiles[x + y * numxtiles] = new PIXI.Texture(
-          bt,
-          new PIXI.Rectangle(x * tileDim, y * tileDim, tileDim, tileDim),
-        );
-      }
-    }
     const screenxtiles =
       Number.isFinite(map.width) && map.width > 0
         ? map.width
@@ -577,32 +750,138 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
     container.__pickPlacementIdAt = (worldX, worldY) => pickPlacedObjectIdAt(container, worldX, worldY);
     container.__highlightPlacementId = null;
     container.__highlightState = null;
+    container.__tilesetBaseTexture = bt;
+    let tilesetLoadFailed = false;
+
+    const tileLayersContainer = new PIXI.Container();
     const groundObjectsContainer = new PIXI.Container();
     const decalsContainer = new PIXI.Container();
     const stampObjectsContainer = new PIXI.Container();
     const standingObjectsContainer = new PIXI.Container();
     const animatedContainer = new PIXI.Container();
     const allLayers = [...map.bgTiles, ...map.objectTiles];
+    const hasEncodedTileSets = Array.isArray(map.encodedTileSets) && map.encodedTileSets.length > 0;
 
-    // blit bg & object layers of map onto canvas
-    for (let i = 0; i < screenxtiles * screenytiles; i++) {
-      const x = i % screenxtiles;
-      const y = Math.floor(i / screenxtiles);
-      const xPx = x * tileDim;
-      const yPx = y * tileDim;
+    const buildTileLayers = () => {
+      if (tilesetLoadFailed) return;
+      if (container.__disposed) return;
 
-      // Add all layers of backgrounds.
-      for (const layer of allLayers) {
-        const tileIndex = layer[x]?.[y] ?? -1;
-        // Some layers may not have tiles at this location.
-        if (tileIndex === -1) continue;
-        const ctile = new PIXI.Sprite(tiles[tileIndex] ?? PIXI.Texture.EMPTY);
-        ctile.x = xPx;
-        ctile.y = yPx;
-        container.addChild(ctile);
+	      const width = Number((bt as any).width);
+	      const height = Number((bt as any).height);
+	      const valid = Boolean((bt as any).valid);
+      if (hasEncodedTileSets) {
+        // For encoded tile IDs, the tileSetUrl is not used; render via per-tileset slicing.
+        tileLayersContainer.removeChildren();
+        void (async () => {
+          for (let i = 0; i < screenxtiles * screenytiles; i++) {
+            if (container.__disposed) return;
+            const x = i % screenxtiles;
+            const y = Math.floor(i / screenxtiles);
+            const xPx = x * tileDim;
+            const yPx = y * tileDim;
+
+            for (const layer of allLayers) {
+              const encodedId = layer[x]?.[y] ?? 0;
+              if (encodedId === 0) continue;
+              const texture = await getEncodedTileTexture(encodedId, map.encodedTileSets!);
+              if (container.__disposed) return;
+              if (!texture) continue;
+              const sprite = new PIXI.Sprite(texture);
+              sprite.x = xPx;
+              sprite.y = yPx;
+              sprite.width = tileDim;
+              sprite.height = tileDim;
+              tileLayersContainer.addChild(sprite);
+            }
+          }
+        })();
+        return;
+      }
+
+      const isOnePixelTileset =
+        typeof map.tileSetUrl === 'string' && map.tileSetUrl.startsWith(ONE_PIXEL_PNG_PREFIX);
+      if (!valid || !Number.isFinite(width) || !Number.isFinite(height)) {
+        requestAnimationFrame(buildTileLayers);
+        return;
+      }
+	      if (!isOnePixelTileset && (width <= 1 || height <= 1)) {
+	        // Some browsers briefly report a 1x1 base texture for real images. Defer until it's usable.
+	        requestAnimationFrame(buildTileLayers);
+	        return;
+	      }
+
+      tileLayersContainer.removeChildren();
+
+      const tileSetDimX = Number.isFinite(map.tileSetDimX) && map.tileSetDimX > 0 ? map.tileSetDimX : width;
+      const tileSetDimY = Number.isFinite(map.tileSetDimY) && map.tileSetDimY > 0 ? map.tileSetDimY : height;
+      const clampedDimX = Math.min(tileSetDimX, width);
+      const clampedDimY = Math.min(tileSetDimY, height);
+      const numxtiles = Math.floor(clampedDimX / tileDim);
+      const numytiles = Math.floor(clampedDimY / tileDim);
+
+      const tiles = [];
+      for (let x = 0; x < numxtiles; x++) {
+        for (let y = 0; y < numytiles; y++) {
+          tiles[x + y * numxtiles] = new PIXI.Texture(
+            bt,
+            new PIXI.Rectangle(x * tileDim, y * tileDim, tileDim, tileDim),
+          );
+        }
+      }
+
+      // blit bg & object layers of map onto canvas
+      for (let i = 0; i < screenxtiles * screenytiles; i++) {
+        const x = i % screenxtiles;
+        const y = Math.floor(i / screenxtiles);
+        const xPx = x * tileDim;
+        const yPx = y * tileDim;
+
+        // Add all layers of backgrounds.
+        for (const layer of allLayers) {
+          const tileIndex = layer[x]?.[y] ?? -1;
+          // Some layers may not have tiles at this location.
+          if (tileIndex === -1) continue;
+          const ctile = new PIXI.Sprite(tiles[tileIndex] ?? PIXI.Texture.EMPTY);
+          ctile.x = xPx;
+          ctile.y = yPx;
+          tileLayersContainer.addChild(ctile);
+        }
+      }
+    };
+
+    const onTilesetLoaded = () => buildTileLayers();
+    const onTilesetError = (error: unknown) => {
+      tilesetLoadFailed = true;
+      console.warn('StaticMap: failed to load tileset', map.tileSetUrl, error);
+    };
+    container.__onTilesetLoaded = onTilesetLoaded;
+    container.__onTilesetError = onTilesetError;
+
+    const initialWidth = Number((bt as any).width);
+    const initialHeight = Number((bt as any).height);
+    const initialValid = Boolean((bt as any).valid);
+    if (hasEncodedTileSets) {
+      // Encoded tilesets don't depend on map.tileSetUrl (often a 1px placeholder), so build immediately.
+      buildTileLayers();
+    } else if (initialValid && initialWidth > 1 && initialHeight > 1) {
+      buildTileLayers();
+    } else {
+      bt.once('loaded', onTilesetLoaded);
+      bt.once('error', onTilesetError as any);
+
+      // Avoid missing the event if the tileset flips to valid between our initial check and
+      // installing listeners.
+      const postWidth = Number((bt as any).width);
+      const postHeight = Number((bt as any).height);
+      const postValid = Boolean((bt as any).valid);
+      if (postValid && postWidth > 1 && postHeight > 1) {
+        bt.off('loaded', onTilesetLoaded);
+        bt.off('error', onTilesetError as any);
+        buildTileLayers();
       }
     }
 
+    container.addChild(tileLayersContainer);
     container.addChild(groundObjectsContainer);
     container.addChild(decalsContainer);
     container.addChild(stampObjectsContainer);
@@ -995,8 +1274,9 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
         }
 
         const getObjectTileSize = (object: NonNullable<AssetsManifest['objects']>[number], rotation: number) => {
-          const pixelWidth = Number(object.pixelWidth) || map.tileDim;
-          const pixelHeight = Number(object.pixelHeight) || map.tileDim;
+          const scale = inferPlacedObjectScale(object);
+          const pixelWidth = (Number(object.pixelWidth) || map.tileDim) * scale;
+          const pixelHeight = (Number(object.pixelHeight) || map.tileDim) * scale;
           const isGround = isGroundCategory(object.category);
           const isFence = object.category === 'fences';
           const baseTileWidth = isGround || isFence ? 1 : Math.max(1, Math.ceil(pixelWidth / map.tileDim));
@@ -1054,8 +1334,9 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
           if (!def) continue;
           if (!def.image) continue;
           const rotation = normalizeRotation(placement.rotation);
-          const pixelWidth = Number(def.pixelWidth) || map.tileDim;
-          const pixelHeight = Number(def.pixelHeight) || map.tileDim;
+          const scale = inferPlacedObjectScale(def);
+          const pixelWidth = (Number(def.pixelWidth) || map.tileDim) * scale;
+          const pixelHeight = (Number(def.pixelHeight) || map.tileDim) * scale;
           const isGround = isGroundCategory(def.category);
 
           const { tileWidth, tileHeight } = getObjectTileSize(def, rotation);
@@ -1266,12 +1547,9 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
         console.error('Could not find animation', sheet);
         continue;
       }
-      const { spritesheet, url } = animation;
-      const texture = PIXI.BaseTexture.from(url, {
-        scaleMode: PIXI.SCALE_MODES.NEAREST,
-      });
-      const spriteSheet = new PIXI.Spritesheet(texture, spritesheet);
-      spriteSheet.parse().then(() => {
+      void loadAnimatedSpritesheet(sheet).then((spriteSheet) => {
+        if (!spriteSheet) return;
+        if (container.__disposed) return;
         for (const sprite of sprites) {
           const pixiAnimation = spriteSheet.animations[sprite.animation];
           if (!pixiAnimation) {
@@ -1314,6 +1592,14 @@ export const PixiStaticMap = PixiComponent('StaticMap', {
   willUnmount: (instance) => {
     const container = instance as StaticMapContainer;
     container.__disposed = true;
+    if (container.__tilesetBaseTexture) {
+      if (container.__onTilesetLoaded) {
+        container.__tilesetBaseTexture.off('loaded', container.__onTilesetLoaded);
+      }
+      if (container.__onTilesetError) {
+        container.__tilesetBaseTexture.off('error', container.__onTilesetError as any);
+      }
+    }
     clearPlacedObjectHighlight(container);
     const tickers = (instance as any).__tickers as Array<((delta: number) => void) | undefined> | undefined;
     if (tickers) {

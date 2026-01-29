@@ -7,6 +7,7 @@ import agentAvatar from '../../assets/ui/agent-avatar.svg';
 import { waitForInput } from '../hooks/sendInput';
 import { useCharacters } from '../lib/characterRegistry';
 import CharacterSelectGrid from './CharacterSelectGrid';
+import { Id } from '../../convex/_generated/dataModel';
 
 const modalStyles = {
   overlay: {
@@ -43,9 +44,10 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onCreateCharacter?: () => void;
+  worldId?: Id<'worlds'>;
 };
 
-export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }: Props) {
+export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter, worldId }: Props) {
   const { characters } = useCharacters();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -55,8 +57,6 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   
-  const worldStatus = useQuery(api.world.defaultWorldStatus);
-  const worldId = worldStatus?.worldId;
   const userTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   
   const createElizaAgent = useAction(api.elizaAgent.actions.createElizaAgent);

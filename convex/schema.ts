@@ -12,6 +12,14 @@ export default defineSchema({
     type: v.union(v.literal('background'), v.literal('player')),
   }),
 
+  userRooms: defineTable({
+    ownerKey: v.string(),
+    worldId: v.id('worlds'),
+    createdAt: v.number(),
+  })
+    .index('by_ownerKey', ['ownerKey'])
+    .index('by_world', ['worldId']),
+
   messages: defineTable({
     conversationId,
     messageUuid: v.string(),
@@ -49,6 +57,14 @@ export default defineSchema({
     status: v.union(v.literal('waiting'), v.literal('active'), v.literal('ended')),
     createdAt: v.number(),
   }).index('by_object', ['scriptedObjectId']),
+
+  // Phase 2 (MVP): template state storage (e.g. board/counter).
+  appCounterStates: defineTable({
+    worldId: v.id('worlds'),
+    objectInstanceId: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index('by_world_object', ['worldId', 'objectInstanceId']),
 
   rateLimitBuckets: defineTable({
     key: v.string(),

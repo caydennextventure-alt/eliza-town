@@ -54,6 +54,12 @@ export default PixiComponent('Viewport', {
     });
   },
   willUnmount(viewport: Viewport) {
-    viewport.destroy({ children: true });
+    // pixi-viewport's EventSystem can be torn down before this component unmounts,
+    // causing `destroy()` to throw while trying to remove DOM listeners.
+    try {
+      viewport.destroy({ children: true });
+    } catch {
+      // Ignore teardown errors during React unmount.
+    }
   },
 });

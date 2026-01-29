@@ -794,7 +794,10 @@
         "assets/Tileset Asset/animated/asset_0_f3.png",
         "assets/Tileset Asset/animated/asset_0_f4.png"
       ],
-      "frameDelay": [30, 70],
+      "frameDelay": [
+        30,
+        70
+      ],
       "pixelWidth": 133,
       "pixelHeight": 130,
       "anchor": "bottom-left"
@@ -810,7 +813,10 @@
         "assets/Tileset Asset/animated/bakery f3.png",
         "assets/Tileset Asset/animated/bakery f4.png"
       ],
-      "frameDelay": [40, 100],
+      "frameDelay": [
+        40,
+        100
+      ],
       "pixelWidth": 225,
       "pixelHeight": 225,
       "anchor": "bottom-left"
@@ -844,7 +850,10 @@
         "assets/Tileset Asset/animated/building_2_3.png",
         "assets/Tileset Asset/animated/building_2_4.png"
       ],
-      "frameDelay": [30, 70],
+      "frameDelay": [
+        30,
+        70
+      ],
       "pixelWidth": 160,
       "pixelHeight": 144,
       "anchor": "bottom-left"
@@ -2188,6 +2197,1023 @@
       "image": "assets/Tileset Asset/decorations/Broken_tree7.png",
       "pixelWidth": 128,
       "pixelHeight": 128,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-001",
+      "name": "tables 001",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_001.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-002",
+      "name": "tables 002",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_002.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-003",
+      "name": "tables 003",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_003.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-004",
+      "name": "tables 004",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_004.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-005",
+      "name": "tables 005",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_005.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-006",
+      "name": "tables 006",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_006.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-007",
+      "name": "tables 007",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_007.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-008",
+      "name": "tables 008",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_008.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-009",
+      "name": "tables 009",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_009.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-010",
+      "name": "tables 010",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_010.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-011",
+      "name": "tables 011",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_011.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-012",
+      "name": "tables 012",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_012.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-013",
+      "name": "tables 013",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_013.png",
+      "pixelWidth": 32,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-014",
+      "name": "tables 014",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_014.png",
+      "pixelWidth": 16,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-015",
+      "name": "tables 015",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_015.png",
+      "pixelWidth": 114,
+      "pixelHeight": 17,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-016",
+      "name": "tables 016",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_016.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-017",
+      "name": "tables 017",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_017.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-018",
+      "name": "tables 018",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_018.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-019",
+      "name": "tables 019",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_019.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-020",
+      "name": "tables 020",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_020.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-021",
+      "name": "tables 021",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_021.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-022",
+      "name": "tables 022",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_022.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-023",
+      "name": "tables 023",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_023.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-024",
+      "name": "tables 024",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_024.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-025",
+      "name": "tables 025",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_025.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-026",
+      "name": "tables 026",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_026.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-027",
+      "name": "tables 027",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_027.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-028",
+      "name": "tables 028",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_028.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-029",
+      "name": "tables 029",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_029.png",
+      "pixelWidth": 22,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-030",
+      "name": "tables 030",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_030.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-031",
+      "name": "tables 031",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_031.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-032",
+      "name": "tables 032",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_032.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-033",
+      "name": "tables 033",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_033.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-034",
+      "name": "tables 034",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_034.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-035",
+      "name": "tables 035",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_035.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-036",
+      "name": "tables 036",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_036.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-037",
+      "name": "tables 037",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_037.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-038",
+      "name": "tables 038",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_038.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-039",
+      "name": "tables 039",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_039.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-040",
+      "name": "tables 040",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_040.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-041",
+      "name": "tables 041",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_041.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-042",
+      "name": "tables 042",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_042.png",
+      "pixelWidth": 32,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-043",
+      "name": "tables 043",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_043.png",
+      "pixelWidth": 22,
+      "pixelHeight": 62,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-044",
+      "name": "tables 044",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_044.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-045",
+      "name": "tables 045",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_045.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-046",
+      "name": "tables 046",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_046.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-047",
+      "name": "tables 047",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_047.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-048",
+      "name": "tables 048",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_048.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-049",
+      "name": "tables 049",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_049.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-050",
+      "name": "tables 050",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_050.png",
+      "pixelWidth": 31,
+      "pixelHeight": 22,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-051",
+      "name": "tables 051",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_051.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-052",
+      "name": "tables 052",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_052.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-053",
+      "name": "tables 053",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_053.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-054",
+      "name": "tables 054",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_054.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-055",
+      "name": "tables 055",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_055.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-056",
+      "name": "tables 056",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_056.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-057",
+      "name": "tables 057",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_057.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-058",
+      "name": "tables 058",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_058.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-059",
+      "name": "tables 059",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_059.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-060",
+      "name": "tables 060",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_060.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-061",
+      "name": "tables 061",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_061.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-062",
+      "name": "tables 062",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_062.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-063",
+      "name": "tables 063",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_063.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-064",
+      "name": "tables 064",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_064.png",
+      "pixelWidth": 25,
+      "pixelHeight": 24,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-065",
+      "name": "tables 065",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_065.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-066",
+      "name": "tables 066",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_066.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-067",
+      "name": "tables 067",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_067.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-068",
+      "name": "tables 068",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_068.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-069",
+      "name": "tables 069",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_069.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-070",
+      "name": "tables 070",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_070.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-071",
+      "name": "tables 071",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_071.png",
+      "pixelWidth": 25,
+      "pixelHeight": 23,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-072",
+      "name": "tables 072",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_072.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-073",
+      "name": "tables 073",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_073.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-074",
+      "name": "tables 074",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_074.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-075",
+      "name": "tables 075",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_075.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-076",
+      "name": "tables 076",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_076.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-077",
+      "name": "tables 077",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_077.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-078",
+      "name": "tables 078",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_078.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-079",
+      "name": "tables 079",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_079.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-080",
+      "name": "tables 080",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_080.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-081",
+      "name": "tables 081",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_081.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-082",
+      "name": "tables 082",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_082.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-083",
+      "name": "tables 083",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_083.png",
+      "pixelWidth": 34,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-084",
+      "name": "tables 084",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_084.png",
+      "pixelWidth": 32,
+      "pixelHeight": 49,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-085",
+      "name": "tables 085",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_085.png",
+      "pixelWidth": 33,
+      "pixelHeight": 42,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-086",
+      "name": "tables 086",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_086.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-087",
+      "name": "tables 087",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_087.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-088",
+      "name": "tables 088",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_088.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-089",
+      "name": "tables 089",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_089.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-090",
+      "name": "tables 090",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_090.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-091",
+      "name": "tables 091",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_091.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-092",
+      "name": "tables 092",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_092.png",
+      "pixelWidth": 28,
+      "pixelHeight": 33,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-093",
+      "name": "tables 093",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_093.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-094",
+      "name": "tables 094",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_094.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-095",
+      "name": "tables 095",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_095.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-096",
+      "name": "tables 096",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_096.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-097",
+      "name": "tables 097",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_097.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-098",
+      "name": "tables 098",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_098.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-099",
+      "name": "tables 099",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_099.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-100",
+      "name": "tables 100",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_100.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-101",
+      "name": "tables 101",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_101.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-102",
+      "name": "tables 102",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_102.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-103",
+      "name": "tables 103",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_103.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-104",
+      "name": "tables 104",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_104.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-105",
+      "name": "tables 105",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_105.png",
+      "pixelWidth": 25,
+      "pixelHeight": 30,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-106",
+      "name": "tables 106",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_106.png",
+      "pixelWidth": 14,
+      "pixelHeight": 15,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-107",
+      "name": "tables 107",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_107.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-108",
+      "name": "tables 108",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_108.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-109",
+      "name": "tables 109",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_109.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-110",
+      "name": "tables 110",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_110.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-111",
+      "name": "tables 111",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_111.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-112",
+      "name": "tables 112",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_112.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
+      "anchor": "bottom-left"
+    },
+    {
+      "id": "interior-table-113",
+      "name": "tables 113",
+      "category": "furniture",
+      "image": "assets/interior/Builders Assets/tables/tables_113.png",
+      "pixelWidth": 25,
+      "pixelHeight": 29,
       "anchor": "bottom-left"
     }
   ]

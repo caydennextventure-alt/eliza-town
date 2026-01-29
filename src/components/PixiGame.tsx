@@ -16,6 +16,7 @@ import { SHOW_DEBUG_UI } from './Game.tsx';
 import { ServerGame } from '../hooks/serverGame.ts';
 import NightLighting from './NightLighting.tsx';
 import type { Interactable } from '../../convex/aiTown/worldMap.ts';
+import RoomBuildPreview, { type RoomBuildPreviewItem } from './RoomBuildPreview.tsx';
 
 export const PixiGame = (props: {
   worldId: Id<'worlds'>;
@@ -30,6 +31,10 @@ export const PixiGame = (props: {
   buildMode?: boolean;
   buildSelectedPlacementId?: string | null;
   onBuildSelect?: (objectInstanceId: string | null) => void;
+  roomBuildMode?: boolean;
+  onRoomBuildTile?: (tileX: number, tileY: number, remove: boolean) => void;
+  roomBuildPreviewItem?: RoomBuildPreviewItem | null;
+  roomBuildRotation?: number;
 }) => {
   // PIXI setup.
   const pixiApp = useApp();
@@ -47,6 +52,24 @@ export const PixiGame = (props: {
   const onMapPointerDown = (e: any) => {
     // https://pixijs.download/dev/docs/PIXI.FederatedPointerEvent.html
     dragStart.current = { screenX: e.screenX, screenY: e.screenY };
+  };
+
+  const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number; shiftKey: boolean } | null>(
+    null,
+  );
+  const onMapPointerMove = (e: any) => {
+    if (!props.roomBuildMode) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const gameSpacePx = viewport.toWorld(e.screenX, e.screenY);
+    const tileDim = props.game.worldMap.tileDim;
+    const x = Math.floor(gameSpacePx.x / tileDim);
+    const y = Math.floor(gameSpacePx.y / tileDim);
+    if (x < 0 || y < 0 || x >= props.game.worldMap.width || y >= props.game.worldMap.height) {
+      setHoveredTile(null);
+      return;
+    }
+    setHoveredTile({ x, y, shiftKey: Boolean((e as any).shiftKey) });
   };
 
   const [lastDestination, setLastDestination] = useState<{
@@ -87,6 +110,12 @@ export const PixiGame = (props: {
         roundedTiles.y >= item.hitbox.y &&
         roundedTiles.y < item.hitbox.y + item.hitbox.h,
     );
+
+    if (props.roomBuildMode) {
+      const remove = Boolean((e as any).shiftKey) || (typeof (e as any).button === 'number' && (e as any).button === 2);
+      props.onRoomBuildTile?.(roundedTiles.x, roundedTiles.y, remove);
+      return;
+    }
 
     if (props.buildMode) {
       const pick = (e.currentTarget as any)?.__pickPlacementIdAt as
@@ -144,12 +173,23 @@ export const PixiGame = (props: {
       viewportRef={viewportRef}
     >
       <PixiStaticMap
-        key={props.game.worldMapId}
+        key={`${props.game.worldMapId}:${props.game.worldMapFingerprint}`}
         map={props.game.worldMap}
         highlightPlacementId={props.buildMode ? props.buildSelectedPlacementId ?? null : null}
         onpointerup={onMapPointerUp}
         onpointerdown={onMapPointerDown}
+        onpointermove={onMapPointerMove}
       />
+      {props.roomBuildMode && hoveredTile && (
+        <RoomBuildPreview
+          tileDim={tileDim}
+          hoveredTileX={hoveredTile.x}
+          hoveredTileY={hoveredTile.y}
+          removeMode={hoveredTile.shiftKey}
+          item={props.roomBuildPreviewItem ?? null}
+          rotation={props.roomBuildRotation ?? 0}
+        />
+      )}
       {players.map(
         (p) =>
           // Only show the path for the human player in non-debug mode.

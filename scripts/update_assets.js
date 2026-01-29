@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const ASSETS_JSON_PATH = path.join(__dirname, '../public/assets/assets.json');
 const ASSETS_BASE_DIR = path.join(__dirname, '../public/assets');
 const TILESET_ASSET_DIR = path.join(ASSETS_BASE_DIR, 'Tileset Asset');
+const INTERIOR_BUILDER_ASSET_DIR = path.join(ASSETS_BASE_DIR, 'interior', 'Builders Assets');
 
 // Map Tileset Asset subfolders -> category IDs in public/assets/assets.json
 const CATEGORY_MAP = {
@@ -26,6 +27,7 @@ const CATEGORY_MAP = {
 const SLUG_SAFE = /[^a-z0-9-]/g;
 
 const toRelAssetPath = (folderName, fileName) => `assets/Tileset Asset/${folderName}/${fileName}`;
+const toRelInteriorAssetPath = (subPath) => `assets/interior/Builders Assets/${subPath}`;
 
 const slugify = (value) =>
   value
@@ -91,6 +93,27 @@ const getImageSize = async (filePath) => {
   return getPngSize(filePath);
 };
 
+const walkPngFiles = (rootDir) => {
+  const results = [];
+  const walk = (dir, relBase) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const abs = path.join(dir, entry.name);
+      const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(abs, rel);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.png')) {
+        results.push({ absPath: abs, relPath: rel });
+      }
+    }
+  };
+  if (fs.existsSync(rootDir)) {
+    walk(rootDir, '');
+  }
+  return results;
+};
+
 export async function updateAssets() {
   console.log('Reading assets.json...');
   const assetsData = JSON.parse(fs.readFileSync(ASSETS_JSON_PATH, 'utf-8'));
@@ -125,6 +148,41 @@ export async function updateAssets() {
         console.error(`Failed to read image ${folderName}/${file}:`, err.message);
       }
     }
+  }
+
+  console.log('Scanning Interior Builder Assets...');
+  // For interior "Builders Assets", we currently map folders into our existing categories.
+  // Extend this map as you add more interior asset packs.
+  const INTERIOR_CATEGORY_MAP = {
+    tables: 'furniture',
+  };
+  if (fs.existsSync(INTERIOR_BUILDER_ASSET_DIR)) {
+    const pngFiles = walkPngFiles(INTERIOR_BUILDER_ASSET_DIR);
+    for (const { absPath, relPath } of pngFiles) {
+      const topFolder = relPath.split('/')[0];
+      const categoryId = (topFolder && INTERIOR_CATEGORY_MAP[topFolder]) || null;
+      if (!categoryId) continue;
+      try {
+        const { width, height } = await getImageSize(absPath);
+        const relImage = toRelInteriorAssetPath(relPath);
+        const info = {
+          relImage,
+          width,
+          height,
+          categoryId,
+          folderName: `interior/${topFolder}`,
+          fileName: path.basename(relPath),
+        };
+        scannedByImage.set(relImage, info);
+        const list = scannedByBasename.get(info.fileName) ?? [];
+        list.push(info);
+        scannedByBasename.set(info.fileName, list);
+      } catch (err) {
+        console.error(`Failed to read image interior/${relPath}:`, err.message);
+      }
+    }
+  } else {
+    console.warn('Skipping missing interior builder assets folder');
   }
 
   let updatedCount = 0;
@@ -178,7 +236,9 @@ export async function updateAssets() {
     if (existingImages.has(info.relImage)) continue;
 
     const baseName = path.parse(info.fileName).name;
-    const baseId = slugify(baseName);
+    const baseId = info.relImage.startsWith('assets/interior/')
+      ? `interior-${slugify(baseName)}`
+      : slugify(baseName);
     const id = makeUniqueId(baseId, existingIds);
     const name = baseName.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
     const newObject = {

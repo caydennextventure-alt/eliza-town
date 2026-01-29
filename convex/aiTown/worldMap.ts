@@ -61,6 +61,18 @@ export const serializedWorldMap = {
   objectTiles: v.array(tileLayer),
   placedObjects: v.optional(v.array(v.object(placedObject))),
   interactables: v.optional(v.array(v.object(interactable))),
+  // Optional: supports tile IDs encoded across multiple tilesets (e.g. interior + walls/floors).
+  // Each layer cell stores an encoded ID, where 0 means empty and `firstId` offsets into a tileset.
+  encodedTileSets: v.optional(
+    v.array(
+      v.object({
+        url: v.string(),
+        cols: v.number(),
+        tileSize: v.number(),
+        firstId: v.number(),
+      }),
+    ),
+  ),
   terrainDecals: v.optional(
     v.object({
       grassId: v.string(),
@@ -86,6 +98,7 @@ export class WorldMap {
   objectTiles: TileLayer[];
   placedObjects: PlacedObject[];
   interactables: Interactable[];
+  encodedTileSets?: Array<{ url: string; cols: number; tileSize: number; firstId: number }>;
   terrainDecals?: { grassId: string; sandId: string; waterId?: string };
   animatedSprites: AnimatedSprite[];
 
@@ -100,6 +113,7 @@ export class WorldMap {
     this.objectTiles = serialized.objectTiles;
     this.placedObjects = serialized.placedObjects ?? [];
     this.interactables = serialized.interactables ?? [];
+    this.encodedTileSets = serialized.encodedTileSets ?? undefined;
     this.terrainDecals = serialized.terrainDecals ?? undefined;
     this.animatedSprites = serialized.animatedSprites;
   }
@@ -116,6 +130,7 @@ export class WorldMap {
       objectTiles: this.objectTiles,
       placedObjects: this.placedObjects,
       interactables: this.interactables,
+      encodedTileSets: this.encodedTileSets,
       terrainDecals: this.terrainDecals,
       animatedSprites: this.animatedSprites,
     };

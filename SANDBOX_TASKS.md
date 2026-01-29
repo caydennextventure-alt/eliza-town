@@ -23,7 +23,7 @@
 - **资源限制**：频控、state 大小限制、会话数量限制、执行步数限制、kill switch。
 
 ## 1) 关键名词（统一口径）
-- **World / Town**：一个 `worldId` = 一个 Town（先可只有 default world；后续扩展 1 user = 1 town）。
+- **World / Town**：一个 `worldId` = 一个世界实例（Lobby / Room 都是 world；后续扩展 1 user = 1 town）。
 - **Object Instance**：地图上实例：`objectInstanceId` + `objectType` + `hitbox` + `anchor` + `radius` + `metadata`。
 - **App**：绑定 object 的应用元信息：owner、visibility、copyPolicy、当前发布版本。
 - **App Version**：不可变发布产物：config/spec/uiSchema/dsl/assetsRefs。
@@ -69,6 +69,40 @@
 
 ---
 
+### Phase 0.5 — Lobby/Room Worlds（路由与隔离）
+**目标**：Town Hall 作为 Lobby（default world）；每个玩家有自己的 Room world；前端可在两者之间切换（先 dev/unauth 可用，后续收口权限）。
+
+- [x] Convex：`userRooms` 表（`ownerKey -> worldId`）
+- [x] Convex：`rooms.getOrCreateMyRoomWorld`（支持 dev 下 guestKey）
+- [x] 前端：Lobby / My Room 切换入口（保持 UI 简单）
+- [x] 前端：核心交互组件改为使用“当前 worldId”（避免默认 world 写死）
+- [ ] 权限收口：Room 只允许 owner 写（替换 `ALLOW_UNAUTHENTICATED_TOWN_EDIT`）
+
+**DoD**
+- 点 “My Room” 可创建/进入个人房间世界；点 “Lobby” 回到 Town Hall。
+
+---
+
+### Room Map Format（interior tileset）
+**目标**：支持室内 tileset（`townInterior.png` + `walls_and_floors.png`）的 tile layer 渲染，并复用 `collision` 做可走性。
+
+- 放置位置：
+  - `public/assets/interior/townInterior.png`
+  - `public/assets/interior/walls_and_floors.png`
+- `data/room.json` 关键字段（row-major 一维数组，长度必须是 `width*height`）：
+  - `width`, `height`
+  - `backLayer`, `buildingsLayer`, `frontLayer`：tile id（`0` 表示空）
+  - `collision`：`0/1`（`1` = blocked）
+  - `terrain`：`0/1`（当前用于 floor seed；后续可废弃或改成 palette）
+- 后端落地（Convex → WorldMap）：
+  - `bgTiles`：由 `back/buildings/front` 转为 column-major（`bgTiles[layer][x][y]`）
+  - `objectTiles[0]`：由 `collision` 转为 column-major；空为 `-1`，阻挡为 `0`（阻挡判断用 `!= -1`，并且 `0` 在 encoded 渲染里是不可见的）
+  - 若 json 已提供 `back/buildings/front`，则不再用 `terrain` 在 `placedObjects` 里“刷满地板”（避免遮住房间墙体）
+- tile id 编码约定（与示例 loader 一致）：
+  - `0`：空
+  - `1..`：来自 `walls_and_floors.png`（`cols=16`, `tileSize=16`）
+  - `1000..`：来自 `townInterior.png`（`cols=32`, `tileSize=16`）
+
 ### Phase 1 — Object Instance（地图可交互物体）
 **目标**：系统能“识别/命中/选中”一个 objectInstance，并拿到稳定 id（为 App 绑定做准备）。
 
@@ -77,11 +111,11 @@
   - [x] `objectType`（board/vending/tv/bulletin/custom...）
   - [x] `hitbox`（tile rect）
   - [ ] `anchor`（如需从 asset 自动推导锚点/相对 hitbox，后续补）
-  - [x] `interactionRadius`
+- [x] `interactionRadius`
   - [x] `displayName` / `metadata`（tags 先不做）
 - [x] Map Editor：创建/编辑/删除 interactable；保存 stable id（重载不变）
 - [x] Client hit-test：鼠标 click 命中 hitbox，显示交互提示（Phase 1 先用 placeholder modal）
-- [x] In-game Build Mode（路线 A，先试水）：在游戏里点选物体并保存/移除 interactable（MVP：按 anchor tile 选中；写入需要登录或 `ALLOW_UNAUTHENTICATED_TOWN_EDIT=1`）
+- [x] In-game Build Mode（路线 A，先试水）：在游戏里点选物体并保存/移除 interactable（像素级 hit-test；写入需要登录或 `ALLOW_UNAUTHENTICATED_TOWN_EDIT=1`）
 - [x] Object Registry：objectType → 默认提示文案（icon/模板推荐 Phase 2+）
 
 **DoD**

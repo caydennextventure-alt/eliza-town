@@ -34,6 +34,7 @@
     "hnswlib-node": "^1.4.2",
     "jimp": "^1.6.0",
     "jszip": "^3.10.1",
+    "lucide-react": "^0.563.0",
     "pixi-viewport": "^5.0.1",
     "pixi.js": "^7.2.4",
     "quickjs-emscripten": "^0.31.0",
