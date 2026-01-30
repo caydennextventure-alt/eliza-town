@@ -4,6 +4,7 @@ import ReactModal from 'react-modal';
 import { useQuery } from 'convex/react';
 import { api } from 'convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { GameId } from '../../../convex/aiTown/ids';
 import { useSendInput } from '../../hooks/sendInput';
 import { useServerGame } from '../../hooks/serverGame';
 import { CharacterDefinition, useCharacters } from '../../lib/characterRegistry';
@@ -577,7 +578,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
       character?: CharacterDefinition;
     }>();
     for (const player of players) {
-      const description = game?.playerDescriptions.get(player.playerId);
+      const description = game?.playerDescriptions.get(player.playerId as GameId<'players'>);
       const characterName = description?.character;
       const character = characterName ? characterByName.get(characterName) : undefined;
       result.set(player.playerId, {

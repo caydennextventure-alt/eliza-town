@@ -1,7 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { ConvexHttpClient } from 'convex/browser';
-import { api } from '../convex/_generated/api';
+import { anyApi } from 'convex/server';
+import type { Id } from '../convex/_generated/dataModel';
 
+const apiAny = anyApi;
 const spritePath = 'public/assets/characters/char-f1.png';
 const DEFAULT_FLIZA_ELIZA_SERVER_URL = 'https://fliza-agent-production.up.railway.app';
 const DEFAULT_FLIZA_ELIZA_AGENT_ID = 'c7cab9c8-6c71-03a6-bd21-a694c8776023';
@@ -9,14 +11,16 @@ const DEFAULT_FLIZA_ELIZA_AGENT_ID = 'c7cab9c8-6c71-03a6-bd21-a694c8776023';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const waitForInputProcessed = async (
-  inputId: string,
+  inputId: string | Id<'inputs'>,
   options: { timeoutMs?: number; pollIntervalMs?: number } = {},
 ) => {
   const { timeoutMs = 90_000, pollIntervalMs = 1000 } = options;
   const client = getConvexClient();
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const status = await client.query(api.aiTown.main.inputStatus, { inputId });
+    const status = await client.query(apiAny.aiTown.main.inputStatus, {
+      inputId: inputId as Id<'inputs'>,
+    });
     if (status) {
       if (status.kind === 'error') {
         throw new Error(status.message);
@@ -31,6 +35,12 @@ const waitForInputProcessed = async (
 type ElizaAgentOption = {
   value: string;
   label: string;
+};
+
+type ConvexClientAny = {
+  query: (fn: any, args?: any) => Promise<any>;
+  mutation: (fn: any, args?: any) => Promise<any>;
+  action: (fn: any, args?: any) => Promise<any>;
 };
 
 const normalizeElizaAgentLabel = (label: string) =>
@@ -162,10 +172,10 @@ const getConvexUrl = () => {
   return `http://${host}:${port}`;
 };
 
-let convexClient: ConvexHttpClient | null = null;
+let convexClient: ConvexClientAny | null = null;
 const getConvexClient = () => {
   if (!convexClient) {
-    convexClient = new ConvexHttpClient(getConvexUrl());
+    convexClient = new ConvexHttpClient(getConvexUrl()) as unknown as ConvexClientAny;
   }
   return convexClient;
 };
@@ -305,7 +315,7 @@ export const ensureWorldRunning = async (timeoutMs = 60_000) => {
   let lastError: unknown = null;
   while (Date.now() < deadline) {
     try {
-      await client.mutation(api.testing.resume, {});
+      await client.mutation(apiAny.testing.resume, {});
       return;
     } catch (error) {
       lastError = error;
@@ -665,7 +675,7 @@ export const ensureNamedAgentsViaConvex = async (
   }
 
   const client = getConvexClient();
-  const worldStatus = await client.query(api.world.defaultWorldStatus, {});
+  const worldStatus = await client.query(apiAny.world.defaultWorldStatus, {});
   const worldId = worldStatus?.worldId;
   if (!worldId) {
     throw new Error('Unable to resolve default world id for agent setup.');
@@ -676,7 +686,7 @@ export const ensureNamedAgentsViaConvex = async (
     if (!elizaAgentId) {
       throw new Error(`Missing Eliza agent id for "${name}".`);
     }
-    const result = await client.action(api.elizaAgent.actions.connectExistingElizaAgent, {
+    const result = await client.action(apiAny.elizaAgent.actions.connectExistingElizaAgent, {
       worldId,
       name,
       character,
@@ -714,17 +724,20 @@ export const resolveAgentIdsByName = async (
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const worldStatus = await client.query(api.world.defaultWorldStatus, {});
+    const worldStatus = await client.query(apiAny.world.defaultWorldStatus, {});
     const worldId = worldStatus?.worldId;
     if (!worldId) {
       await sleep(pollIntervalMs);
       continue;
     }
-    const [worldState, descriptions] = await Promise.all([
-      client.query(api.world.worldState, { worldId }),
-      client.query(api.world.gameDescriptions, { worldId }),
-    ]);
-    const nameByPlayerId = new Map(
+    const [worldState, descriptions] = (await Promise.all([
+      client.query(apiAny.world.worldState, { worldId }),
+      client.query(apiAny.world.gameDescriptions, { worldId }),
+    ])) as [
+      { world: { agents: Array<{ id: string; playerId: string }> } },
+      { playerDescriptions: Array<{ playerId: string; name: string }> },
+    ];
+    const nameByPlayerId = new Map<string, string>(
       descriptions.playerDescriptions.map((desc) => [desc.playerId, desc.name]),
     );
     const agentIdsByName: Record<string, string> = {};
@@ -1158,10 +1171,16 @@ export const ensureSpectatorChatMessage = async (
   let injectedBy: string | undefined;
 
   while (Date.now() < deadline) {
-    const { state } = await client.query(api.werewolf.matchGetState, {
+    const { state } = (await client.query(apiAny.werewolf.matchGetState, {
       matchId,
       includeRecentPublicMessages: true,
-    });
+    })) as {
+      state: {
+        phase: string;
+        recentPublicMessages: Array<unknown>;
+        players: Array<{ displayName: string; alive: boolean; playerId: string }>;
+      };
+    };
     if (state.recentPublicMessages.length > 0) {
       return { hadMessages: true, injected, playerName: injectedBy, phase: state.phase };
     }
@@ -1172,7 +1191,7 @@ export const ensureSpectatorChatMessage = async (
       );
       if (candidate) {
         try {
-          await client.mutation(api.werewolf.matchSayPublic, {
+          await client.mutation(apiAny.werewolf.matchSayPublic, {
             matchId,
             playerId: candidate.playerId,
             text: `E2E spectator ping (${new Date().toISOString()})`,

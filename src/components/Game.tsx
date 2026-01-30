@@ -21,9 +21,6 @@ import { toastOnError } from '../toasts.ts';
 import { toast } from 'react-toastify';
 import { Id } from '../../convex/_generated/dataModel';
 import { useAssetsManifest } from '../hooks/useAssetsManifest.ts';
-import { useSendInput } from '../hooks/sendInput.ts';
-import { isTestMode } from '../testEnv';
-import { COLLISION_THRESHOLD } from '../../convex/constants';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 

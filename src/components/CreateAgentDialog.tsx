@@ -99,21 +99,29 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter, 
     if (rawMap) {
       try {
         const parsed = JSON.parse(rawMap) as Record<string, string>;
-        return Object.entries(parsed)
+        return (Object.entries(parsed) as Array<[string, string]>)
           .filter(([, id]) => typeof id === 'string' && id.trim().length > 0)
           .map(([name, id]) => ({ id: id.trim(), name: name.trim() }));
       } catch {
         // Ignore malformed JSON and fall back to CSV parsing.
       }
     }
-    const rawNames = import.meta.env.VITE_E2E_ELIZA_AGENT_NAMES ?? '';
-    const rawIds = import.meta.env.VITE_E2E_ELIZA_AGENT_IDS ?? '';
-    const names = rawNames.split(',').map((name) => name.trim()).filter(Boolean);
-    const ids = rawIds.split(',').map((id) => id.trim()).filter(Boolean);
+    const rawNames = String(import.meta.env.VITE_E2E_ELIZA_AGENT_NAMES ?? '');
+    const rawIds = String(import.meta.env.VITE_E2E_ELIZA_AGENT_IDS ?? '');
+    const names = rawNames
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    const ids = rawIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
     if (!names.length || !ids.length) {
       return [] as ElizaAgentSummary[];
     }
-    return names.map((name, index) => ({ name, id: ids[index] })).filter((agent) => !!agent.id);
+    return names
+      .map((name, index) => ({ name, id: ids[index] }))
+      .filter((agent) => !!agent.id) as ElizaAgentSummary[];
   }, [isE2E]);
   const selectableCharacters = isE2E ? characters : customCharacters;
   const hasCustomCharacters = selectableCharacters.length > 0;

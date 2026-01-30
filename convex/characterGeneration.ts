@@ -1,7 +1,6 @@
 import { v } from 'convex/values';
 import { action } from './_generated/server';
 import { anyApi } from 'convex/server';
-import { internal } from './_generated/api';
 import Replicate from 'replicate';
 import { requireUserId } from './util/auth';
 
@@ -15,12 +14,12 @@ export const generate = action({
   },
   handler: async (ctx, args) => {
     const actorId = await requireUserId(ctx, 'Please log in to generate characters.');
-    await ctx.runMutation(internal.rateLimit.consume, {
+    await ctx.runMutation(apiAny.rateLimit.consume, {
       key: `characterGeneration.generate:${actorId}`,
       limit: 3,
       windowMs: 60_000,
     });
-    await ctx.runMutation(internal.audit.log, {
+    await ctx.runMutation(apiAny.audit.log, {
       actorId,
       action: 'characterGeneration.generate',
       metadata: { promptLength: args.prompt.length, hasImage: Boolean(args.image) },
@@ -244,12 +243,12 @@ export const generateCharacterConcept = action({
   },
   handler: async (ctx, args) => {
     const actorId = await requireUserId(ctx, 'Please log in to generate characters.');
-    await ctx.runMutation(internal.rateLimit.consume, {
+    await ctx.runMutation(apiAny.rateLimit.consume, {
       key: `characterGeneration.generateCharacterConcept:${actorId}`,
       limit: 6,
       windowMs: 60_000,
     });
-    await ctx.runMutation(internal.audit.log, {
+    await ctx.runMutation(apiAny.audit.log, {
       actorId,
       action: 'characterGeneration.generateCharacterConcept',
       metadata: { promptLength: args.prompt.length, hasImage: Boolean(args.image) },

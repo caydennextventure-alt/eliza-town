@@ -18,3 +18,5 @@ export const terraindecals = {"grassId":"grass","sandId":"sand","waterId":"sea"}
 
 export const mapwidth = 45;
 export const mapheight = 32;
+export const interactables = [];
+export const terrainDecals = terraindecals;

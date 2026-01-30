@@ -16,6 +16,25 @@ interface AssetSlicerProps {
   onClose: () => void;
 }
 
+type SaveFilePickerOptions = {
+  suggestedName?: string;
+  types?: Array<{
+    description?: string;
+    accept: Record<string, string[]>;
+  }>;
+};
+
+type FileSystemWritableFileStream = {
+  write: (data: Blob) => Promise<void>;
+  close: () => Promise<void>;
+};
+
+type FileSystemFileHandle = {
+  createWritable: () => Promise<FileSystemWritableFileStream>;
+};
+
+type SaveFilePicker = (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>;
+
 export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [slices, setSlices] = useState<Slice[]>([]);
@@ -403,10 +422,9 @@ export const AssetSlicer: React.FC<AssetSlicerProps> = ({ onClose }) => {
     
     // Try Native File System Access API first (Fixes renaming issues)
     try {
-        // @ts-ignore - window.showSaveFilePicker is not yet in all TS definitions
-        if (typeof window.showSaveFilePicker === 'function') {
-            // @ts-ignore
-            const handle = await window.showSaveFilePicker({
+        const savePicker = (window as Window & { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+        if (typeof savePicker === 'function') {
+            const handle = await savePicker({
                 suggestedName: 'assets.zip',
                 types: [{
                     description: 'ZIP Archive',

@@ -6,8 +6,8 @@ type ToolArgs = Record<string, unknown>;
 const werewolfApi = anyApi.werewolf as any;
 
 type ConvexClient = {
-  query: (fn: unknown, args: ToolArgs) => Promise<unknown>;
-  mutation: (fn: unknown, args: ToolArgs) => Promise<unknown>;
+  query: (fn: any, args?: any) => Promise<any>;
+  mutation: (fn: any, args?: any) => Promise<any>;
 };
 
 type ToolCallRequest = {

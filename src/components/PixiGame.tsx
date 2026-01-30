@@ -49,6 +49,7 @@ export const PixiGame = (props: {
   const buildingResult = useQuery(api.werewolf.buildingsInWorld, { worldId: props.worldId });
 
   const moveTo = useSendInput(props.engineId, 'moveTo');
+  const onOpenSpectator = props.onOpenSpectator;
 
   // Interaction for clicking on the world to navigate.
   const dragStart = useRef<{ screenX: number; screenY: number } | null>(null);
@@ -191,8 +192,8 @@ export const PixiGame = (props: {
           y={building.y * tileDim + tileDim / 2}
           tileDim={tileDim}
           onSelect={
-            props.onOpenSpectator
-              ? () => props.onOpenSpectator(building.matchId)
+            onOpenSpectator
+              ? () => onOpenSpectator(building.matchId)
               : undefined
           }
         />

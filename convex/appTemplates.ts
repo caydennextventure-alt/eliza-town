@@ -4,7 +4,7 @@ import { mutation, query } from './_generated/server';
 async function assertBoardInteractable(ctx: any, worldId: any, objectInstanceId: string) {
   const mapDoc = await ctx.db
     .query('maps')
-    .withIndex('worldId', (q) => q.eq('worldId', worldId))
+    .withIndex('worldId', (q: any) => q.eq('worldId', worldId))
     .first();
   if (!mapDoc) {
     throw new ConvexError('Map not found');
@@ -30,7 +30,7 @@ export const getCounter = query({
     await assertBoardInteractable(ctx, args.worldId, args.objectInstanceId);
     const doc = await ctx.db
       .query('appCounterStates')
-      .withIndex('by_world_object', (q) =>
+      .withIndex('by_world_object', (q: any) =>
         q.eq('worldId', args.worldId).eq('objectInstanceId', args.objectInstanceId),
       )
       .first();
@@ -48,7 +48,7 @@ export const incrementCounter = mutation({
     const now = Date.now();
     const existing = await ctx.db
       .query('appCounterStates')
-      .withIndex('by_world_object', (q) =>
+      .withIndex('by_world_object', (q: any) =>
         q.eq('worldId', args.worldId).eq('objectInstanceId', args.objectInstanceId),
       )
       .first();

@@ -1,6 +1,5 @@
 import { action } from '../_generated/server';
 import type { ActionCtx } from '../_generated/server';
-import { internal } from '../_generated/api';
 import { v } from 'convex/values';
 import { anyApi } from 'convex/server';
 import { Id } from '../_generated/dataModel';
@@ -1199,14 +1198,14 @@ export const createElizaAgent = action({
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ inputId: Id<"inputs"> | string; elizaAgentId: string }> => {
+  handler: async (ctx, args): Promise<{ inputId: Id<'inputs'>; elizaAgentId: string }> => {
     const actorId = await requireUserId(ctx, 'Please log in to create an agent.');
-    await ctx.runMutation(internal.rateLimit.consume, {
+    await ctx.runMutation(apiAny.rateLimit.consume, {
       key: `elizaAgent.createElizaAgent:${actorId}`,
       limit: 5,
       windowMs: 60 * 60_000,
     });
-    await ctx.runMutation(internal.audit.log, {
+    await ctx.runMutation(apiAny.audit.log, {
       actorId,
       action: 'elizaAgent.createElizaAgent',
       worldId: args.worldId,
@@ -1268,13 +1267,13 @@ export const createElizaAgent = action({
       // 2. Create game player using existing API
       // We use api.world.createAgent to create the character in the game engine
       // casting to any to avoid circular type inference issues
-      const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
+      const inputId = (await ctx.runMutation(apiAny.world.createAgent, {
          worldId: args.worldId,
          name: args.name,
          character: args.character,
          identity: args.identity,
          plan: args.plan,
-      });
+      })) as Id<'inputs'>;
       
       // 3. Save Mapping
       // We can't link playerId yet as it's created asynchronously by the engine.
@@ -1322,19 +1321,19 @@ export const connectExistingElizaAgent = action({
     elizaServerUrl: v.optional(v.string()),
     elizaAuthToken: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ inputId: Id<'inputs'> | string; elizaAgentId: string }> => {
+  handler: async (ctx, args): Promise<{ inputId: Id<'inputs'>; elizaAgentId: string }> => {
     const elizaServerUrlOverride = normalizeElizaServerUrl(args.elizaServerUrl);
     const elizaServerUrl = elizaServerUrlOverride ?? DEFAULT_ELIZA_SERVER;
     const authToken = resolveElizaAuthToken(args.elizaAuthToken);
     const storedAuthToken = normalizeAuthToken(args.elizaAuthToken);
 
-    const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
+    const inputId = (await ctx.runMutation(apiAny.world.createAgent, {
       worldId: args.worldId,
       name: args.name,
       character: args.character,
       identity: args.identity,
       plan: args.plan,
-    });
+    })) as Id<'inputs'>;
 
     await ctx.runMutation(apiAny.elizaAgent.mutations.saveMapping, {
       worldId: args.worldId,

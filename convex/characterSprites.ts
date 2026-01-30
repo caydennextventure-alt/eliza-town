@@ -1,8 +1,10 @@
 import { v } from 'convex/values';
+import { anyApi } from 'convex/server';
 import { mutation, query, action } from './_generated/server';
 import { DEFAULT_NAME } from './constants';
-import { internal } from './_generated/api';
 import { getOptionalUserId, requireUserId } from './util/auth';
+
+const apiAny = anyApi;
 
 const resolveOwnerId = async (ctx: { auth: { getUserIdentity: () => Promise<{ tokenIdentifier?: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -46,12 +48,12 @@ export const storeImage = action({
   args: { imageUrl: v.string() },
   handler: async (ctx, args) => {
     const actorId = await requireUserId(ctx, 'Please log in to upload images.');
-    await ctx.runMutation(internal.rateLimit.consume, {
+    await ctx.runMutation(apiAny.rateLimit.consume, {
       key: `characterSprites.storeImage:${actorId}`,
       limit: 10,
       windowMs: 60_000,
     });
-    await ctx.runMutation(internal.audit.log, {
+    await ctx.runMutation(apiAny.audit.log, {
       actorId,
       action: 'characterSprites.storeImage',
       metadata: { isDataUrl: args.imageUrl.startsWith('data:') },

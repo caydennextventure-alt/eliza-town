@@ -1,10 +1,12 @@
 import { ConvexError, v } from 'convex/values';
-import { internal } from './_generated/api';
+import { anyApi } from 'convex/server';
 import { mutation } from './_generated/server';
 import { createEngine } from './aiTown/main';
 import { ENGINE_ACTION_DURATION } from './constants';
 import { getOptionalUserId } from './util/auth';
 import roomJson from '../data/room.json';
+
+const apiAny = anyApi;
 
 function allowUnauthenticatedRooms(): boolean {
   return process.env.ALLOW_UNAUTHENTICATED_TOWN_EDIT === '1';
@@ -244,7 +246,7 @@ export const getOrCreateMyRoomWorld = mutation({
 
     await ctx.db.insert('userRooms', { ownerKey, worldId, createdAt: now });
 
-    await ctx.scheduler.runAfter(0, internal.aiTown.main.runStep, {
+    await ctx.scheduler.runAfter(0, apiAny.aiTown.main.runStep, {
       worldId,
       generationNumber: engine.generationNumber,
       maxDuration: ENGINE_ACTION_DURATION,

@@ -9,7 +9,7 @@ import { useServerGame } from '../../hooks/serverGame';
 import { CharacterDefinition, useCharacters } from '../../lib/characterRegistry';
 import agentAvatar from '../../../assets/ui/agent-avatar.svg';
 
-const modalStyles = {
+const modalStyles: ReactModal.Styles = {
   overlay: {
     backgroundColor: 'rgb(0, 0, 0, 75%)',
     zIndex: 12,
