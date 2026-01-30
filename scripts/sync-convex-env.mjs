@@ -27,6 +27,8 @@ const envKeys = [
   'WEREWOLF_PHASE_MS_DAY_RESOLUTION',
   'WEREWOLF_PHASE_MS_ENDED',
   'AITOWN_DISABLE_AGENT_OPERATIONS',
+  // Dev UX: allow unauthenticated editing/room ownership via guestKey.
+  'ALLOW_UNAUTHENTICATED_TOWN_EDIT',
 ];
 const envValues = envKeys
   .map((key) => ({ key, value: process.env[key] }))

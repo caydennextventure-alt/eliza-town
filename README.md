@@ -25,7 +25,7 @@ Unlike standard AI Town, **Eliza Town** integrates the powerful [ElizaOS framewo
 | Agent Engine | [ElizaOS](https://github.com/elizaOS/eliza) |
 | Game Engine & Database | [Convex](https://convex.dev/) |
 | Rendering | [PixiJS](https://pixijs.com/) |
-| Authentication | [Clerk](https://clerk.com/) (Optional) |
+| Authentication | [Clerk](https://clerk.com/) (Optional; otherwise some actions require a dev flag) |
 | Music Generation | [Replicate](https://replicate.com/) |
 
 ---
@@ -74,6 +74,17 @@ Start the frontend development server:
 ```bash
 npm run dev
 ```
+
+#### Dev tip: run without login
+
+Some actions (sprite upload, character generation, certain build/save actions) require authentication.
+If you haven't set up Clerk yet, you can unblock local development by allowing unauthenticated edits:
+
+```bash
+ALLOW_UNAUTHENTICATED_TOWN_EDIT=1 npm run dev
+```
+
+This is meant for local dev only.
 
 Optional: seed default agents during init by setting `AUTO_SPAWN_AGENTS`:
 ```bash
