@@ -20,23 +20,27 @@ const readEnvMs = (name: string, fallback: number): number => {
   return parsed === undefined ? fallback : parsed;
 };
 
-const DEFAULT_ROUND_DURATION_MS = 15_000;
-const DEFAULT_ROUND_BUFFER_MS = 5_000;
-const DEFAULT_ROUND_RESPONSE_TIMEOUT_MS = 10_000;
+const isE2EFast = () => /^(1|true|yes)$/i.test(process.env.WEREWOLF_E2E_FAST ?? '');
 
-export const ROUND_DURATION_MS = readEnvMs(
-  'WEREWOLF_ROUND_DURATION_MS',
-  DEFAULT_ROUND_DURATION_MS,
-);
-export const ROUND_BUFFER_MS = readEnvMs('WEREWOLF_ROUND_BUFFER_MS', DEFAULT_ROUND_BUFFER_MS);
-const defaultResponseTimeoutMs = Math.min(
-  DEFAULT_ROUND_RESPONSE_TIMEOUT_MS,
-  Math.max(1_000, ROUND_DURATION_MS - ROUND_BUFFER_MS),
-);
-export const ROUND_RESPONSE_TIMEOUT_MS = readEnvMs(
-  'WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS',
-  defaultResponseTimeoutMs,
-);
+const getDefaultRoundDurationMs = () => (isE2EFast() ? 1_500 : 15_000);
+const getDefaultRoundBufferMs = () => (isE2EFast() ? 200 : 5_000);
+const getDefaultRoundResponseTimeoutMs = () => (isE2EFast() ? 1_000 : 10_000);
+
+export const getRoundDurationMs = () =>
+  readEnvMs('WEREWOLF_ROUND_DURATION_MS', getDefaultRoundDurationMs());
+
+export const getRoundBufferMs = () =>
+  readEnvMs('WEREWOLF_ROUND_BUFFER_MS', getDefaultRoundBufferMs());
+
+export const getRoundResponseTimeoutMs = () => {
+  const roundDuration = getRoundDurationMs();
+  const roundBuffer = getRoundBufferMs();
+  const defaultResponseTimeoutMs = Math.min(
+    getDefaultRoundResponseTimeoutMs(),
+    Math.max(1_000, roundDuration - roundBuffer),
+  );
+  return readEnvMs('WEREWOLF_ROUND_RESPONSE_TIMEOUT_MS', defaultResponseTimeoutMs);
+};
 
 const PHASE_ROUND_COUNTS: Record<Phase, number> = {
   LOBBY: 0,
@@ -54,7 +58,7 @@ export function getRoundCount(phase: Phase): number {
 }
 
 export function getRoundStartAt(phaseStartedAt: number, roundIndex: number): number {
-  return phaseStartedAt + roundIndex * ROUND_DURATION_MS;
+  return phaseStartedAt + roundIndex * getRoundDurationMs();
 }
 
 export function getPreviousPhase(phase: Phase): Phase | null {

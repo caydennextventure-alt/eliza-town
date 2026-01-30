@@ -13,6 +13,7 @@ import { GameId } from '../../convex/aiTown/ids.ts';
 import { useServerGame } from '../hooks/serverGame.ts';
 import { useSendInput } from '../hooks/sendInput.ts';
 import { isTestMode } from '../testEnv';
+import { COLLISION_THRESHOLD } from '../../convex/constants';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
@@ -40,7 +41,6 @@ export default function Game({ onOpenSpectator, hideTestControls = false }: Prop
       ? [...game.world.players.values()].find((p) => p.human === humanTokenIdentifier)?.id
       : undefined;
   const moveTo = useSendInput(engineId!, 'moveTo');
-  const [testDestination, setTestDestination] = useState<{ x: number; y: number } | null>(null);
 
   // Send a periodic heartbeat to our world to keep it alive.
   useWorldHeartbeat();
@@ -52,15 +52,70 @@ export default function Game({ onOpenSpectator, hideTestControls = false }: Prop
     return null;
   }
   const humanPlayer = humanPlayerId ? game.world.players.get(humanPlayerId) : undefined;
+  const findTestDestination = () => {
+    if (!humanPlayer) {
+      return null;
+    }
+    const map = game.worldMap;
+    const baseX = Math.round(humanPlayer.position.x);
+    const baseY = Math.round(humanPlayer.position.y);
+    const otherPositions = [...game.world.players.values()]
+      .filter((player) => player.id !== humanPlayer.id)
+      .map((player) => player.position);
+    const isBlocked = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) {
+        return true;
+      }
+      for (const layer of map.objectTiles) {
+        if (layer[Math.floor(x)]?.[Math.floor(y)] !== -1) {
+          return true;
+        }
+      }
+      for (const other of otherPositions) {
+        if (Math.hypot(other.x - x, other.y - y) < COLLISION_THRESHOLD) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const offsets: Array<[number, number]> = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+      [2, 0],
+      [-2, 0],
+      [0, 2],
+      [0, -2],
+      [2, 1],
+      [2, -1],
+      [-2, 1],
+      [-2, -1],
+      [1, 2],
+      [1, -2],
+      [-1, 2],
+      [-1, -2],
+    ];
+    for (const [dx, dy] of offsets) {
+      const candidate = { x: baseX + dx, y: baseY + dy };
+      if (!isBlocked(candidate.x, candidate.y)) {
+        return candidate;
+      }
+    }
+    return null;
+  };
   const handleTestMove = async () => {
     if (!humanPlayerId) {
       return;
     }
-    const next = {
-      x: testDestination ? testDestination.x + 1 : 1,
-      y: testDestination ? testDestination.y + 1 : 1,
-    };
-    setTestDestination(next);
+    const next = findTestDestination();
+    if (!next) {
+      return;
+    }
     await moveTo({ playerId: humanPlayerId, destination: next });
   };
   const startConversation = useSendInput(engineId!, 'startConversation');
@@ -113,7 +168,10 @@ export default function Game({ onOpenSpectator, hideTestControls = false }: Prop
             >
               Invite Me (from selected)
             </button>
-            <div className="space-y-1" data-testid="test-player-list">
+            <div
+              className="space-y-1 max-h-[30vh] overflow-y-auto pr-1"
+              data-testid="test-player-list"
+            >
               {[...game.world.players.values()].map((player) => {
                 const label = game.playerDescriptions.get(player.id)?.name ?? player.id;
                 return (

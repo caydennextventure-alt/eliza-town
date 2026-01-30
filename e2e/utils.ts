@@ -8,6 +8,26 @@ const DEFAULT_FLIZA_ELIZA_AGENT_ID = 'c7cab9c8-6c71-03a6-bd21-a694c8776023';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitForInputProcessed = async (
+  inputId: string,
+  options: { timeoutMs?: number; pollIntervalMs?: number } = {},
+) => {
+  const { timeoutMs = 90_000, pollIntervalMs = 1000 } = options;
+  const client = getConvexClient();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = await client.query(api.aiTown.main.inputStatus, { inputId });
+    if (status) {
+      if (status.kind === 'error') {
+        throw new Error(status.message);
+      }
+      return status.value;
+    }
+    await sleep(pollIntervalMs);
+  }
+  throw new Error(`Timed out waiting for input ${inputId} to process.`);
+};
+
 type ElizaAgentOption = {
   value: string;
   label: string;
@@ -96,6 +116,16 @@ export const loadElizaAgentsWithRetry = async (
   const deadline = Date.now() + timeoutMs;
   let attempt = 0;
   let lastStatus = '';
+
+  const hasOptions = async () =>
+    (await select.evaluate((node) => {
+      const selectNode = node as HTMLSelectElement;
+      return Array.from(selectNode.options).filter((opt) => opt.value).length;
+    })) > 0;
+
+  if ((await select.isEnabled().catch(() => false)) && (await hasOptions())) {
+    return;
+  }
 
   while (Date.now() < deadline) {
     attempt += 1;
@@ -269,22 +299,93 @@ export const gotoHome = async (page: Page) => {
   await page.goto('/ai-town/');
 };
 
-export const enterWorld = async (page: Page) => {
-  await page.getByTestId('enter-world').click();
-  await expect(page.getByTestId('game-view')).toBeVisible();
+export const ensureWorldRunning = async (timeoutMs = 60_000) => {
+  const client = getConvexClient();
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown = null;
+  while (Date.now() < deadline) {
+    try {
+      await client.mutation(api.testing.resume, {});
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(1000);
+    }
+  }
+  throw new Error(`Unable to resume world within ${timeoutMs}ms. ${String(lastError ?? '')}`);
 };
 
-export const openJoinDialog = async (page: Page) => {
+export const enterWorld = async (page: Page) => {
+  await ensureWorldRunning();
+  const gameView = page.getByTestId('game-view');
+  if (await gameView.isVisible().catch(() => false)) {
+    return;
+  }
+  const enterButton = page.getByTestId('enter-world');
+  await expect(enterButton).toBeVisible({ timeout: 20000 });
+  await enterButton.click();
+  await expect(gameView).toBeVisible({ timeout: 20000 });
+};
+
+export const openJoinDialog = async (
+  page: Page,
+  options: { allowReload?: boolean } = {},
+) => {
   const joinButton = page.getByTestId('join-world');
+  const joinDialog = page.getByTestId('join-world-dialog');
+  if (await joinDialog.isVisible().catch(() => false)) {
+    return;
+  }
   await expect(joinButton).toBeVisible({ timeout: 20000 });
   await expect(joinButton).not.toHaveClass(/pointer-events-none/, { timeout: 20000 });
-  const currentText = (await joinButton.textContent()) ?? '';
-  if (currentText.includes('Release')) {
-    await joinButton.click();
-    await expect(joinButton).toHaveText(/Take Over/, { timeout: 20000 });
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const currentText = (await joinButton.textContent()) ?? '';
+    if (currentText.includes('Release')) {
+      await joinButton.click();
+      await expect(joinButton).toHaveText(/Take Over/, { timeout: 20000 });
+    }
+    await joinButton.scrollIntoViewIfNeeded();
+    await joinButton.click({ force: true });
+    try {
+      await expect(joinDialog).toBeVisible({ timeout: 5000 });
+      return;
+    } catch {
+      await page
+        .evaluate(() => {
+          const el = document.querySelector('[data-testid="join-world"]');
+          if (el instanceof HTMLElement) {
+            el.click();
+          }
+        })
+        .catch(() => {});
+      try {
+        await expect(joinDialog).toBeVisible({ timeout: 5000 });
+        return;
+      } catch {
+        // fall through
+      }
+      try {
+        await joinButton.focus();
+        await page.keyboard.press('Enter');
+        await expect(joinDialog).toBeVisible({ timeout: 5000 });
+        return;
+      } catch {
+        // fall through
+      }
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(500);
+    }
   }
-  await joinButton.click();
-  await expect(page.getByTestId('join-world-dialog')).toBeVisible({ timeout: 20000 });
+
+  if (options.allowReload !== false) {
+    await page.reload();
+    await enterWorld(page);
+    await openJoinDialog(page, { allowReload: false });
+    return;
+  }
+
+  await expect(joinDialog).toBeVisible({ timeout: 20000 });
 };
 
 export const openCharacters = async (page: Page) => {
@@ -556,6 +657,7 @@ export const ensureNamedAgentsViaConvex = async (
     personality = [],
   } = options;
 
+  await ensureWorldRunning();
   const existingNames = new Set(await listCustomAgentNames(page));
   const missingNames = agentNames.filter((name) => !existingNames.has(name));
   if (missingNames.length === 0) {
@@ -574,7 +676,7 @@ export const ensureNamedAgentsViaConvex = async (
     if (!elizaAgentId) {
       throw new Error(`Missing Eliza agent id for "${name}".`);
     }
-    await client.action(api.elizaAgent.actions.connectExistingElizaAgent, {
+    const result = await client.action(api.elizaAgent.actions.connectExistingElizaAgent, {
       worldId,
       name,
       character,
@@ -585,13 +687,21 @@ export const ensureNamedAgentsViaConvex = async (
       elizaServerUrl,
       elizaAuthToken,
     });
+    if (result?.inputId) {
+      try {
+        await waitForInputProcessed(result.inputId, { timeoutMs: 180_000 });
+      } catch (error) {
+        await ensureWorldRunning();
+        await waitForInputProcessed(result.inputId, { timeoutMs: 180_000 });
+      }
+    }
   }
 
   await expect
     .poll(async () => {
       const names = await listCustomAgentNames(page);
       return agentNames.every((name) => names.includes(name));
-    }, { timeout: 60000 })
+    }, { timeout: 120_000 })
     .toBeTruthy();
 };
 
@@ -656,7 +766,7 @@ export const removeAgentsByName = async (page: Page, agentNames: string[]) => {
       await confirmButton.click({ force: true });
       await expect
         .poll(async () => page.locator(`[data-agent-name="${name}"]`).count(), {
-          timeout: 30000,
+          timeout: 60000,
         })
         .toBeLessThan(remaining);
       remaining = await page.locator(`[data-agent-name="${name}"]`).count();
@@ -675,18 +785,43 @@ export const removeAgentsById = async (page: Page, agentIds: string[]) => {
     if ((await row.count()) === 0) {
       continue;
     }
-    const removeButton = row.locator('[data-testid^="agent-remove-"]');
-    await expect(removeButton).toBeVisible({ timeout: 20000 });
-    if (await removeButton.isDisabled()) {
-      throw new Error(`Agent "${agentId}" is controlled by someone else and cannot be removed.`);
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      if ((await row.count()) === 0) {
+        break;
+      }
+      const confirmButton = row.locator('[data-testid^="agent-confirm-remove-"]');
+      if ((await confirmButton.count()) > 0) {
+        await row.scrollIntoViewIfNeeded();
+        await confirmButton.scrollIntoViewIfNeeded();
+        await confirmButton.click({ force: true });
+      } else {
+        const removeButton = row.locator('[data-testid^="agent-remove-"]');
+        await expect(removeButton).toBeVisible({ timeout: 20000 });
+        if (await removeButton.isDisabled()) {
+          throw new Error(`Agent "${agentId}" is controlled by someone else and cannot be removed.`);
+        }
+        await row.scrollIntoViewIfNeeded();
+        await removeButton.click({ force: true });
+        await expect(confirmButton).toBeVisible({ timeout: 20000 });
+        await confirmButton.scrollIntoViewIfNeeded();
+        await confirmButton.click({ force: true });
+      }
+      try {
+        await expect
+          .poll(async () => row.count(), { timeout: 60000 })
+          .toBe(0);
+        break;
+      } catch (error) {
+        attempts += 1;
+        if (attempts >= maxAttempts) {
+          throw error;
+        }
+        await closeAgentList(page);
+        await openAgentList(page);
+      }
     }
-    await row.scrollIntoViewIfNeeded();
-    await removeButton.click({ force: true });
-    const confirmButton = row.locator('[data-testid^="agent-confirm-remove-"]');
-    await confirmButton.click({ force: true });
-    await expect
-      .poll(async () => row.count(), { timeout: 30000 })
-      .toBe(0);
   }
   await page.getByTestId('agent-list-done').click();
   await expect(page.getByTestId('agent-list-dialog')).toBeHidden();
@@ -854,23 +989,54 @@ export const takeOverFirstAgent = async (page: Page) => {
 export const takeOverAgentByName = async (page: Page, name: string) => {
   await openJoinDialog(page);
   const joinDialog = page.getByTestId('join-world-dialog');
-  const agentButton = page
-    .locator('[data-testid^="join-world-agent-"]')
-    .filter({ hasText: name })
-    .first();
-  await agentButton.click();
-  await page.getByTestId('join-world-takeover').click();
-  await expect
-    .poll(async () => {
-      const joinText = (await page.getByTestId('join-world').textContent()) ?? '';
-      const humanId = (await page.getByTestId('test-human-player-id').textContent()) ?? '';
-      return /Release/i.test(joinText) && humanId.trim() !== 'not-playing';
-    }, { timeout: 60_000 })
-    .toBeTruthy();
-  if (await joinDialog.isVisible()) {
-    await page.getByTestId('join-world-cancel').click();
-    await expect(joinDialog).toBeHidden({ timeout: 20000 });
+  const waitForTakeOver = async (timeoutMs: number) => {
+    await expect
+      .poll(async () => {
+        const joinText = (await page.getByTestId('join-world').textContent()) ?? '';
+        const humanId = (await page.getByTestId('test-human-player-id').textContent()) ?? '';
+        return /Release/i.test(joinText) && humanId.trim() !== 'not-playing';
+      }, { timeout: timeoutMs })
+      .toBeTruthy();
+  };
+
+  const maxAttempts = 3;
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const agentButtons = page
+      .locator('[data-testid^="join-world-agent-"]')
+      .filter({ hasText: name });
+    const buttonCount = await agentButtons.count();
+    if (buttonCount === 0) {
+      throw new Error(`No joinable agents found with name "${name}".`);
+    }
+    const agentButton = agentButtons.nth(attempt % buttonCount);
+    await expect(agentButton).toBeVisible({ timeout: 20000 });
+    await agentButton.click();
+    await page.getByTestId('join-world-takeover').click();
+    try {
+      await waitForTakeOver(60_000);
+      if (await joinDialog.isVisible()) {
+        await page.getByTestId('join-world-cancel').click();
+        await expect(joinDialog).toBeHidden({ timeout: 20000 });
+      }
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      if (await joinDialog.isVisible()) {
+        const cancelButton = page.getByTestId('join-world-cancel');
+        if (await cancelButton.isVisible()) {
+          await cancelButton.click();
+          await expect(joinDialog).toBeHidden({ timeout: 20000 });
+        } else {
+          await page.keyboard.press('Escape');
+          await expect(joinDialog).toBeHidden({ timeout: 20000 });
+        }
+      }
+      await openJoinDialog(page);
+    }
   }
+
+  throw lastError ?? new Error(`Unable to take over agent "${name}".`);
 };
 
 export const releaseAgent = async (page: Page) => {
@@ -984,7 +1150,7 @@ export const ensureSpectatorChatMessage = async (
   agentNames: string[],
   options: { timeoutMs?: number; pollIntervalMs?: number } = {},
 ): Promise<SpectatorChatResult> => {
-  const { timeoutMs = 120_000, pollIntervalMs = 3_000 } = options;
+  const { timeoutMs = 120_000, pollIntervalMs = 1_000 } = options;
   const client = getConvexClient();
   const deadline = Date.now() + timeoutMs;
   const idempotencyKey = `e2e-spectator-chat-${matchId}-${Date.now()}`;

@@ -53,8 +53,25 @@ test('create agent with custom characters and traits', async ({ page }) => {
   }
   await select.selectOption(optionValue);
 
-  await page.getByTestId('agent-create').click();
-  await expect(page.getByTestId('create-agent-dialog')).toBeHidden({ timeout: 60000 });
+  const dialog = page.getByTestId('create-agent-dialog');
+  const errorBox = page.getByTestId('agent-error');
+  const createButton = page.getByTestId('agent-create');
+  const maxAttempts = 3;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await createButton.click();
+    try {
+      await expect(dialog).toBeHidden({ timeout: 60000 });
+      return;
+    } catch (error) {
+      const errorText = (await errorBox.textContent())?.toLowerCase() ?? '';
+      if (attempt < maxAttempts - 1 && errorText.includes('world is still processing')) {
+        await page.waitForTimeout(2000);
+        continue;
+      }
+      throw error;
+    }
+  }
 
   await openAgentList(page);
   const listDialog = page.getByTestId('agent-list-dialog');

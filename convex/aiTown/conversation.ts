@@ -13,6 +13,16 @@ import { ConversationMembership, serializedConversationMembership } from './conv
 import { parseMap, serializeMap } from '../util/object';
 import { noisyLog, noisyWarn } from './logging';
 
+const resolveConversationDistance = () => {
+  const raw =
+    process.env.E2E_CONVERSATION_DISTANCE ?? process.env.AITOWN_CONVERSATION_DISTANCE ?? '';
+  if (!raw) {
+    return CONVERSATION_DISTANCE;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : CONVERSATION_DISTANCE;
+};
+
 export class Conversation {
   id: GameId<'conversations'>;
   creator: GameId<'players'>;
@@ -67,7 +77,7 @@ export class Conversation {
     // If the players are both in the "walkingOver" state and they're sufficiently close, transition both
     // of them to "participating" and stop their paths.
     if (member1.status.kind === 'walkingOver' && member2.status.kind === 'walkingOver') {
-      if (playerDistance < CONVERSATION_DISTANCE) {
+      if (playerDistance < resolveConversationDistance()) {
         noisyLog(`Starting conversation between ${player1.id} and ${player2.id}`);
 
         // First, stop the two players from moving.

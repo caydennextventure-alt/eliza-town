@@ -20,7 +20,7 @@ import {
   applyMatchWolfChat,
   applyMatchWolfKill,
 } from './match';
-import { getPreviousPhase, getRoundCount, ROUND_RESPONSE_TIMEOUT_MS } from './rounds';
+import { getPreviousPhase, getRoundCount, getRoundResponseTimeoutMs } from './rounds';
 import type { EventVisibility, Phase, PlayerId, PublicMessageKind } from './types';
 import {
   createNarratorEvent,
@@ -143,15 +143,33 @@ function logAgentResponse(params: {
 function buildPassLogAction(params: {
   player: MatchPlayerState;
   responseText: string | null;
+  state: MatchState;
+  roundIndex: number;
+  roundCount: number;
 }): RoundAction {
   const trimmed = params.responseText?.trim() ?? '';
   const text = trimmed.length === 0 ? 'no response' : 'pass';
+  const isNight = params.state.phase === 'NIGHT';
+  const isFinalNightRound =
+    isNight && params.roundIndex === Math.max(0, params.roundCount - 1);
+  if (isNight && params.player.role === 'WEREWOLF' && !isFinalNightRound) {
+    return {
+      type: 'LOG_MESSAGE',
+      playerId: params.player.playerId,
+      text,
+      channel: 'WOLF_CHAT',
+      visibility: 'WOLVES',
+    };
+  }
+  const kind: PublicMessageKind =
+    params.state.phase === 'DAY_OPENING' ? 'OPENING' : 'DISCUSSION';
   return {
     type: 'LOG_MESSAGE',
     playerId: params.player.playerId,
     text,
-    channel: 'PRIVATE',
+    channel: 'PUBLIC',
     visibility: 'PUBLIC',
+    kind,
   };
 }
 
@@ -391,10 +409,10 @@ export const runRound = internalAction({
           elizaAgentId: elizaAgent.elizaAgentId,
           prompt,
         });
-        const responseText = await sendElizaMessageWithTimeout(ctx, {
-          elizaAgent,
-          matchId: context.matchId,
-          prompt,
+      const responseText = await sendElizaMessageWithTimeout(ctx, {
+        elizaAgent,
+        matchId: context.matchId,
+        prompt,
         });
         logAgentResponse({
           matchId: context.matchId,
@@ -455,6 +473,9 @@ export const runRound = internalAction({
             buildPassLogAction({
               player,
               responseText: null,
+              state: context.state,
+              roundIndex: args.roundIndex,
+              roundCount,
             }),
           );
         }
@@ -489,6 +510,9 @@ export const runRound = internalAction({
             buildPassLogAction({
               player,
               responseText: value.responseText ?? null,
+              state: context.state,
+              roundIndex: args.roundIndex,
+              roundCount,
             }),
           );
         }
@@ -687,7 +711,7 @@ async function sendElizaMessageWithTimeout(
       message: params.prompt,
       senderId: `werewolf:${params.matchId}`,
       conversationId: `werewolf:${params.matchId}`,
-      timeoutMs: ROUND_RESPONSE_TIMEOUT_MS,
+      timeoutMs: getRoundResponseTimeoutMs(),
     });
   } catch (error) {
     console.warn('Eliza message failed', { error });
@@ -716,7 +740,7 @@ function parseAgentResponse(params: {
 }): { responded: boolean; action?: RoundAction; messageText?: string } {
   const rawResponse = params.responseText;
   if (rawResponse === null || rawResponse === undefined || rawResponse.trim().length === 0) {
-    return { responded: true };
+    return { responded: false };
   }
   const parsed = parseJsonObject(rawResponse);
   if (!parsed) {
@@ -750,6 +774,9 @@ function parseAgentResponse(params: {
           roundCount: params.roundCount,
         })
       : null;
+    if (!fallbackAction && !messageText) {
+      return { responded: false };
+    }
     return { responded: true, action: fallbackAction ?? undefined, messageText };
   }
 
@@ -774,6 +801,9 @@ function parseAgentResponse(params: {
         roundCount: params.roundCount,
       })
     : null;
+  if (!fallbackAction && !messageText) {
+    return { responded: false };
+  }
   return { responded: true, action: fallbackAction ?? undefined, messageText };
 }
 

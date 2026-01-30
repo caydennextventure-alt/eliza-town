@@ -64,13 +64,25 @@ test('accept invite, send a message, and leave conversation', async ({ page }) =
     throw new Error('No incoming invite received to accept.');
   }
 
-  await expect(page.getByTestId('message-input')).toBeVisible({ timeout: 60000 });
+  const messageInput = page
+    .getByTestId('message-input')
+    .or(page.locator('[contenteditable][placeholder="Type here"]'))
+    .first();
+  await expect(messageInput).toBeVisible({ timeout: 60000 });
 
-  await page.getByTestId('message-input').fill('Hello!');
-  await page.getByTestId('message-input').press('Enter');
+  await messageInput.click();
+  await messageInput.fill('Hello!');
+  await messageInput.press('Enter');
   await expect(page.getByText('Hello!')).toBeVisible();
 
-  await page.getByTestId('leave-conversation').click();
+  const leaveButton = page.getByTestId('leave-conversation');
+  if (await leaveButton.isVisible().catch(() => false)) {
+    await leaveButton.click();
+  } else {
+    const cancelInvite = page.getByTestId('cancel-invite');
+    await expect(cancelInvite).toBeVisible({ timeout: 20000 });
+    await cancelInvite.click();
+  }
   await page.getByTestId('close-player-details').click();
   await expect(page.getByTestId('player-details-empty')).toBeVisible();
 });

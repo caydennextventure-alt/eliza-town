@@ -1,5 +1,5 @@
 import type { MatchState } from './engine/state';
-import { PHASE_DURATIONS_MS, createInitialMatchState } from './engine/state';
+import { createInitialMatchState, getPhaseDurationMs } from './engine/state';
 import { applyDayAction } from './engine/day';
 import { applyNightAction } from './engine/night';
 import type { Phase } from './types';
@@ -17,7 +17,7 @@ function withPhase(state: MatchState, phase: Phase, startAt: number): MatchState
     ...state,
     phase,
     phaseStartedAt: startAt,
-    phaseEndsAt: startAt + PHASE_DURATIONS_MS[phase],
+    phaseEndsAt: startAt + getPhaseDurationMs(phase),
   };
 }
 
@@ -45,7 +45,7 @@ describe('advanceMatchPhase', () => {
 
     expect(result.advanced).toBe(true);
     expect(result.nextState.phase).toBe('DAY_ANNOUNCE');
-    expect(result.nextState.phaseEndsAt).toBe(now + PHASE_DURATIONS_MS.DAY_ANNOUNCE);
+    expect(result.nextState.phaseEndsAt).toBe(now + getPhaseDurationMs('DAY_ANNOUNCE'));
     const eliminated = result.nextState.players.find((player) => player.playerId === target.playerId);
     expect(eliminated?.alive).toBe(false);
     expect(result.nextState.playersAlive).toBe(state.playersAlive - 1);

@@ -20,7 +20,17 @@ const ROLE_DISTRIBUTION: Role[] = [
 const REQUIRED_PLAYERS = ROLE_DISTRIBUTION.length;
 const ROLE_ASSIGN_SEED = 0x9e3779b9;
 
-export function assignRoles(playerIds: PlayerId[]): RoleAssignment[] {
+const normalizeRoleSeed = (seed?: number | string): number => {
+  if (seed === undefined) {
+    return ROLE_ASSIGN_SEED;
+  }
+  return xxHash32(String(seed), ROLE_ASSIGN_SEED) >>> 0;
+};
+
+export function assignRoles(
+  playerIds: PlayerId[],
+  seed?: number | string,
+): RoleAssignment[] {
   if (playerIds.length !== REQUIRED_PLAYERS) {
     throw new Error(`assignRoles requires ${REQUIRED_PLAYERS} players`);
   }
@@ -30,10 +40,11 @@ export function assignRoles(playerIds: PlayerId[]): RoleAssignment[] {
     throw new Error('assignRoles requires unique player ids');
   }
 
+  const roleSeed = normalizeRoleSeed(seed);
   const orderedPlayers = [...playerIds]
     .map((playerId) => ({
       playerId,
-      sortKey: xxHash32(playerId, ROLE_ASSIGN_SEED) >>> 0,
+      sortKey: xxHash32(playerId, roleSeed) >>> 0,
     }))
     .sort((a, b) => {
       if (a.sortKey !== b.sortKey) {

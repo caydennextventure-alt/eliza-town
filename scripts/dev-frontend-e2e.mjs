@@ -41,11 +41,38 @@ if (!process.env.SKIP_CONVEX_WAIT) {
   await waitForBackend();
 }
 
+const defaultAgentNames = Array.from({ length: 8 }, (_, index) => `E2E Werewolf ${index + 1}`);
+const defaultAgentIds = [
+  'c7cab9c8-6c71-03a6-bd21-a694c8776023',
+  '5f72a139-5879-0f35-9da7-90bf5be30be7',
+  '63951950-3c9b-0ca8-8308-cab08cbb464f',
+  '811e5045-23aa-06eb-9897-30584a587d46',
+  '918dcdba-01af-0c4c-9867-3c0f114264f6',
+  '998c8655-d945-0fa3-b5df-cef9bb7fae48',
+  'd09c5b1c-9cce-0e90-9b2b-b3364191369a',
+  '23337d73-4500-01b6-9eb0-7d9bbd3ea4cc',
+];
+const defaultAgentMap = Object.fromEntries(
+  defaultAgentNames.map((name, index) => [name, defaultAgentIds[index]]),
+);
+
 const env = {
   ...process.env,
   VITE_E2E: process.env.VITE_E2E ?? '1',
   VITE_CONVEX_URL:
     process.env.VITE_CONVEX_URL ?? `http://${host}:${cloudPort}`,
+  VITE_E2E_ELIZA_AGENT_MAP:
+    process.env.VITE_E2E_ELIZA_AGENT_MAP ??
+    process.env.E2E_ELIZA_AGENT_MAP ??
+    JSON.stringify(defaultAgentMap),
+  VITE_E2E_ELIZA_AGENT_NAMES:
+    process.env.VITE_E2E_ELIZA_AGENT_NAMES ??
+    process.env.E2E_ELIZA_AGENT_NAMES ??
+    defaultAgentNames.join(','),
+  VITE_E2E_ELIZA_AGENT_IDS:
+    process.env.VITE_E2E_ELIZA_AGENT_IDS ??
+    process.env.E2E_ELIZA_AGENT_IDS ??
+    defaultAgentIds.join(','),
 };
 
 const viteBin = path.join(process.cwd(), 'node_modules', 'vite', 'bin', 'vite.js');

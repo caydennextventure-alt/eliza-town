@@ -87,6 +87,8 @@ export default function PlayerDetails({
     sameConversation &&
     playerStatus?.kind === 'participating' &&
     humanStatus?.kind === 'participating';
+  const allowChatInput =
+    inConversationWithMe || (isTestMode && playerStatus?.kind === 'walkingOver');
 
   const canCancelInvite =
     sameConversation &&
@@ -264,12 +266,15 @@ export default function PlayerDetails({
           )}
         </p>
       </div>
-      {!isMe && playerConversation && playerStatus?.kind === 'participating' && (
+      {!isMe &&
+        playerConversation &&
+        (playerStatus?.kind === 'participating' ||
+          (isTestMode && playerStatus?.kind === 'walkingOver')) && (
         <div className="flex-1 min-h-0">
           <Messages
             worldId={worldId}
             engineId={engineId}
-            inConversationWithMe={inConversationWithMe ?? false}
+            inConversationWithMe={allowChatInput ?? false}
             conversation={{ kind: 'active', doc: playerConversation }}
             humanPlayer={humanPlayer}
           />

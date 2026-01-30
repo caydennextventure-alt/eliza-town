@@ -5,6 +5,7 @@ import { ConvexError } from 'convex/values';
 import { toast } from 'react-toastify';
 import { api } from 'convex/_generated/api';
 import { waitForInput } from '../hooks/sendInput';
+import { isTestMode } from '../testEnv';
 import { useServerGame } from '../hooks/serverGame';
 import { CharacterDefinition, useCharacters } from '../lib/characterRegistry';
 import agentAvatar from '../../assets/ui/agent-avatar.svg';
@@ -114,20 +115,21 @@ export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Prop
       toast.error('This agent is controlled by someone else.');
       return;
     }
+    const inputTimeoutMs = isTestMode ? 60000 : 15000;
     setRemovingAgentId(agent.agentId);
     try {
       if (agent.isControlledByUser) {
         const releaseInputId = await leaveWorld({ worldId });
         if (releaseInputId) {
           await waitForInput(convex, releaseInputId, {
-            timeoutMs: 15000,
+            timeoutMs: inputTimeoutMs,
             timeoutMessage: 'World is still processing. Try again in a moment.',
           });
         }
       }
       const inputId = await removeAgent({ worldId, agentId: agent.agentId });
       await waitForInput(convex, inputId, {
-        timeoutMs: 15000,
+        timeoutMs: inputTimeoutMs,
         timeoutMessage: 'World is still processing. Try again in a moment.',
       });
       setConfirmingAgentId(null);

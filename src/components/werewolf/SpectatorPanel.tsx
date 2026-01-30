@@ -163,12 +163,52 @@ function buildTranscriptEntries(
   playerNameById: Map<string, string>,
 ): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
+  let currentPhase: string | null = null;
+  let currentPhaseLabel: string | null = null;
+  let currentDayNumber: number | null = null;
+  let currentNightNumber: number | null = null;
+
+  const phasePrefixFor = () => {
+    if (!currentPhaseLabel) {
+      return '';
+    }
+    if (currentPhase === 'NIGHT') {
+      const nightLabel =
+        currentNightNumber !== null ? `Night ${currentNightNumber}` : 'Night';
+      return `[${nightLabel}] `;
+    }
+    if (currentPhase?.startsWith('DAY')) {
+      const dayLabel =
+        currentDayNumber !== null ? `Day ${currentDayNumber}` : 'Day ?';
+      return `[${dayLabel} · ${currentPhaseLabel}] `;
+    }
+    return `[${currentPhaseLabel}] `;
+  };
 
   for (const event of events) {
     const payload = asRecord(event.payload) ?? {};
     const timeLabel = formatTimeLabel(event.at);
     const isPrivate = event.visibility === 'PRIVATE';
     const privateLabel = isPrivate ? ' (Private)' : '';
+    if (event.type === 'PHASE_CHANGED') {
+      const nextPhase = typeof payload.to === 'string' ? payload.to : null;
+      const fromPhase = typeof payload.from === 'string' ? payload.from : null;
+      if (typeof payload.dayNumber === 'number') {
+        currentDayNumber = payload.dayNumber;
+      }
+      if (nextPhase) {
+        if (nextPhase === 'NIGHT') {
+          if (currentNightNumber === null) {
+            currentNightNumber = 1;
+          } else if (fromPhase === 'DAY_RESOLUTION') {
+            currentNightNumber += 1;
+          }
+        }
+        currentPhase = nextPhase;
+        currentPhaseLabel = formatPhaseLabel(nextPhase);
+      }
+    }
+    const phasePrefix = phasePrefixFor();
 
     switch (event.type) {
       case 'PUBLIC_MESSAGE': {
@@ -183,7 +223,7 @@ function buildTranscriptEntries(
           eventId: event.eventId,
           timeLabel,
           title: playerNameById.get(playerId) ?? playerId,
-          text: `${prefix}${text}`,
+          text: `${phasePrefix}${prefix}${text}`,
           kind: 'message',
           playerId,
           visibility: event.visibility,
@@ -216,7 +256,7 @@ function buildTranscriptEntries(
           eventId: event.eventId,
           timeLabel,
           title: `Wolf chat${privateLabel}`,
-          text: `${wolfName}: ${text}`,
+          text: `${phasePrefix}${wolfName}: ${text}`,
           kind: 'message',
           playerId: fromWolfId,
           visibility: event.visibility,
@@ -255,7 +295,7 @@ function buildTranscriptEntries(
           eventId: event.eventId,
           timeLabel,
           title: 'Vote',
-          text: `${voterName} -> ${targetName}${reasonSuffix}`,
+          text: `${phasePrefix}${voterName} -> ${targetName}${reasonSuffix}`,
           kind: 'vote',
           playerId: voterId,
           visibility: event.visibility,
@@ -623,7 +663,7 @@ export default function SpectatorPanel({ isOpen, matchId, onClose }: Props) {
   const filteredEntries = useMemo(() => {
     let next = transcriptEntries;
     if (storyFilter === 'chat') {
-      next = next.filter((entry) => entry.kind === 'message');
+      next = next.filter((entry) => entry.kind === 'message' || entry.kind === 'vote');
     } else if (storyFilter === 'events') {
       next = next.filter((entry) => entry.kind === 'system' || entry.kind === 'narrator');
     } else if (storyFilter === 'votes') {

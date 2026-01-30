@@ -222,6 +222,9 @@ const safeJsonStringify = (value: unknown) => {
   try {
     const seen = new WeakSet<object>();
     return JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'bigint') {
+        return val.toString();
+      }
       if (val && typeof val === 'object') {
         if (seen.has(val)) {
           return '[Circular]';
@@ -231,8 +234,28 @@ const safeJsonStringify = (value: unknown) => {
       return val;
     });
   } catch (error) {
-    return JSON.stringify({ error: (error as Error)?.message ?? 'Unserializable payload' });
+    return '[Unserializable payload]';
   }
+};
+
+const formatLogValue = (value: unknown): unknown => {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  return safeJsonStringify(value);
 };
 
 const buildCurl = (url: string, headers: Record<string, string>, body: unknown) => {
@@ -446,7 +469,7 @@ const ensureElizaWorld = async (params: {
       });
       needsOwnership = true;
     } catch (error) {
-      console.error('Eliza world create failed', error);
+      console.error('Eliza world create failed', formatLogValue(error));
     }
   }
 
@@ -461,7 +484,7 @@ const ensureElizaWorld = async (params: {
         timeoutMs: params.timeoutMs,
       });
     } catch (error) {
-      console.error('Eliza world ownership update failed', error);
+      console.error('Eliza world ownership update failed', formatLogValue(error));
     }
   }
 
@@ -1217,7 +1240,7 @@ export const createElizaAgent = action({
       }
       
       if (!elizaAgentId) {
-          console.error("ElizaOS Response:", data);
+          console.error('ElizaOS Response:', formatLogValue(data));
           throw new Error("Failed to parse Eliza Agent ID from response");
       }
       
@@ -1257,12 +1280,12 @@ export const createElizaAgent = action({
           agentName: args.name,
         });
       } catch (error) {
-        console.error('Eliza world initialization failed', error);
+        console.error('Eliza world initialization failed', formatLogValue(error));
       }
       
       return { inputId, elizaAgentId };
     } catch (e: any) {
-        console.error("Create Eliza Agent Failed", e);
+        console.error('Create Eliza Agent Failed', formatLogValue(e));
         throw new Error("Failed to create Eliza Agent: " + e.message);
     }
   },
@@ -1313,7 +1336,7 @@ export const connectExistingElizaAgent = action({
         agentName: args.name,
       });
     } catch (error) {
-      console.error('Eliza world initialization failed', error);
+      console.error('Eliza world initialization failed', formatLogValue(error));
     }
 
     return { inputId, elizaAgentId: args.elizaAgentId };
@@ -1334,6 +1357,8 @@ export const sendElizaMessage = async (
   ctx: ActionCtx,
   args: SendMessageArgs,
 ): Promise<string | null> => {
+  const message =
+    typeof args.message === 'string' ? args.message : safeJsonStringify(args.message);
   const elizaServerUrl = normalizeElizaServerUrl(args.elizaServerUrl) ?? DEFAULT_ELIZA_SERVER;
   const authToken = resolveElizaAuthToken(args.elizaAuthToken);
   const deadline = typeof args.timeoutMs === 'number' ? Date.now() + args.timeoutMs : undefined;
@@ -1354,12 +1379,12 @@ export const sendElizaMessage = async (
       });
       elizaUserId = ensured.userId;
     } catch (error) {
-      console.error('Eliza world ensure failed', error);
+      console.error('Eliza world ensure failed', formatLogValue(error));
     }
 
     if (!skipLegacy) {
-      const messageSummary = summarizeForLog(args.message);
-      const messageLength = args.message.length;
+      const messageSummary = summarizeForLog(message);
+      const messageLength = message.length;
       const legacyPayload = {
         entityId: elizaUserId,
         roomId: args.conversationId,
@@ -1382,8 +1407,8 @@ export const sendElizaMessage = async (
           body: JSON.stringify({
             entityId: elizaUserId,
             roomId: args.conversationId,
-            content: { text: args.message, source: 'api' },
-            text: args.message,
+            content: { text: message, source: 'api' },
+            text: message,
             userId: elizaUserId,
           }),
         },
@@ -1416,7 +1441,7 @@ export const sendElizaMessage = async (
     const firstAttempt = await sendMessageWithSession({
       elizaServerUrl,
       authToken,
-      message: args.message,
+      message,
       senderId: args.senderId,
       conversationId: args.conversationId,
       sessionId: session.sessionId,
@@ -1436,7 +1461,7 @@ export const sendElizaMessage = async (
         const retry = await sendMessageWithSession({
           elizaServerUrl,
           authToken,
-          message: args.message,
+          message,
           senderId: args.senderId,
           conversationId: args.conversationId,
           sessionId: refreshed.sessionId,
@@ -1446,7 +1471,7 @@ export const sendElizaMessage = async (
           console.error('Eliza Chat Error', {
             legacyStatus,
             legacyBody,
-            sessionError: retry.body,
+            sessionError: formatLogValue(retry.body),
           });
           return null;
         }
@@ -1465,7 +1490,7 @@ export const sendElizaMessage = async (
       console.error('Eliza Chat Error', {
         legacyStatus,
         legacyBody,
-        sessionError: firstAttempt.body,
+        sessionError: formatLogValue(firstAttempt.body),
       });
       return null;
     }
@@ -1487,7 +1512,7 @@ export const sendElizaMessage = async (
     console.error('Eliza Chat Error', {
       legacyStatus,
       legacyBody,
-      sessionError: error?.message ?? error,
+      sessionError: formatLogValue(error),
     });
     return null;
   }

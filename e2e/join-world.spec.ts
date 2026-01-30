@@ -3,6 +3,7 @@ import {
   enterWorld,
   gotoHome,
   openJoinDialog,
+  openAgentList,
   ensureCustomAgent,
   takeOverFirstAgent,
   releaseAgent,

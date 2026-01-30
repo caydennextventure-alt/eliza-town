@@ -1,6 +1,6 @@
 import type { Phase } from '../types';
 import type { MatchState } from './state';
-import { PHASE_DURATIONS_MS } from './state';
+import { getPhaseDurationMs } from './state';
 
 export type AdvancePhaseOptions = {
   allowEarly?: boolean;
@@ -30,7 +30,7 @@ export function advancePhase(
     dayNumber,
     nightNumber,
     phaseStartedAt: now,
-    phaseEndsAt: now + PHASE_DURATIONS_MS[nextPhase],
+    phaseEndsAt: now + getPhaseDurationMs(nextPhase),
   };
 
   if (nextPhase === 'ENDED') {

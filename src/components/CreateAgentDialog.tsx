@@ -91,6 +91,30 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
   }, [characters, userTokenIdentifier]);
   
   const isE2E = import.meta.env.VITE_E2E === '1' || import.meta.env.VITE_E2E === 'true';
+  const e2eAgentFallback = useMemo(() => {
+    if (!isE2E) {
+      return [] as ElizaAgentSummary[];
+    }
+    const rawMap = import.meta.env.VITE_E2E_ELIZA_AGENT_MAP;
+    if (rawMap) {
+      try {
+        const parsed = JSON.parse(rawMap) as Record<string, string>;
+        return Object.entries(parsed)
+          .filter(([, id]) => typeof id === 'string' && id.trim().length > 0)
+          .map(([name, id]) => ({ id: id.trim(), name: name.trim() }));
+      } catch {
+        // Ignore malformed JSON and fall back to CSV parsing.
+      }
+    }
+    const rawNames = import.meta.env.VITE_E2E_ELIZA_AGENT_NAMES ?? '';
+    const rawIds = import.meta.env.VITE_E2E_ELIZA_AGENT_IDS ?? '';
+    const names = rawNames.split(',').map((name) => name.trim()).filter(Boolean);
+    const ids = rawIds.split(',').map((id) => id.trim()).filter(Boolean);
+    if (!names.length || !ids.length) {
+      return [] as ElizaAgentSummary[];
+    }
+    return names.map((name, index) => ({ name, id: ids[index] })).filter((agent) => !!agent.id);
+  }, [isE2E]);
   const selectableCharacters = isE2E ? characters : customCharacters;
   const hasCustomCharacters = selectableCharacters.length > 0;
   const hasMultipleCharacters = selectableCharacters.length > 1;
@@ -281,6 +305,18 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
           message: `Loaded ${result.agents.length} agents.`,
         });
       } else {
+        if (e2eAgentFallback.length > 0) {
+          setAvailableAgents(e2eAgentFallback);
+          const fallbackAgent = e2eAgentFallback[0];
+          if (fallbackAgent?.id) {
+            void handleSelectAgent(fallbackAgent.id, fallbackAgent);
+          }
+          setCheckStatus({
+            ok: true,
+            message: `Using E2E fallback agent list (${e2eAgentFallback.length}).`,
+          });
+          return;
+        }
         const statusLabel = result.status ? `HTTP ${result.status}` : 'Request failed';
         const detail = result.message ? ` ${result.message}` : '';
         setCheckStatus({
@@ -289,10 +325,22 @@ export default function CreateAgentDialog({ isOpen, onClose, onCreateCharacter }
         });
       }
     } catch (lookupError: any) {
-      setCheckStatus({
-        ok: false,
-        message: lookupError?.message ?? 'Unable to reach the Eliza server.',
-      });
+      if (e2eAgentFallback.length > 0) {
+        setAvailableAgents(e2eAgentFallback);
+        const fallbackAgent = e2eAgentFallback[0];
+        if (fallbackAgent?.id) {
+          void handleSelectAgent(fallbackAgent.id, fallbackAgent);
+        }
+        setCheckStatus({
+          ok: true,
+          message: `Using E2E fallback agent list (${e2eAgentFallback.length}).`,
+        });
+      } else {
+        setCheckStatus({
+          ok: false,
+          message: lookupError?.message ?? 'Unable to reach the Eliza server.',
+        });
+      }
     } finally {
       setIsLoadingAgents(false);
     }

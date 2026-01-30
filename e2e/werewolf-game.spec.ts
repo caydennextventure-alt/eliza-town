@@ -114,6 +114,10 @@ const assertSpectatorChat = async (
   agentNames: string[],
   timeoutMs: number,
 ) => {
+  const chatFilter = spectatorPanel.getByRole('button', { name: /^chat$/i });
+  if (await chatFilter.isVisible()) {
+    await chatFilter.click();
+  }
   const agentPattern = buildAgentNamePattern(agentNames);
   const messageEntries = spectatorPanel.locator(
     '[data-testid="werewolf-transcript-entry"][data-entry-kind="message"]',
@@ -131,7 +135,9 @@ const assertSpectatorChat = async (
     .poll(
       async () =>
         spectatorPanel
-          .locator('[data-testid="werewolf-transcript-entry"]:not([data-entry-kind="message"])')
+          .locator(
+            '[data-testid="werewolf-transcript-entry"][data-entry-kind]:not([data-entry-kind="message"]):not([data-entry-kind="vote"])',
+          )
           .count(),
       { timeout: 20000 },
     )

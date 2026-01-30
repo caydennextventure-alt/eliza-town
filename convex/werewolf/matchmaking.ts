@@ -42,12 +42,16 @@ export function planMatchCreation(params: {
   }
 
   const selectedEntries = sorted.slice(0, params.requiredPlayers);
+  const roleSeed = `${params.queueId}:${params.now}:${selectedEntries
+    .map((entry) => entry.playerId)
+    .join('|')}`;
   const matchState = createInitialMatchState(
     selectedEntries.map((entry) => ({
       playerId: entry.playerId,
       displayName: entry.displayName,
     })),
     params.now,
+    roleSeed,
   );
 
   const placementSeed = `${params.queueId}:${params.now}:${selectedEntries

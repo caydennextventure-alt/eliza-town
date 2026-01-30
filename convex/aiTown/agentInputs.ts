@@ -254,13 +254,19 @@ export const agentInputs = {
         throw new Error('You do not own this agent.');
       }
       const player = game.world.players.get(agent.playerId);
-      if (!player) {
-        throw new Error(`Invalid player ID ${agent.playerId}`);
+      if (player) {
+        if (player.human) {
+          throw new Error('Release this agent before removing it.');
+        }
+        player.leave(game, now);
+      } else {
+        for (const conversation of [...game.world.conversations.values()]) {
+          if (conversation.participants.has(agent.playerId)) {
+            conversation.stop(game, now);
+          }
+        }
+        game.world.players.delete(agent.playerId);
       }
-      if (player.human) {
-        throw new Error('Release this agent before removing it.');
-      }
-      player.leave(game, now);
       game.world.agents.delete(agentId);
       game.agentDescriptions.delete(agentId);
       game.playerDescriptions.delete(agent.playerId);

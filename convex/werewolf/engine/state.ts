@@ -1,5 +1,5 @@
 import type { Phase, PlayerId, RequiredAction, Role } from '../types';
-import { getRoundCount, ROUND_DURATION_MS } from '../rounds';
+import { getRoundCount, getRoundDurationMs } from '../rounds';
 import { assignRoles } from './roleAssign';
 
 export type WinningTeam = 'VILLAGERS' | 'WEREWOLVES';
@@ -69,6 +69,34 @@ const parseEnvMs = (value?: string): number | undefined => {
   return rounded;
 };
 
+const isE2EFast = () => /^(1|true|yes)$/i.test(process.env.WEREWOLF_E2E_FAST ?? '');
+
+const getPhaseFallbackMs = (phase: Phase): number => {
+  const fast = isE2EFast();
+  switch (phase) {
+    case 'LOBBY':
+      return fast ? 2_000 : 10_000;
+    case 'NIGHT':
+      return fast ? 6_000 : 60_000;
+    case 'DAY_ANNOUNCE':
+      return fast ? 2_000 : 10_000;
+    case 'DAY_OPENING':
+      return fast ? 3_000 : 15_000;
+    case 'DAY_DISCUSSION':
+      return fast ? 6_000 : 45_000;
+    case 'DAY_VOTE':
+      return fast ? 3_000 : 15_000;
+    case 'DAY_RESOLUTION':
+      return fast ? 2_000 : 10_000;
+    case 'ENDED':
+      return 0;
+    default: {
+      const unreachable: never = phase;
+      throw new Error(`Unknown phase ${unreachable}`);
+    }
+  }
+};
+
 const readPhaseDurationMs = (phase: Phase, fallback: number): number => {
   const raw = process.env[`WEREWOLF_PHASE_MS_${phase}`];
   const parsed = parseEnvMs(raw);
@@ -77,26 +105,58 @@ const readPhaseDurationMs = (phase: Phase, fallback: number): number => {
   }
   const roundCount = getRoundCount(phase);
   if (roundCount > 0) {
-    return roundCount * ROUND_DURATION_MS;
+    return roundCount * getRoundDurationMs();
   }
   return fallback;
 };
 
-export const PHASE_DURATIONS_MS: Record<Phase, number> = {
-  LOBBY: readPhaseDurationMs('LOBBY', 10_000),
-  NIGHT: readPhaseDurationMs('NIGHT', 60_000),
-  DAY_ANNOUNCE: readPhaseDurationMs('DAY_ANNOUNCE', 10_000),
-  DAY_OPENING: readPhaseDurationMs('DAY_OPENING', 15_000),
-  DAY_DISCUSSION: readPhaseDurationMs('DAY_DISCUSSION', 45_000),
-  DAY_VOTE: readPhaseDurationMs('DAY_VOTE', 15_000),
-  DAY_RESOLUTION: readPhaseDurationMs('DAY_RESOLUTION', 10_000),
-  ENDED: readPhaseDurationMs('ENDED', 0),
+export const getPhaseDurationMs = (phase: Phase): number => {
+  switch (phase) {
+    case 'LOBBY':
+      return readPhaseDurationMs('LOBBY', getPhaseFallbackMs('LOBBY'));
+    case 'NIGHT':
+      return readPhaseDurationMs('NIGHT', getPhaseFallbackMs('NIGHT'));
+    case 'DAY_ANNOUNCE':
+      return readPhaseDurationMs('DAY_ANNOUNCE', getPhaseFallbackMs('DAY_ANNOUNCE'));
+    case 'DAY_OPENING':
+      return readPhaseDurationMs('DAY_OPENING', getPhaseFallbackMs('DAY_OPENING'));
+    case 'DAY_DISCUSSION':
+      return readPhaseDurationMs('DAY_DISCUSSION', getPhaseFallbackMs('DAY_DISCUSSION'));
+    case 'DAY_VOTE':
+      return readPhaseDurationMs('DAY_VOTE', getPhaseFallbackMs('DAY_VOTE'));
+    case 'DAY_RESOLUTION':
+      return readPhaseDurationMs('DAY_RESOLUTION', getPhaseFallbackMs('DAY_RESOLUTION'));
+    case 'ENDED':
+      return readPhaseDurationMs('ENDED', getPhaseFallbackMs('ENDED'));
+    default: {
+      const unreachable: never = phase;
+      throw new Error(`Unknown phase ${unreachable}`);
+    }
+  }
 };
+
+export const getPhaseDurationsMs = (): Record<Phase, number> => ({
+  LOBBY: getPhaseDurationMs('LOBBY'),
+  NIGHT: getPhaseDurationMs('NIGHT'),
+  DAY_ANNOUNCE: getPhaseDurationMs('DAY_ANNOUNCE'),
+  DAY_OPENING: getPhaseDurationMs('DAY_OPENING'),
+  DAY_DISCUSSION: getPhaseDurationMs('DAY_DISCUSSION'),
+  DAY_VOTE: getPhaseDurationMs('DAY_VOTE'),
+  DAY_RESOLUTION: getPhaseDurationMs('DAY_RESOLUTION'),
+  ENDED: getPhaseDurationMs('ENDED'),
+});
 
 const INITIAL_PUBLIC_SUMMARY = 'Match created. Waiting in lobby.';
 
-export function createInitialMatchState(players: MatchPlayerSeed[], now: number): MatchState {
-  const roleAssignments = assignRoles(players.map((player) => player.playerId));
+export function createInitialMatchState(
+  players: MatchPlayerSeed[],
+  now: number,
+  roleSeed?: string | number,
+): MatchState {
+  const roleAssignments = assignRoles(
+    players.map((player) => player.playerId),
+    roleSeed,
+  );
   const rolesByPlayerId = new Map<PlayerId, Role>(
     roleAssignments.map((assignment) => [assignment.playerId, assignment.role]),
   );
@@ -124,7 +184,7 @@ export function createInitialMatchState(players: MatchPlayerSeed[], now: number)
     dayNumber: 0,
     nightNumber: 1,
     phaseStartedAt: now,
-    phaseEndsAt: now + PHASE_DURATIONS_MS.LOBBY,
+    phaseEndsAt: now + getPhaseDurationMs('LOBBY'),
     startedAt: now,
     publicSummary: INITIAL_PUBLIC_SUMMARY,
     players: playerStates,
