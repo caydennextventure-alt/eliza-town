@@ -13,6 +13,8 @@ export const saveMapping = internalMutation({
     elizaAuthToken: v.optional(v.string()),
     communicationMode: v.optional(v.string()),
     communicationVerifiedAt: v.optional(v.number()),
+    provider: v.optional(v.union(v.literal('server'), v.literal('cloud'))),
+    cloudApiKey: v.optional(v.string()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()),
@@ -51,6 +53,12 @@ export const saveMapping = internalMutation({
       if (args.elizaUserId !== undefined) {
         update.elizaUserId = args.elizaUserId;
       }
+      if (args.provider !== undefined) {
+        update.provider = args.provider;
+      }
+      if (args.cloudApiKey !== undefined) {
+        update.cloudApiKey = args.cloudApiKey;
+      }
       await ctx.db.patch(existing._id, update);
       return;
     }
@@ -64,6 +72,8 @@ export const saveMapping = internalMutation({
       elizaAuthToken: args.elizaAuthToken,
       communicationMode: args.communicationMode,
       communicationVerifiedAt: args.communicationVerifiedAt,
+      provider: args.provider,
+      cloudApiKey: args.cloudApiKey,
       name: args.name,
       bio: args.bio,
       personality: args.personality,

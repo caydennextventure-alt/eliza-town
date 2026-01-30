@@ -13,6 +13,8 @@ export const elizaAgentTables = {
     elizaAuthToken: v.optional(v.string()),
     communicationMode: v.optional(v.string()),
     communicationVerifiedAt: v.optional(v.number()),
+    provider: v.optional(v.union(v.literal('server'), v.literal('cloud'))),
+    cloudApiKey: v.optional(v.string()),
     name: v.string(),
     bio: v.string(),
     personality: v.array(v.string()), // ['Friendly', 'Curious']

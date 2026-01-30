@@ -35,9 +35,11 @@ export async function startConversationMessage(
       elizaServerUrl: elizaAgent.elizaServerUrl,
       elizaAuthToken: elizaAgent.elizaAuthToken,
       // For start, we simulate an approach
-      message: "*Approaches you to start a conversation*", 
+      message: "*Approaches you to start a conversation*",
       senderId: otherPlayer.id,
       conversationId,
+      provider: elizaAgent.provider ?? 'server',
+      cloudApiKey: elizaAgent.cloudApiKey,
     });
     if (response) return response;
     // Fallback if Eliza fails
@@ -122,6 +124,8 @@ export async function continueConversationMessage(
           message: lastMessage.text,
           senderId: otherPlayerId,
           conversationId,
+          provider: elizaAgent.provider ?? 'server',
+          cloudApiKey: elizaAgent.cloudApiKey,
        });
        if (response) return response;
     } else {
@@ -196,6 +200,8 @@ export async function leaveConversationMessage(
         message: "*I need to leave now*",
         senderId: otherPlayerId,
         conversationId,
+        provider: elizaAgent.provider ?? 'server',
+        cloudApiKey: elizaAgent.cloudApiKey,
      });
      if (response) return response;
   }

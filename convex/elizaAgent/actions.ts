@@ -26,6 +26,21 @@ const normalizeElizaServerUrl = (value?: string) => {
   }
 };
 
+const normalizeElizaCloudUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const withoutTrailing = trimmed.replace(/\/+$/, '');
+  try {
+    const url = new URL(withoutTrailing);
+    url.pathname = url.pathname.replace(/\/+$/, '') || '/';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return withoutTrailing;
+  }
+};
+
 const normalizeAuthToken = (value?: string) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
@@ -42,12 +57,27 @@ const buildElizaHeaders = (authToken?: string) => {
   return headers;
 };
 
+const buildElizaCloudHeaders = (apiKey: string, includeContentType = false) => {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    'X-API-Key': apiKey,
+  };
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return headers;
+};
+
 const DEFAULT_ELIZA_SERVER =
   normalizeElizaServerUrl(process.env.ELIZA_SERVER_URL) ||
   'https://fliza-agent-production.up.railway.app';
 const DEFAULT_ELIZA_WORLD_NAME =
   process.env.ELIZA_WORLD_NAME?.trim() || 'Eliza Town';
 const ELIZA_INSTALLATION_KEY = 'default';
+const ELIZA_CLOUD_BASE_URL =
+  normalizeElizaCloudUrl(process.env.ELIZA_CLOUD_BASE_URL) || 'https://www.elizacloud.ai';
+const ELIZA_CLOUD_API_BASE = `${ELIZA_CLOUD_BASE_URL}/api/v1`;
 // Avoid deep type instantiation in Convex tsc.
 const apiAny = anyApi;
 
@@ -81,6 +111,7 @@ const truncateBody = (value: string, limit = 1000) => {
   }
   return `${value.slice(0, limit)}...`;
 };
+
 
 const pickString = (value: unknown): string | undefined => {
   if (typeof value === 'string') {
@@ -117,6 +148,9 @@ const normalizeAgentPayload = (payload: unknown): Record<string, unknown> | null
   const record = payload as Record<string, unknown>;
   if (record.data && typeof record.data === 'object') {
     return record.data as Record<string, unknown>;
+  }
+  if (record.app && typeof record.app === 'object') {
+    return record.app as Record<string, unknown>;
   }
   if (record.agent && typeof record.agent === 'object') {
     return record.agent as Record<string, unknown>;
@@ -187,16 +221,16 @@ const extractAgentSummary = (payload: unknown): AgentSummary | null => {
       ? (record.character as Record<string, unknown>)
       : null;
   let id =
-    pickStringFromKeys(record, ['id', 'agentId', '_id', 'agent_id']) ??
+    pickStringFromKeys(record, ['id', 'agentId', 'appId', 'model', 'modelId', '_id', 'agent_id', 'app_id']) ??
     (character ? pickStringFromKeys(character, ['id', 'agentId']) : undefined);
   const name =
-    pickStringFromKeys(record, ['name', 'displayName', 'agentName']) ??
+    pickStringFromKeys(record, ['name', 'displayName', 'agentName', 'title']) ??
     (character ? pickStringFromKeys(character, ['name', 'displayName']) : undefined);
   const username =
     pickStringFromKeys(record, ['username', 'handle', 'slug']) ??
     (character ? pickStringFromKeys(character, ['username', 'handle', 'slug']) : undefined);
   const bio =
-    pickStringFromKeys(record, ['bio', 'description', 'identity']) ??
+    pickStringFromKeys(record, ['bio', 'description', 'identity', 'summary']) ??
     (character ? pickStringFromKeys(character, ['bio', 'description', 'identity']) : undefined);
   if (!id && username) {
     id = username;
@@ -212,21 +246,33 @@ const extractAgentSummary = (payload: unknown): AgentSummary | null => {
   return { id, name, username, bio, personality, plan };
 };
 
+const extractAgentSummaryFromValue = (value: unknown): AgentSummary | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? { id: trimmed } : null;
+  }
+  return extractAgentSummary(value);
+};
+
 const extractAgentList = (payload: unknown): AgentSummary[] => {
   if (!payload || typeof payload !== 'object') {
     return [];
   }
   if (Array.isArray(payload)) {
-    return payload.map(extractAgentSummary).filter((entry): entry is AgentSummary => Boolean(entry));
+    return payload
+      .map(extractAgentSummaryFromValue)
+      .filter((entry): entry is AgentSummary => Boolean(entry));
   }
   const record = payload as Record<string, unknown>;
   const dataRecord =
     record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : null;
   const container =
     (Array.isArray(record.data) && record.data) ||
+    (dataRecord && Array.isArray(dataRecord.apps) && dataRecord.apps) ||
     (dataRecord && Array.isArray(dataRecord.agents) && dataRecord.agents) ||
     (dataRecord && Array.isArray(dataRecord.items) && dataRecord.items) ||
     (dataRecord && Array.isArray(dataRecord.results) && dataRecord.results) ||
+    (Array.isArray(record.apps) && record.apps) ||
     (Array.isArray(record.agents) && record.agents) ||
     (Array.isArray(record.items) && record.items) ||
     (Array.isArray(record.results) && record.results) ||
@@ -235,12 +281,15 @@ const extractAgentList = (payload: unknown): AgentSummary[] => {
     return [];
   }
   return container
-    .map(extractAgentSummary)
+    .map(extractAgentSummaryFromValue)
     .filter((entry): entry is AgentSummary => Boolean(entry));
 };
 
 const redactHeaders = (headers: Record<string, string>) => {
   const next = { ...headers };
+  if (next.Authorization) {
+    next.Authorization = '<redacted>';
+  }
   if (next['X-API-KEY']) {
     next['X-API-KEY'] = '<redacted>';
   }
@@ -1346,6 +1395,7 @@ export const createElizaAgent = action({
          elizaAuthToken: storedAuthToken,
          communicationMode: normalizedMode ?? undefined,
          communicationVerifiedAt: normalizedMode ? Date.now() : undefined,
+         provider: 'server',
          // playerId Left undefined for now, to be linked later if needed
       });
 
@@ -1410,6 +1460,7 @@ export const connectExistingElizaAgent = action({
       elizaAuthToken: storedAuthToken,
       communicationMode: normalizedMode,
       communicationVerifiedAt: Date.now(),
+      provider: 'server',
     });
 
     try {
@@ -1423,6 +1474,216 @@ export const connectExistingElizaAgent = action({
     } catch (error) {
       console.error('Eliza world initialization failed', error);
     }
+
+    return { inputId, elizaAgentId: args.elizaAgentId };
+  },
+});
+
+export const verifyElizaCloudKey = action({
+  args: {
+    cloudApiKey: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const res = await fetchWithTimeout(
+      `${ELIZA_CLOUD_API_BASE}/models`,
+      {
+        method: 'GET',
+        headers: buildElizaCloudHeaders(apiKey),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    return {
+      ok: res.ok,
+      status: res.status,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
+
+export const fetchElizaCloudAgents = action({
+  args: {
+    cloudApiKey: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const res = await fetchWithTimeout(
+      `${ELIZA_CLOUD_API_BASE}/apps`,
+      {
+        method: 'GET',
+        headers: buildElizaCloudHeaders(apiKey),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    const agents = parsed ? extractAgentList(parsed) : [];
+    return {
+      ok: res.ok,
+      status: res.status,
+      agents,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
+
+export const fetchElizaCloudAgentInfo = action({
+  args: {
+    elizaAgentId: v.string(),
+    cloudApiKey: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const agentId = args.elizaAgentId.trim();
+    if (!agentId) {
+      throw new Error('Missing Eliza Cloud agent ID.');
+    }
+    const res = await fetchWithTimeout(
+      `${ELIZA_CLOUD_API_BASE}/apps/${encodeURIComponent(agentId)}`,
+      {
+        method: 'GET',
+        headers: buildElizaCloudHeaders(apiKey),
+      },
+      10_000,
+    );
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    const agent = parsed ? extractAgentSummary(parsed) : null;
+    const raw = res.ok ? (parsed ?? text) : null;
+    return {
+      ok: res.ok,
+      status: res.status,
+      agent,
+      raw,
+      message: res.ok ? undefined : truncateBody(text),
+    };
+  },
+});
+
+export const createElizaCloudAgent = action({
+  args: {
+    name: v.string(),
+    bio: v.optional(v.string()),
+    cloudApiKey: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const name = args.name.trim();
+    if (!name) {
+      throw new Error('Missing Eliza Cloud agent name.');
+    }
+    const bio = args.bio?.trim();
+    const payload: Record<string, string> = { name };
+    if (bio) {
+      payload.description = bio;
+    }
+    const res = await fetchWithTimeout(
+      `${ELIZA_CLOUD_API_BASE}/apps`,
+      {
+        method: 'POST',
+        headers: buildElizaCloudHeaders(apiKey, true),
+        body: JSON.stringify(payload),
+      },
+      20_000,
+    );
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    const agent = parsed ? extractAgentSummary(parsed) : null;
+    const raw = res.ok ? (parsed ?? text) : null;
+    let deployOk: boolean | undefined;
+    let deployStatus: number | undefined;
+    let deployMessage: string | undefined;
+    if (res.ok && agent?.id) {
+      const deployRes = await fetchWithTimeout(
+        `${ELIZA_CLOUD_API_BASE}/apps/${encodeURIComponent(agent.id)}/deploy`,
+        {
+          method: 'POST',
+          headers: buildElizaCloudHeaders(apiKey),
+        },
+        20_000,
+      );
+      deployOk = deployRes.ok;
+      deployStatus = deployRes.status;
+      if (!deployRes.ok) {
+        const deployText = await deployRes.text();
+        deployMessage = truncateBody(deployText);
+      }
+    }
+    return {
+      ok: res.ok,
+      status: res.status,
+      agent,
+      raw,
+      message: res.ok ? undefined : truncateBody(text),
+      deployOk,
+      deployStatus,
+      deployMessage,
+    };
+  },
+});
+
+export const connectElizaCloudAgent = action({
+  args: {
+    worldId: v.id('worlds'),
+    name: v.string(),
+    character: v.string(),
+    identity: v.string(),
+    plan: v.string(),
+    personality: v.array(v.string()),
+    elizaAgentId: v.string(),
+    cloudApiKey: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ inputId: Id<'inputs'> | string; elizaAgentId: string }> => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+
+    const inputId: any = await ctx.runMutation(apiAny.world.createAgent, {
+      worldId: args.worldId,
+      name: args.name,
+      character: args.character,
+      identity: args.identity,
+      plan: args.plan,
+    });
+
+    await ctx.runMutation(apiAny.elizaAgent.mutations.saveMapping, {
+      worldId: args.worldId,
+      name: args.name,
+      elizaAgentId: args.elizaAgentId,
+      bio: args.identity,
+      personality: args.personality,
+      provider: 'cloud',
+      cloudApiKey: apiKey,
+    });
 
     return { inputId, elizaAgentId: args.elizaAgentId };
   },
@@ -1640,6 +1901,50 @@ export const sendElizaMessage = async (
     });
     return null;
   }
+};
+
+const extractElizaCloudChatContent = (data: any): string | null =>
+  data?.choices?.[0]?.message?.content ??
+  data?.choices?.[0]?.text ??
+  data?.output_text ??
+  data?.data?.output_text ??
+  null;
+
+const sendElizaCloudChatMessage = async (
+  apiKey: string,
+  agentId: string,
+  message: string,
+  timeoutMs?: number,
+): Promise<{ ok: boolean; text: string | null; status: number; body?: string }> => {
+  const res = await fetchWithTimeout(
+    `${ELIZA_CLOUD_API_BASE}/chat/completions`,
+    {
+      method: 'POST',
+      headers: buildElizaCloudHeaders(apiKey, true),
+      body: JSON.stringify({
+        model: agentId,
+        messages: [{ role: 'user', content: message }],
+      }),
+    },
+    timeoutMs,
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    return { ok: false, text: null, status: res.status, body: text };
+  }
+  let data: any = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+  const content = extractElizaCloudChatContent(data);
+  return {
+    ok: Boolean(content),
+    text: content,
+    status: res.status,
+    body: text,
+  };
 };
 
 export const testElizaAgentCommunication = action({
@@ -1866,6 +2171,72 @@ export const testElizaAgentCommunication = action({
   },
 });
 
+export const testElizaCloudCommunication = action({
+  args: {
+    elizaAgentId: v.string(),
+    cloudApiKey: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const agentId = args.elizaAgentId.trim();
+    if (!agentId) {
+      throw new Error('Missing Eliza Cloud agent ID.');
+    }
+    const helloMessage = 'Hello, this is Eliza Town. Are you there?';
+    const introMessage = 'Can you introduce yourself?';
+    const handshakeTimeoutMs = 12_000;
+    const conversationId = `eliza-cloud-test:${createUuid()}:handshake`;
+    const senderId = `eliza-cloud-user:${createUuid()}`;
+    const messages: CommunicationTestMessage[] = [{ role: 'user', text: helloMessage }];
+
+    const helloReply = await sendElizaCloudChatMessage(
+      apiKey,
+      agentId,
+      helloMessage,
+      handshakeTimeoutMs,
+    );
+    if (!helloReply.ok || !helloReply.text) {
+      return {
+        ok: false,
+        message: helloReply.body
+          ? `No reply to the greeting prompt. ${summarizeForLog(helloReply.body, 200)}`
+          : 'No reply to the greeting prompt.',
+        preferredMode: 'cloud',
+        conversation: { conversationId, senderId, messages },
+      };
+    }
+    messages.push({ role: 'agent', text: helloReply.text });
+
+    messages.push({ role: 'user', text: introMessage });
+    const introReply = await sendElizaCloudChatMessage(
+      apiKey,
+      agentId,
+      introMessage,
+      handshakeTimeoutMs,
+    );
+    if (!introReply.ok || !introReply.text) {
+      return {
+        ok: false,
+        message: introReply.body
+          ? `No reply to the introduction prompt. ${summarizeForLog(introReply.body, 200)}`
+          : 'No reply to the introduction prompt.',
+        preferredMode: 'cloud',
+        conversation: { conversationId, senderId, messages },
+      };
+    }
+    messages.push({ role: 'agent', text: introReply.text });
+
+    return {
+      ok: true,
+      preferredMode: 'cloud',
+      conversation: { conversationId, senderId, messages },
+    };
+  },
+});
+
 export const sendElizaTestMessage = action({
   args: {
     elizaAgentId: v.string(),
@@ -1892,6 +2263,29 @@ export const sendElizaTestMessage = action({
       return { ok: false, message: 'No reply from agent.' };
     }
     return { ok: true, reply: response };
+  },
+});
+
+export const sendElizaCloudTestMessage = action({
+  args: {
+    elizaAgentId: v.string(),
+    cloudApiKey: v.string(),
+    message: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = args.cloudApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Missing Eliza Cloud API key.');
+    }
+    const agentId = args.elizaAgentId.trim();
+    if (!agentId) {
+      throw new Error('Missing Eliza Cloud agent ID.');
+    }
+    const response = await sendElizaCloudChatMessage(apiKey, agentId, args.message, 12_000);
+    if (!response.ok || !response.text) {
+      return { ok: false, message: 'No reply from agent.' };
+    }
+    return { ok: true, reply: response.text };
   },
 });
 
@@ -2034,6 +2428,28 @@ export const sendMessage = action({
     senderId: v.string(),
     conversationId: v.string(),
     timeoutMs: v.optional(v.number()),
+    provider: v.optional(v.union(v.literal('server'), v.literal('cloud'))),
+    cloudApiKey: v.optional(v.string()),
   },
-  handler: async (ctx, args) => await sendElizaMessage(ctx, args),
+  handler: async (ctx, args) => {
+    if (args.provider === 'cloud') {
+      const apiKey = args.cloudApiKey?.trim();
+      if (!apiKey) {
+        console.error('Eliza Cloud API key missing for chat request.');
+        return null;
+      }
+      const result = await sendElizaCloudChatMessage(
+        apiKey,
+        args.elizaAgentId,
+        args.message,
+        args.timeoutMs,
+      );
+      if (!result.ok) {
+        console.error('Eliza Cloud Chat Error', truncateBody(result.body ?? ''));
+        return null;
+      }
+      return result.text;
+    }
+    return await sendElizaMessage(ctx, args);
+  },
 });
