@@ -738,6 +738,7 @@ function parseAgentResponse(params: {
   roundIndex: number;
   roundCount: number;
 }): { responded: boolean; action?: RoundAction; messageText?: string } {
+  const isE2EFast = /^(1|true|yes)$/i.test(process.env.WEREWOLF_E2E_FAST ?? '');
   const rawResponse = params.responseText;
   if (rawResponse === null || rawResponse === undefined || rawResponse.trim().length === 0) {
     return { responded: false };
@@ -762,8 +763,7 @@ function parseAgentResponse(params: {
   }
 
   const actionRaw = typeof parsed.action === 'string' ? parsed.action.trim().toUpperCase() : '';
-  const messageText =
-    normalizeMessageText(extractMessageText(parsed)) ?? normalizeMessageText(params.responseText);
+  const messageText = normalizeMessageText(extractMessageText(parsed));
   if (!actionRaw || actionRaw === 'PASS' || actionRaw === 'NONE') {
     const fallbackAction = messageText
       ? buildFallbackChatAction({
@@ -775,7 +775,7 @@ function parseAgentResponse(params: {
         })
       : null;
     if (!fallbackAction && !messageText) {
-      return { responded: false };
+      return { responded: !isE2EFast };
     }
     return { responded: true, action: fallbackAction ?? undefined, messageText };
   }

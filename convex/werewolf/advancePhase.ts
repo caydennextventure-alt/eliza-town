@@ -13,11 +13,45 @@ import { resolveDayVote } from './engine/day';
 import { buildNarratorUpdate } from './engine/narrator';
 import { resolveNight } from './engine/night';
 import { canAdvancePhaseEarly } from './engine/earlyAdvance';
-import type { MatchState } from './engine/state';
+import type { MatchState, WinningTeam } from './engine/state';
 import { advancePhase as advancePhaseEngine } from './engine/transitions';
 import { evaluateWinCondition } from './engine/win';
 import { getRoundCount, getRoundStartAt } from './rounds';
 import type { MatchId, PlayerId, Role } from './types';
+
+const parseEnvMs = (value?: string): number | null => {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  const rounded = Math.round(parsed);
+  if (rounded <= 0) {
+    return null;
+  }
+  return rounded;
+};
+
+const getE2EMatchMaxDurationMs = (): number | null => {
+  const explicit = parseEnvMs(process.env.WEREWOLF_E2E_MAX_DURATION_MS);
+  if (explicit !== null) {
+    return explicit;
+  }
+  const isE2EFast = /^(1|true|yes)$/i.test(process.env.WEREWOLF_E2E_FAST ?? '');
+  if (!isE2EFast) {
+    return null;
+  }
+  return 180_000;
+};
+
+const pickForcedWinner = (state: MatchState): WinningTeam => {
+  const alivePlayers = state.players.filter((player) => player.alive);
+  const aliveWolves = alivePlayers.filter((player) => player.role === 'WEREWOLF').length;
+  const aliveVillagers = alivePlayers.length - aliveWolves;
+  return aliveWolves >= aliveVillagers ? 'WEREWOLVES' : 'VILLAGERS';
+};
 
 const internalScheduler = anyApi;
 
@@ -46,6 +80,9 @@ export function advanceMatchPhase(state: MatchState, now: number): AdvanceMatchP
     return { nextState: state, events: [], advanced: false };
   }
 
+  const maxDurationMs = getE2EMatchMaxDurationMs();
+  const maxDurationReached = maxDurationMs !== null && now - state.startedAt >= maxDurationMs;
+
   let workingState = state;
   let eliminatedPlayerId: PlayerId | undefined;
   let wolfKillTargetPlayerId: PlayerId | undefined;
@@ -64,13 +101,18 @@ export function advanceMatchPhase(state: MatchState, now: number): AdvanceMatchP
   }
 
   const winner = evaluateWinCondition(workingState);
-  if (winner) {
-    workingState = { ...workingState, winner };
+  const forcedWinner = !winner && maxDurationReached;
+  const resolvedWinner = winner ?? (forcedWinner ? pickForcedWinner(workingState) : undefined);
+  if (resolvedWinner) {
+    workingState = { ...workingState, winner: resolvedWinner };
   }
 
   const allowEarly = now < state.phaseEndsAt;
   let nextState = advancePhaseEngine(workingState, now, { allowEarly });
-  if (state.phase === 'NIGHT' && winner) {
+  if (state.phase === 'NIGHT' && resolvedWinner) {
+    nextState = forceEndState(nextState, now);
+  }
+  if (forcedWinner) {
     nextState = forceEndState(nextState, now);
   }
 

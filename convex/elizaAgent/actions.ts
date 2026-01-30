@@ -303,8 +303,20 @@ const createAbortError = (message: string) => {
   return error;
 };
 
-const isAbortError = (error: unknown) =>
-  error instanceof Error && error.name === 'AbortError';
+const isAbortLike = (value: unknown) => {
+  if (value instanceof Error) {
+    return value.name === 'AbortError' || value.message === 'AbortError';
+  }
+  if (typeof value === 'string') {
+    return value === 'AbortError';
+  }
+  if (value && typeof value === 'object') {
+    const maybeName = (value as { name?: unknown }).name;
+    const maybeMessage = (value as { message?: unknown }).message;
+    return maybeName === 'AbortError' || maybeMessage === 'AbortError';
+  }
+  return false;
+};
 
 const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs?: number) => {
   if (timeoutMs === undefined) {
@@ -1468,6 +1480,9 @@ export const sendElizaMessage = async (
           timeoutMs: remainingMs(),
         });
         if (!retry.ok) {
+          if (isAbortLike(retry.body)) {
+            return null;
+          }
           console.error('Eliza Chat Error', {
             legacyStatus,
             legacyBody,
@@ -1486,6 +1501,9 @@ export const sendElizaMessage = async (
           lastUsedAt: Date.now(),
         });
         return retry.text;
+      }
+      if (isAbortLike(firstAttempt.body)) {
+        return null;
       }
       console.error('Eliza Chat Error', {
         legacyStatus,
@@ -1506,7 +1524,7 @@ export const sendElizaMessage = async (
     });
     return firstAttempt.text;
   } catch (error: any) {
-    if (isAbortError(error)) {
+    if (isAbortLike(error)) {
       return null;
     }
     console.error('Eliza Chat Error', {

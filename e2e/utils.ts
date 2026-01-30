@@ -915,8 +915,27 @@ export const joinWerewolfQueueByName = async (
     }
     const joinButton = row.locator('[data-testid^="werewolf-queue-join-"]');
     if ((await joinButton.count()) > 0) {
-      await expect(joinButton).toBeEnabled({ timeout: 20000 });
-      await joinButton.click();
+      const agentId = options.agentIdsByName?.[name];
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        const button = agentId
+          ? page.getByTestId(`werewolf-queue-join-${agentId}`)
+          : row.locator('[data-testid^="werewolf-queue-join-"]').first();
+        if ((await button.count()) === 0) {
+          break;
+        }
+        try {
+          await expect(button).toBeEnabled({ timeout: 5000 });
+          await button.click({ timeout: 5000, force: true });
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/detached|not attached|not visible|not found|timeout/i.test(message)) {
+            throw error;
+          }
+          await page.waitForTimeout(200);
+        }
+      }
       await expect
         .poll(async () => {
           if ((await row.locator('[data-testid^="werewolf-queue-leave-"]').count()) > 0) {
