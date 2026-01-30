@@ -1,7 +1,8 @@
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { insertInput } from './aiTown/insertInput';
-import { conversationId, playerId } from './aiTown/ids';
+import { conversationId } from './aiTown/ids';
+import { requireUserId } from './util/auth';
 
 export const listMessages = query({
   args: {
@@ -31,20 +32,28 @@ export const writeMessage = mutation({
     worldId: v.id('worlds'),
     conversationId,
     messageUuid: v.string(),
-    playerId,
     text: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx, 'Not logged in');
+    const world = await ctx.db.get(args.worldId);
+    if (!world) {
+      throw new ConvexError(`Invalid world ID: ${args.worldId}`);
+    }
+    const player = world.players.find((p) => p.human === userId);
+    if (!player) {
+      throw new ConvexError('You are not controlling an agent.');
+    }
     await ctx.db.insert('messages', {
       conversationId: args.conversationId,
-      author: args.playerId,
+      author: player.id,
       messageUuid: args.messageUuid,
       text: args.text,
       worldId: args.worldId,
     });
     await insertInput(ctx, args.worldId, 'finishSendingMessage', {
       conversationId: args.conversationId,
-      playerId: args.playerId,
+      playerId: player.id,
       timestamp: Date.now(),
     });
   },

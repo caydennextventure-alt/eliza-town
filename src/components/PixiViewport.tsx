@@ -34,7 +34,7 @@ export default PixiComponent('Viewport', {
     viewport
       .drag()
       .pinch({})
-      .wheel()
+      .wheel({ wheelZoom: true, trackpadPinch: true, smooth: 8 })
       .decelerate()
       .clamp({ direction: 'all', underflow: 'center' })
       .setZoom(-10)
@@ -52,5 +52,14 @@ export default PixiComponent('Viewport', {
         viewport[p] = newProps[p];
       }
     });
+  },
+  willUnmount(viewport: Viewport) {
+    // pixi-viewport's EventSystem can be torn down before this component unmounts,
+    // causing `destroy()` to throw while trying to remove DOM listeners.
+    try {
+      viewport.destroy({ children: true });
+    } catch {
+      // Ignore teardown errors during React unmount.
+    }
   },
 });

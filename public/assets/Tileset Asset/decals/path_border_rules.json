@@ -1,0 +1,89 @@
+{
+  "tileSize": 32,
+  "borderThicknessPx": 6,
+  "cornerRadiusPx": 8,
+  "style": "metal_cap_neutral_gray",
+  "paths": [
+    {
+      "name": "BrickGray",
+      "baseTile": "paths/BrickGray.png",
+      "sheet": "BrickGray_border_sheet.png",
+      "sheetJson": "BrickGray_border_sheet.json",
+      "decalsFolder": "decals/BrickGray",
+      "decals": {
+        "edge": {
+          "N": "edge_N",
+          "E": "edge_E",
+          "S": "edge_S",
+          "W": "edge_W"
+        },
+        "corner": {
+          "NE": "corner_NE",
+          "NW": "corner_NW",
+          "SE": "corner_SE",
+          "SW": "corner_SW"
+        }
+      },
+      "palette": {
+        "gray_base_original": 113,
+        "base_boost": 8,
+        "hi_offset": 16,
+        "lo_offset": -20
+      }
+    },
+    {
+      "name": "PebbleDark",
+      "baseTile": "paths/PebbleDark.png",
+      "sheet": "PebbleDark_border_sheet.png",
+      "sheetJson": "PebbleDark_border_sheet.json",
+      "decalsFolder": "decals/PebbleDark",
+      "decals": {
+        "edge": {
+          "N": "edge_N",
+          "E": "edge_E",
+          "S": "edge_S",
+          "W": "edge_W"
+        },
+        "corner": {
+          "NE": "corner_NE",
+          "NW": "corner_NW",
+          "SE": "corner_SE",
+          "SW": "corner_SW"
+        }
+      },
+      "palette": {
+        "gray_base_original": 105,
+        "base_boost": 8,
+        "hi_offset": 16,
+        "lo_offset": -20
+      }
+    },
+    {
+      "name": "PebbleTan",
+      "baseTile": "paths/PebbleTan.png",
+      "sheet": "PebbleTan_border_sheet.png",
+      "sheetJson": "PebbleTan_border_sheet.json",
+      "decalsFolder": "decals/PebbleTan",
+      "decals": {
+        "edge": {
+          "N": "edge_N",
+          "E": "edge_E",
+          "S": "edge_S",
+          "W": "edge_W"
+        },
+        "corner": {
+          "NE": "corner_NE",
+          "NW": "corner_NW",
+          "SE": "corner_SE",
+          "SW": "corner_SW"
+        }
+      },
+      "palette": {
+        "gray_base_original": 105,
+        "base_boost": 8,
+        "hi_offset": 16,
+        "lo_offset": -20
+      }
+    }
+  ]
+}

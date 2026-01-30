@@ -9,6 +9,7 @@ import { isTestMode } from '../testEnv';
 import { useServerGame } from '../hooks/serverGame';
 import { CharacterDefinition, useCharacters } from '../lib/characterRegistry';
 import agentAvatar from '../../assets/ui/agent-avatar.svg';
+import { Id } from '../../convex/_generated/dataModel';
 
 const modalStyles = {
   overlay: {
@@ -37,6 +38,7 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onCreateAgent?: () => void;
+  worldId?: Id<'worlds'>;
 };
 
 type AgentEntry = {
@@ -47,10 +49,8 @@ type AgentEntry = {
   isControlledByUser: boolean;
 };
 
-export default function AgentListDialog({ isOpen, onClose, onCreateAgent }: Props) {
+export default function AgentListDialog({ isOpen, onClose, onCreateAgent, worldId }: Props) {
   const { characters } = useCharacters();
-  const worldStatus = useQuery(api.world.defaultWorldStatus);
-  const worldId = worldStatus?.worldId;
   const game = useServerGame(worldId);
   const humanTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');
   const removeAgent = useMutation(api.world.removeAgent);

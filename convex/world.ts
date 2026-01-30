@@ -5,7 +5,6 @@ import { characters } from '../data/characters';
 import { insertInput } from './aiTown/insertInput';
 import { InputArgs, InputNames } from './aiTown/inputs';
 import {
-  DEFAULT_NAME,
   ENGINE_ACTION_DURATION,
   IDLE_WORLD_TIMEOUT,
   WORLD_HEARTBEAT_INTERVAL,
@@ -13,6 +12,7 @@ import {
 import { playerId } from './aiTown/ids';
 import { kickEngine, startEngine, stopEngine } from './aiTown/main';
 import { engineInsertInput } from './engine/abstractGame';
+import { displayNameFromIdentity, getOptionalIdentity, requireUserId } from './util/auth';
 
 const ensureWorldRunning = async (ctx: MutationCtx, worldId: Id<'worlds'>) => {
   const worldStatus = await ctx.db
@@ -27,13 +27,12 @@ const ensureWorldRunning = async (ctx: MutationCtx, worldId: Id<'worlds'>) => {
     throw new ConvexError(`Engine not found for ${worldStatus.engineId}`);
   }
   const now = Date.now();
-  if (worldStatus.status === 'inactive') {
+  if (worldStatus.status !== 'running') {
     await ctx.db.patch(worldStatus._id, { status: 'running', lastViewed: now });
-    await startEngine(ctx, worldStatus.worldId);
-    return;
-  }
-  if (worldStatus.status === 'stoppedByDeveloper') {
-    throw new ConvexError('World is stopped by developer.');
+    if (!engine.running) {
+      await startEngine(ctx, worldStatus.worldId);
+      return;
+    }
   }
   if (!engine.running) {
     await ctx.db.patch(worldStatus._id, { status: 'running', lastViewed: now });
@@ -70,6 +69,18 @@ export const defaultWorldStatus = query({
   },
 });
 
+export const worldStatusForWorld = query({
+  args: {
+    worldId: v.id('worlds'),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('worldStatus')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .unique();
+  },
+});
+
 export const heartbeatWorld = mutation({
   args: {
     worldId: v.id('worlds'),
@@ -92,14 +103,17 @@ export const heartbeatWorld = mutation({
       });
     }
 
-    // Restart inactive worlds, but leave worlds explicitly stopped by the developer alone.
-    if (worldStatus.status === 'stoppedByDeveloper') {
-      console.debug(`World ${worldStatus._id} is stopped by developer, not restarting.`);
-    }
-    if (worldStatus.status === 'inactive') {
-      console.log(`Restarting inactive world ${worldStatus._id}...`);
+    // Restart worlds that aren't running.
+    if (worldStatus.status !== 'running') {
+      console.log(`Restarting world ${worldStatus._id} (state: ${worldStatus.status})...`);
       await ctx.db.patch(worldStatus._id, { status: 'running' });
-      await startEngine(ctx, worldStatus.worldId);
+      const engine = await ctx.db.get(worldStatus.engineId);
+      if (!engine) {
+        throw new Error(`Invalid engine ID: ${worldStatus.engineId}`);
+      }
+      if (!engine.running) {
+        await startEngine(ctx, worldStatus.worldId);
+      }
     }
   },
 });
@@ -147,12 +161,11 @@ export const userStatus = query({
     worldId: v.id('worlds'),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   return null;
-    // }
-    // return identity.tokenIdentifier;
-    return DEFAULT_NAME;
+    const identity = await getOptionalIdentity(ctx);
+    if (!identity?.tokenIdentifier) {
+      return null;
+    }
+    return identity.tokenIdentifier;
   },
 });
 
@@ -162,31 +175,24 @@ export const joinWorld = mutation({
     character: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new ConvexError(`Not logged in`);
-    // }
-    // const name =
-    //   identity.givenName || identity.nickname || (identity.email && identity.email.split('@')[0]);
-    const name = DEFAULT_NAME;
-
-    // if (!name) {
-    //   throw new ConvexError(`Missing name on ${JSON.stringify(identity)}`);
-    // }
+    const identity = await getOptionalIdentity(ctx);
+    if (!identity?.tokenIdentifier) {
+      throw new ConvexError('Not logged in');
+    }
+    const tokenIdentifier = identity.tokenIdentifier;
+    const name = displayNameFromIdentity(identity) ?? tokenIdentifier;
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${args.worldId}`);
     }
     await ensureWorldRunning(ctx, world._id);
-    // const { tokenIdentifier } = identity;
     const chosenCharacter =
       args.character ?? characters[Math.floor(Math.random() * characters.length)].name;
     return await insertInputAndKick(ctx, world._id, 'join', {
       name,
       character: chosenCharacter,
-      description: `${DEFAULT_NAME} is a human player`,
-      // description: `${identity.givenName} is a human player`,
-      tokenIdentifier: DEFAULT_NAME,
+      description: `${name} is a human player`,
+      tokenIdentifier,
     });
   },
 });
@@ -200,6 +206,7 @@ export const createAgent = mutation({
     plan: v.string(),
   },
   handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx, 'Not logged in');
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${args.worldId}`);
@@ -210,7 +217,7 @@ export const createAgent = mutation({
       character: args.character,
       identity: args.identity,
       plan: args.plan,
-      ownerId: DEFAULT_NAME,
+      ownerId,
     });
   },
 });
@@ -221,6 +228,7 @@ export const takeOverAgent = mutation({
     agentId: v.string(),
   },
   handler: async (ctx, args) => {
+    const tokenIdentifier = await requireUserId(ctx, 'Not logged in');
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${args.worldId}`);
@@ -231,7 +239,7 @@ export const takeOverAgent = mutation({
     }
     return await insertInputAndKick(ctx, world._id, 'takeOverAgent', {
       agentId: args.agentId,
-      tokenIdentifier: DEFAULT_NAME,
+      tokenIdentifier,
     });
   },
 });
@@ -241,20 +249,13 @@ export const leaveWorld = mutation({
     worldId: v.id('worlds'),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new Error(`Not logged in`);
-    // }
-    // const { tokenIdentifier } = identity;
+    const tokenIdentifier = await requireUserId(ctx, 'Not logged in');
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new Error(`Invalid world ID: ${args.worldId}`);
     }
     await ensureWorldRunning(ctx, world._id);
-    // const existingPlayer = world.players.find((p) => p.human === tokenIdentifier);
-    const existingPlayer =
-      world.players.find((p) => p.human === DEFAULT_NAME) ??
-      world.players.find((p) => p.human);
+    const existingPlayer = world.players.find((p) => p.human === tokenIdentifier);
     if (!existingPlayer) {
       throw new ConvexError('You are not controlling an agent.');
     }
@@ -270,6 +271,7 @@ export const removeAgent = mutation({
     agentId: v.string(),
   },
   handler: async (ctx, args) => {
+    const tokenIdentifier = await requireUserId(ctx, 'Not logged in');
     const world = await ctx.db.get(args.worldId);
     if (!world) {
       throw new ConvexError(`Invalid world ID: ${args.worldId}`);
@@ -280,7 +282,7 @@ export const removeAgent = mutation({
     }
     return await insertInputAndKick(ctx, world._id, 'removeAgent', {
       agentId: args.agentId,
-      tokenIdentifier: DEFAULT_NAME,
+      tokenIdentifier,
     });
   },
 });
@@ -292,10 +294,44 @@ export const sendWorldInput = mutation({
     args: v.any(),
   },
   handler: async (ctx, args) => {
-    // const identity = await ctx.auth.getUserIdentity();
-    // if (!identity) {
-    //   throw new Error(`Not logged in`);
-    // }
+    const tokenIdentifier = await requireUserId(ctx, 'Not logged in');
+
+    const worldStatus = await ctx.db
+      .query('worldStatus')
+      .withIndex('engineId', (q) => q.eq('engineId', args.engineId))
+      .unique();
+    if (!worldStatus) {
+      throw new ConvexError(`World status not found for engine ${args.engineId}`);
+    }
+    const world = await ctx.db.get(worldStatus.worldId);
+    if (!world) {
+      throw new ConvexError(`Invalid world ID: ${worldStatus.worldId}`);
+    }
+
+    const player = world.players.find((p) => p.human === tokenIdentifier);
+    if (!player) {
+      throw new ConvexError('You are not in this world.');
+    }
+
+    const allowedInputs = new Set([
+      'moveTo',
+      'startConversation',
+      'acceptInvite',
+      'rejectInvite',
+      'leaveConversation',
+      'startTyping',
+    ]);
+    if (!allowedInputs.has(args.name)) {
+      throw new ConvexError('This input is not allowed.');
+    }
+    if (typeof args.args !== 'object' || args.args === null) {
+      throw new ConvexError('Invalid input arguments.');
+    }
+    if (!('playerId' in args.args) || (args.args as any).playerId !== player.id) {
+      throw new ConvexError('Invalid player.');
+    }
+
+    await ensureWorldRunning(ctx, world._id);
     return await engineInsertInput(ctx, args.engineId, args.name as any, args.args);
   },
 });

@@ -9,17 +9,17 @@ import { waitForInput } from '../hooks/sendInput';
 import { useServerGame } from '../hooks/serverGame';
 import { useCharacters } from '../lib/characterRegistry';
 import JoinWorldDialog from './JoinWorldDialog';
+import { Id } from '../../convex/_generated/dataModel';
 
 type Props = {
+  worldId?: Id<'worlds'>;
   onCreateAgent?: () => void;
 };
 
-export default function WorldJoinControls({ onCreateAgent }: Props) {
+export default function WorldJoinControls({ worldId, onCreateAgent }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const worldStatus = useQuery(api.world.defaultWorldStatus);
-  const worldId = worldStatus?.worldId;
   const game = useServerGame(worldId);
   const { characters } = useCharacters();
   const humanTokenIdentifier = useQuery(api.world.userStatus, worldId ? { worldId } : 'skip');

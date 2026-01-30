@@ -13,6 +13,8 @@ import { StardewButton } from '../ui/stardew/StardewButton';
 import { StardewCheckbox } from '../ui/stardew/StardewCheckbox';
 import { HangingSign } from '../ui/stardew/HangingSign';
 import { StardewTab } from '../ui/stardew/StardewTab';
+import { StardewSubTabGroup } from '../ui/stardew/StardewSubTab';
+import { AssetSlicer } from './AssetSlicer';
 import { BaseTexture, SCALE_MODES, Spritesheet, type ISpritesheetData } from 'pixi.js';
 // Map editor starts with an empty canvas; tilesets are supplied via packs.
 import * as campfire from '../../data/animations/campfire.json';
@@ -27,17 +29,52 @@ const EMPTY_TILESET_DATA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgCj2R1kAAAAASUVORK5CYII=';
 const PACK_INDEX_PATH = 'assets/packs/index.json';
 const ASSETS_JSON_PATH = 'assets/assets.json';
+const DECAL_SHEETS = {
+  grassInSand: {
+    png: 'assets/Tileset Asset/decals/grass_in_sand_sheet.png',
+    json: 'assets/Tileset Asset/decals/grass_in_sand_sheet.json',
+  },
+  shoreOnSand: {
+    png: 'assets/Tileset Asset/decals/shore_on_sand_sheet.png',
+    json: 'assets/Tileset Asset/decals/shore_on_sand_sheet.json',
+  },
+  shoreOnWater: {
+    png: 'assets/Tileset Asset/decals/shore_on_water_sheet.png',
+    json: 'assets/Tileset Asset/decals/shore_on_water_sheet.json',
+  },
+} as const;
+
+type DecalSheetKey = keyof typeof DECAL_SHEETS;
+const PATH_BORDER_PACK = {
+  base: 'assets/Tileset Asset/decals',
+  config: 'assets/Tileset Asset/decals/path_border_rules.json',
+} as const;
 
 const MAP_WIDTH = DEFAULT_MAP_WIDTH;
 const MAP_HEIGHT = DEFAULT_MAP_HEIGHT;
 
 // Collision layer tile meanings
-const COLLISION_WALKABLE = 367;
+const COLLISION_WALKABLE = 367; // Used as "force clear" override in the editor
 const COLLISION_BLOCKED = 458;
-const RECENT_TILES_MAX = 12;
-const RECENT_OBJECTS_MAX = 8;
 const DEFAULT_LAYER_COUNT = 2;
 const QUICKBAR_SLOTS = 8;
+const PATH_SUBCATEGORIES = [
+  { id: 'paths', label: 'paths' },
+  { id: 'flooring', label: 'floor' },
+] as const;
+const PROP_SUBCATEGORIES = ['nature', 'furniture', 'decorations', 'fences', 'tile-object'] as const;
+const INTERACTABLE_TYPE_OPTIONS = [
+  { id: 'board', label: 'Board' },
+  { id: 'bulletin', label: 'Bulletin' },
+  { id: 'vending', label: 'Vending' },
+  { id: 'tv', label: 'TV' },
+  { id: 'custom', label: 'Custom' },
+] as const;
+
+type InteractableTypeId = (typeof INTERACTABLE_TYPE_OPTIONS)[number]['id'];
+
+const isInteractableTypeId = (value: string): value is InteractableTypeId =>
+  INTERACTABLE_TYPE_OPTIONS.some((opt) => opt.id === value);
 
 type MapAnimatedSprite = {
   x: number;
@@ -62,6 +99,26 @@ type TileCategory = 'terrain' | 'paths' | 'props' | 'buildings';
 type TileCategoryFilter = 'all' | TileCategory;
 type EditorMode = 'terrain' | 'paths' | 'props' | 'buildings' | 'objects' | 'prefabs';
 type StampRotation = 0 | 90 | 180 | 270;
+type DecalFrame = { x: number; y: number; w: number; h: number };
+type DecalSheet = {
+  frames: Record<string, DecalFrame>;
+  meta: { width: number; height: number; tileSize: number };
+  variantCounts: Record<string, number>;
+  url: string;
+};
+
+type PathBorderRule = {
+  name: string;
+  baseTile: string;
+  sheet: string;
+  sheetJson: string;
+};
+
+type PathBorderSheet = {
+  frames: Record<string, DecalFrame>;
+  meta: { width: number; height: number; tileSize: number };
+  url: string;
+};
 
 type PackTileset = {
   image: string;
@@ -78,6 +135,7 @@ type PackObject = {
   pixelWidth: number;
   pixelHeight: number;
   anchor?: ObjectAnchor;
+  category?: string;
 };
 
 type AssetPack = {
@@ -95,7 +153,7 @@ type StampDefinition = {
   layers: number[][][];
 };
 
-type ObjectAnchor = 'top-left' | 'bottom-left';
+type ObjectAnchor = 'top-left' | 'bottom-left' | 'center';
 
 type ObjectDefinition = {
   id: string;
@@ -111,6 +169,7 @@ type ObjectDefinition = {
   pixelHeight?: number;
   packId?: string;
   packName?: string;
+  category?: string;
   readonly?: boolean;
 };
 
@@ -119,6 +178,39 @@ type PlacedObject = {
   objectId: string;
   col: number;
   row: number;
+  rotation?: ObjectRotation;
+  pixelOffsetX?: number;
+  pixelOffsetY?: number;
+};
+
+type Interactable = {
+  objectInstanceId: string;
+  objectType: string;
+  placedObjectId?: string;
+  hitbox: { kind: 'tileRect'; x: number; y: number; w: number; h: number };
+  interactionRadius?: number;
+  displayName?: string;
+  metadata?: any;
+};
+
+type EditorSnapshot = {
+  bgLayers: number[][][];
+  collisionLayer: number[][];
+  placedObjects: PlacedObject[];
+};
+
+type SavedMapPayload = {
+  version: number;
+  mapWidth: number;
+  mapHeight: number;
+  tileset: TilesetConfig;
+  bgLayers: number[][][];
+  collisionLayer: number[][];
+  autoCollisionEnabled?: boolean;
+  placedObjects: PlacedObject[];
+  interactables?: Interactable[];
+  animatedSprites: MapAnimatedSprite[];
+  terrainDecals?: { grassId: string; sandId: string; waterId?: string } | null;
 };
 
 type AutoStampOptions = {
@@ -128,6 +220,8 @@ type AutoStampOptions = {
   maxStamps: number;
   groundCoverage: number;
 };
+
+type ObjectRotation = 0 | 90 | 180 | 270;
 
 const CATEGORY_FILTERS: Array<{ id: TileCategoryFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -156,8 +250,11 @@ const CATEGORY_STORAGE_KEY = 'ai-town.tilesetCategories.v1';
 const STAMP_STORAGE_KEY = 'ai-town.tilesetStamps.v1';
 const OBJECT_STORAGE_KEY = 'ai-town.tilesetObjects.v1';
 const AUTO_STAMP_STORAGE_KEY = 'ai-town.tilesetAutoStamps.v1';
+const MAP_SAVE_STORAGE_KEY = 'ai-town.mapEditor.save.v1';
+const MAP_SAVE_VERSION = 1;
 const AUTO_STAMP_LIMIT = 12;
 const STAMP_PREVIEW_MAX_SIZE = 64;
+const HISTORY_LIMIT = 100;
 const TILESET_BASE_URL = import.meta.env.BASE_URL ?? '/';
 const TILESET_BASE_PATH = TILESET_BASE_URL.endsWith('/') ? TILESET_BASE_URL : `${TILESET_BASE_URL}/`;
 
@@ -174,6 +271,91 @@ const createBlankLayer = (width: number, height: number) =>
 
 const createBlankLayers = (count: number, width: number, height: number) =>
   Array.from({ length: count }, () => createBlankLayer(width, height));
+
+const cloneLayer = (layer: number[][]) => layer.map((column) => [...column]);
+const cloneLayers = (layers: number[][][]) => layers.map((layer) => layer.map((column) => [...column]));
+const clonePlacedObjects = (objects: PlacedObject[]) => objects.map((obj) => ({ ...obj }));
+const cloneInteractables = (items: Interactable[]) =>
+  items.map((item) => ({
+    ...item,
+    hitbox: { ...item.hitbox },
+  }));
+
+const normalizeRotation = (rotation: number): ObjectRotation => {
+  const normalized = ((rotation % 360) + 360) % 360;
+  if (normalized === 90 || normalized === 180 || normalized === 270) return normalized;
+  return 0;
+};
+
+const getRotatedSize = (width: number, height: number, rotation: ObjectRotation) =>
+  rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
+
+const getRotationTransform = (width: number, height: number, rotation: ObjectRotation) => {
+  if (rotation === 90) return `translate(0px, ${width}px) rotate(90deg)`;
+  if (rotation === 180) return `translate(${width}px, ${height}px) rotate(180deg)`;
+  if (rotation === 270) return `translate(${height}px, 0px) rotate(270deg)`;
+  return 'none';
+};
+
+const stableHash = (x: number, y: number, seed: number) => {
+  let hash = (x * 73856093) ^ (y * 19349663) ^ (seed * 83492791);
+  hash >>>= 0;
+  return hash;
+};
+
+const pickVariantIndex = (x: number, y: number, seed: number, count: number) => {
+  if (count <= 0) return 0;
+  return stableHash(x, y, seed) % count;
+};
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const buildDecalVariantCounts = (frames: Record<string, DecalFrame>) => {
+  const counts: Record<string, number> = {};
+  for (const key of Object.keys(frames)) {
+    const match = key.match(/^(.*)_([0-9]+)$/);
+    if (!match) continue;
+    const prefix = match[1];
+    const index = Number(match[2]);
+    if (Number.isNaN(index)) continue;
+    counts[prefix] = Math.max(counts[prefix] ?? 0, index + 1);
+  }
+  return counts;
+};
+
+const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const getBaseName = (value: string) => {
+  const cleaned = decodeURI(value);
+  const parts = cleaned.split('/');
+  return parts[parts.length - 1] ?? cleaned;
+};
+
+const stripExtension = (value: string) => value.replace(/\.[^/.]+$/, '');
+
+const isGroundCategory = (category?: string) =>
+  category === 'terrain' || category === 'paths' || category === 'flooring' || category === 'tile-object';
+
+const LEGACY_OBJECT_ID_MAP: Record<string, string> = {
+  'flooring-44': 'grass',
+  'asset-9': 'sand',
+  'asset-10': 'sea',
+};
+
+const normalizeLegacyId = (id: string) => LEGACY_OBJECT_ID_MAP[id] ?? id;
+
+const normalizePlacedObjects = (objects: PlacedObject[]) => {
+  let changed = false;
+  const next = objects.map((obj) => {
+    const normalized = normalizeLegacyId(obj.objectId);
+    if (normalized !== obj.objectId) {
+      changed = true;
+      return { ...obj, objectId: normalized };
+    }
+    return obj;
+  });
+  return changed ? next : objects;
+};
 
 const DEFAULT_TILESET: TilesetConfig = {
   id: 'starter',
@@ -269,17 +451,27 @@ const PixiAnimatedSpritesLayer = ({ sprites }: { sprites: MapAnimatedSprite[] })
 };
 
 const MapEditor = () => {
+  const [showAssetSlicer, setShowAssetSlicer] = useState(false);
   const [tileset, setTileset] = useState<TilesetConfig>(() => DEFAULT_TILESET);
   const [tilesetOptions, setTilesetOptions] = useState<TilesetConfig[]>([DEFAULT_TILESET]);
   const [assetPacks, setAssetPacks] = useState<AssetPack[]>([]);
+  const [assetReloadToken, setAssetReloadToken] = useState(0);
   const [packLoadError, setPackLoadError] = useState<string | null>(null);
   const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
   const [showCollision, setShowCollision] = useState(true); // Toggle collision overlay
+  const [autoCollisionEnabled, setAutoCollisionEnabled] = useState(true);
+  const [collisionEditMode, setCollisionEditMode] = useState(false);
+  const [collisionBrush, setCollisionBrush] = useState<'block' | 'clear' | 'auto'>('block');
   const [showAnimatedSprites, setShowAnimatedSprites] = useState(true);
+  const [showObjects, setShowObjects] = useState(true); // Toggle placed objects visibility
+  const [showDecals] = useState(true);
+  const [canvasScale, setCanvasScale] = useState(0.7); // Zoom level (0.3 - 2.0)
+  const [isZoomCollapsed, setIsZoomCollapsed] = useState(false);
   const [tilesetLoaded, setTilesetLoaded] = useState(false);
   const [activeTool, setActiveTool] = useState<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object'>('brush');
   const [activeLayerIndex, setActiveLayerIndex] = useState(0);
-  const [activeMode, setActiveMode] = useState<EditorMode>('terrain');
+  const [activeMode, setActiveMode] = useState<EditorMode>('objects');
+  const [activeSubCategory, setActiveSubCategory] = useState<string>('nature');
   const [lastTileMode, setLastTileMode] = useState<EditorMode>('terrain');
   const [paletteMode, setPaletteMode] = useState<'used' | 'all'>('all');
   const [activeCategory, setActiveCategory] = useState<TileCategoryFilter>('all');
@@ -288,12 +480,20 @@ const MapEditor = () => {
   const [isPaletteSelecting, setIsPaletteSelecting] = useState(false);
   const [autoLayerByTransparency, setAutoLayerByTransparency] = useState(true);
   const [isPointerDown, setIsPointerDown] = useState(false);
-  const [recentTiles, setRecentTiles] = useState<number[]>([]);
-  const [recentObjects, setRecentObjects] = useState<string[]>([]);
+  const [history, setHistory] = useState<{ past: EditorSnapshot[]; future: EditorSnapshot[] }>({
+    past: [],
+    future: [],
+  });
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+  const pendingHistoryRef = useRef<EditorSnapshot | null>(null);
+  const historyDirtyRef = useRef(false);
+  const groundOverlayRef = useRef(false);
   const [animatedSprites, setAnimatedSprites] = useState<MapAnimatedSprite[]>(() => INITIAL_ANIMATED_SPRITES);
   const [tilesetLoadError, setTilesetLoadError] = useState<string | null>(null);
   const [transparentTiles, setTransparentTiles] = useState<boolean[]>([]);
   const [hiddenTiles, setHiddenTiles] = useState<boolean[]>([]);
+  const [activeObjectRotation, setActiveObjectRotation] = useState<ObjectRotation>(0);
   const [tilesetCategories, setTilesetCategories] = useState<Record<string, Record<number, TileCategory>>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -325,6 +525,12 @@ const MapEditor = () => {
     }
   });
   const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
+  const [interactables, setInteractables] = useState<Interactable[]>([]);
+  const [interactableEditMode, setInteractableEditMode] = useState(false);
+  const [selectedInteractableId, setSelectedInteractableId] = useState<string | null>(null);
+  const [interactableTypeDraft, setInteractableTypeDraft] = useState<InteractableTypeId>('board');
+  const [interactableNameDraft, setInteractableNameDraft] = useState('');
+  const [interactableRadiusDraft, setInteractableRadiusDraft] = useState(2);
   const [activeStampId, setActiveStampId] = useState<string | null>(null);
   const [stampCaptureMode, setStampCaptureMode] = useState(false);
   const [isStampSelecting, setIsStampSelecting] = useState(false);
@@ -342,7 +548,7 @@ const MapEditor = () => {
   const [editingStampId, setEditingStampId] = useState<string | null>(null);
   const [stampRenameDraft, setStampRenameDraft] = useState('');
   const [activeObjectId, setActiveObjectId] = useState<string | null>(null);
-  const [activeObjectPackId, setActiveObjectPackId] = useState<string | null>(null);
+  // activeObjectPackId removed - we now load objects from all packs
   const [objectCaptureMode, setObjectCaptureMode] = useState(false);
   const [objectPaletteSelection, setObjectPaletteSelection] = useState<{ startId: number; endId: number } | null>(null);
   const [objectNameDraft, setObjectNameDraft] = useState('');
@@ -350,6 +556,19 @@ const MapEditor = () => {
   const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
   const [objectRenameDraft, setObjectRenameDraft] = useState('');
   const [isObjectPaletteSelecting, setIsObjectPaletteSelecting] = useState(false);
+  const [deleteModifierActive, setDeleteModifierActive] = useState(false);
+  const [decalGrassId, setDecalGrassId] = useState<string | null>(null);
+  const [decalSandId, setDecalSandId] = useState<string | null>(null);
+  const [decalWaterId, setDecalWaterId] = useState<string | null>(null);
+  const [decalSheets, setDecalSheets] = useState<Record<DecalSheetKey, DecalSheet | null>>({
+    grassInSand: null,
+    shoreOnSand: null,
+    shoreOnWater: null,
+  });
+  const [pathBorderRules, setPathBorderRules] = useState<PathBorderRule[]>([]);
+  const [pathBorderSheets, setPathBorderSheets] = useState<Record<string, PathBorderSheet>>({});
+  const [pathBorderLoadError, setPathBorderLoadError] = useState<string | null>(null);
+  const [, setDecalLoadError] = useState<string | null>(null);
   const [showAutoStampOptions, setShowAutoStampOptions] = useState(false);
   const [autoStampOptions, setAutoStampOptions] = useState<AutoStampOptions>({
     minTiles: 6,
@@ -375,62 +594,56 @@ const MapEditor = () => {
     tileLayerIndex: number;
     collisionValue: number;
   } | null>(null);
+  const [hoverPixelOffset, setHoverPixelOffset] = useState<{ x: number; y: number } | null>(null);
   const tilesetRef = useRef<HTMLImageElement | null>(null);
   const dragToolRef = useRef<'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object' | null>(null);
   const stampFileInputRef = useRef<HTMLInputElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const deleteDragRef = useRef(false);
+  const collisionDragRef = useRef(false);
+
+  const getPointerPixelOffset = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const scale = canvasScale || 1;
+    const localX = (event.clientX - rect.left) / scale;
+    const localY = (event.clientY - rect.top) / scale;
+    const half = tileSize / 2;
+    const maxOffset = Math.floor(half);
+    const offsetX = clampNumber(Math.round(localX - half), -maxOffset, maxOffset);
+    const offsetY = clampNumber(Math.round(localY - half), -maxOffset, maxOffset);
+    return { x: offsetX, y: offsetY };
+  };
 
   useEffect(() => {
     let active = true;
     const loadPacks = async () => {
       try {
         setPackLoadError(null);
-        const indexUrl = resolveAssetPath(PACK_INDEX_PATH);
-        const indexResponse = await fetch(indexUrl);
-        if (!indexResponse.ok) {
-          throw new Error(`Pack index not found: ${indexUrl}`);
-        }
-        const indexData = await indexResponse.json();
-        const entries = Array.isArray(indexData?.packs) ? indexData.packs : [];
-        const packs = await Promise.all(
-          entries.map(async (entry: { id?: string; name?: string; path?: string }) => {
-            if (!entry?.path) return null;
-            const packUrl = resolveAssetPath(entry.path);
-            const response = await fetch(packUrl);
-            if (!response.ok) {
-              throw new Error(`Pack failed to load: ${packUrl}`);
-            }
-            const packData = await response.json();
-            const id = String(packData?.id ?? entry.id ?? '').trim();
-            if (!id) return null;
-            const name = String(packData?.name ?? entry.name ?? id);
-            const tileset = packData?.tileset as PackTileset | undefined;
-            const objects = Array.isArray(packData?.objects) ? (packData.objects as PackObject[]) : undefined;
-            return {
-              id,
-              name,
-              tileset,
-              objects,
-            } as AssetPack;
-          }),
-        );
         
-        // Also load from assets.json (category-based system)
+        // ONLY load from assets.json (Tileset Asset folder)
+        // Skip old pack index loading to avoid extra objects
         let categoryObjects: PackObject[] = [];
         try {
           const assetsUrl = resolveAssetPath(ASSETS_JSON_PATH);
-          const assetsResponse = await fetch(assetsUrl);
+          const assetsResponse = await fetch(assetsUrl, { cache: 'no-store' });
           if (assetsResponse.ok) {
             const assetsData = await assetsResponse.json();
             if (Array.isArray(assetsData?.objects)) {
-              categoryObjects = assetsData.objects.map((obj: any) => ({
-                id: obj.id,
-                name: obj.name,
-                image: obj.image,
-                pixelWidth: obj.pixelWidth ?? 64,
-                pixelHeight: obj.pixelHeight ?? 64,
-                anchor: obj.anchor ?? 'bottom-left',
-              }));
+              categoryObjects = assetsData.objects.map((obj: any) => {
+                // Calculate scale to normalize to 32px baseline if not provided
+                const maxDim = Math.max(obj.pixelWidth ?? 64, obj.pixelHeight ?? 64);
+                const autoScale = obj.scale ?? (32 / maxDim); // Normalize to 32px visual size
+                return {
+                  id: obj.id,
+                  name: obj.name,
+                  image: obj.image,
+                  pixelWidth: obj.pixelWidth ?? 64,
+                  pixelHeight: obj.pixelHeight ?? 64,
+                  anchor: obj.anchor ?? 'bottom-left',
+                  category: obj.category,
+                  scale: autoScale, // Normalized scale
+                };
+              });
             }
           }
         } catch (e) {
@@ -439,12 +652,12 @@ const MapEditor = () => {
         
         if (!active) return;
         
-        // Create a virtual pack for category-based objects
-        const allPacks = packs.filter((pack): pack is AssetPack => Boolean(pack));
+        // Create a single pack from assets.json only
+        const allPacks: AssetPack[] = [];
         if (categoryObjects.length > 0) {
           allPacks.push({
-            id: 'category-assets',
-            name: 'Assets',
+            id: 'tileset-assets',
+            name: 'Tileset Assets',
             objects: categoryObjects,
           });
         }
@@ -460,7 +673,150 @@ const MapEditor = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [assetReloadToken]);
+
+  useEffect(() => {
+    if (collisionEditMode) {
+      setShowCollision(true);
+    }
+  }, [collisionEditMode]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDecals = async () => {
+      try {
+        setDecalLoadError(null);
+        const entries = Object.entries(DECAL_SHEETS) as Array<[DecalSheetKey, typeof DECAL_SHEETS[DecalSheetKey]]>;
+        const results = await Promise.all(
+          entries.map(async ([key, sheet]) => {
+            try {
+              const response = await fetch(resolveAssetPath(sheet.json), { cache: 'no-store' });
+              if (!response.ok) throw new Error(`Missing ${key} (${response.status})`);
+              const data = await response.json();
+              const frames = (data?.frames ?? {}) as Record<string, DecalFrame>;
+              const tileSize = Number(data?.tileSize) || DEFAULT_TILE_SIZE;
+              let maxX = 0;
+              let maxY = 0;
+              for (const frame of Object.values(frames)) {
+                maxX = Math.max(maxX, frame.x + frame.w);
+                maxY = Math.max(maxY, frame.y + frame.h);
+              }
+              return [
+                key,
+                {
+                  frames,
+                  meta: { width: maxX, height: maxY, tileSize },
+                  variantCounts: buildDecalVariantCounts(frames),
+                  url: resolveAssetPath(sheet.png),
+                },
+              ] as const;
+            } catch (error) {
+              console.warn('Failed to load decal sheet:', key, error);
+              return [key, null] as const;
+            }
+          }),
+        );
+        if (!active) return;
+        const nextSheets: Record<DecalSheetKey, DecalSheet | null> = {
+          grassInSand: null,
+          shoreOnSand: null,
+          shoreOnWater: null,
+        };
+        let missing = 0;
+        for (const [key, sheet] of results) {
+          nextSheets[key] = sheet;
+          if (!sheet) missing += 1;
+        }
+        setDecalSheets(nextSheets);
+        setDecalLoadError(missing > 0 ? 'Missing decal pack.' : null);
+      } catch (error) {
+        if (!active) return;
+        console.warn('Failed to load decal sheets:', error);
+        setDecalSheets({ grassInSand: null, shoreOnSand: null, shoreOnWater: null });
+        setDecalLoadError('Missing decal pack.');
+      }
+    };
+    void loadDecals();
+    return () => {
+      active = false;
+    };
+  }, [assetReloadToken]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPathBorders = async () => {
+      try {
+        setPathBorderLoadError(null);
+        const response = await fetch(resolveAssetPath(PATH_BORDER_PACK.config), { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Missing path border config (${response.status})`);
+        }
+        const data = await response.json();
+        const rules = (data?.paths ?? []).map((entry: any) => ({
+          name: String(entry?.name ?? ''),
+          baseTile: String(entry?.baseTile ?? ''),
+          sheet: String(entry?.sheet ?? ''),
+          sheetJson: String(entry?.sheetJson ?? ''),
+        })) as PathBorderRule[];
+
+        const sheetEntries = await Promise.all(
+          rules.map(async (rule) => {
+            if (!rule.sheetJson || !rule.sheet || !rule.name) return [rule.name, null] as const;
+            try {
+              const sheetJsonPath = `${PATH_BORDER_PACK.base}/${rule.sheetJson}`;
+              const sheetPngPath = `${PATH_BORDER_PACK.base}/${rule.sheet}`;
+              const sheetResponse = await fetch(resolveAssetPath(sheetJsonPath), { cache: 'no-store' });
+              if (!sheetResponse.ok) return [rule.name, null] as const;
+              const sheetData = await sheetResponse.json();
+              const frames = (sheetData?.frames ?? {}) as Record<string, DecalFrame>;
+              const tileSize = Number(sheetData?.tileSize) || DEFAULT_TILE_SIZE;
+              let maxX = 0;
+              let maxY = 0;
+              for (const frame of Object.values(frames)) {
+                maxX = Math.max(maxX, frame.x + frame.w);
+                maxY = Math.max(maxY, frame.y + frame.h);
+              }
+              return [
+                rule.name,
+                {
+                  frames,
+                  meta: { width: maxX, height: maxY, tileSize },
+                  url: resolveAssetPath(sheetPngPath),
+                },
+              ] as const;
+            } catch (error) {
+              console.warn('Failed to load path border sheet:', rule.name, error);
+              return [rule.name, null] as const;
+            }
+          }),
+        );
+
+        if (!active) return;
+        const nextSheets: Record<string, PathBorderSheet> = {};
+        let missing = 0;
+        for (const [name, sheet] of sheetEntries) {
+          if (sheet) {
+            nextSheets[name] = sheet;
+          } else if (name) {
+            missing += 1;
+          }
+        }
+        setPathBorderRules(rules);
+        setPathBorderSheets(nextSheets);
+        setPathBorderLoadError(missing > 0 ? 'Missing path border sheets.' : null);
+      } catch (error) {
+        if (!active) return;
+        console.warn('Failed to load path border pack:', error);
+        setPathBorderRules([]);
+        setPathBorderSheets({});
+        setPathBorderLoadError('Missing path border pack.');
+      }
+    };
+    void loadPathBorders();
+    return () => {
+      active = false;
+    };
+  }, [assetReloadToken]);
 
   useEffect(() => {
     const nextOptions = assetPacks
@@ -507,22 +863,11 @@ const MapEditor = () => {
     [assetPacks],
   );
 
-  useEffect(() => {
-    if (objectPacks.length === 0) {
-      if (activeObjectPackId !== null) {
-        setActiveObjectPackId(null);
-      }
-      return;
-    }
-    if (!activeObjectPackId || !objectPacks.some((pack) => pack.id === activeObjectPackId)) {
-      setActiveObjectPackId(objectPacks[0].id);
-    }
-  }, [objectPacks, activeObjectPackId]);
+  const reloadAssets = useCallback(() => {
+    setAssetReloadToken((prev) => prev + 1);
+  }, []);
 
-  const activeObjectPack = useMemo(() => {
-    if (objectPacks.length === 0) return null;
-    return objectPacks.find((pack) => pack.id === activeObjectPackId) ?? objectPacks[0];
-  }, [objectPacks, activeObjectPackId]);
+  // Pack switching effect removed - we now load all objects from all packs
 
   const tileSize = tileset.tileDim;
   const tilesetCols = Math.floor(tileset.pixelWidth / tileSize);
@@ -530,6 +875,12 @@ const MapEditor = () => {
   const mapPixelWidth = MAP_WIDTH * tileSize;
   const mapPixelHeight = MAP_HEIGHT * tileSize;
   const tilesetUrl = useMemo(() => resolveAssetPath(tileset.path), [tileset.path]);
+  const terrainDecalConfig = useMemo(() => {
+    if (!decalGrassId || !decalSandId) return null;
+    if (decalGrassId === decalSandId) return null;
+    if (decalWaterId && (decalWaterId === decalGrassId || decalWaterId === decalSandId)) return null;
+    return { grassId: decalGrassId, sandId: decalSandId, waterId: decalWaterId ?? undefined };
+  }, [decalGrassId, decalSandId, decalWaterId]);
 
   // Combine all BG layers for rendering (layer 0 is base, layer 1+ are overlays)
   // bgLayers structure: bgLayers[layerIndex][x][y] = tileIndex
@@ -540,6 +891,73 @@ const MapEditor = () => {
   const [collisionLayer, setCollisionLayer] = useState<number[][]>(() =>
     createBlankLayer(MAP_WIDTH, MAP_HEIGHT),
   );
+
+  const createSnapshot = useCallback(
+    (): EditorSnapshot => ({
+      bgLayers: cloneLayers(bgLayers),
+      collisionLayer: cloneLayer(collisionLayer),
+      placedObjects: clonePlacedObjects(placedObjects),
+    }),
+    [bgLayers, collisionLayer, placedObjects],
+  );
+
+  const beginHistoryCapture = useCallback(() => {
+    if (pendingHistoryRef.current) return;
+    pendingHistoryRef.current = createSnapshot();
+    historyDirtyRef.current = false;
+  }, [createSnapshot]);
+
+  const markHistoryDirty = useCallback(() => {
+    if (!pendingHistoryRef.current) return;
+    historyDirtyRef.current = true;
+  }, []);
+
+  const commitHistoryCapture = useCallback(() => {
+    if (pendingHistoryRef.current && historyDirtyRef.current) {
+      setHistory((prev) => ({
+        past: [...prev.past, pendingHistoryRef.current!].slice(-HISTORY_LIMIT),
+        future: [],
+      }));
+    }
+    pendingHistoryRef.current = null;
+    historyDirtyRef.current = false;
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.past.length === 0) return prev;
+      const previous = prev.past[prev.past.length - 1];
+      const rest = prev.past.slice(0, -1);
+      const current = createSnapshot();
+      pendingHistoryRef.current = null;
+      historyDirtyRef.current = false;
+      setBgLayers(previous.bgLayers);
+      setCollisionLayer(previous.collisionLayer);
+      setPlacedObjects(previous.placedObjects);
+      return {
+        past: rest,
+        future: [current, ...prev.future],
+      };
+    });
+  }, [createSnapshot]);
+
+  const redo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.future.length === 0) return prev;
+      const next = prev.future[0];
+      const rest = prev.future.slice(1);
+      const current = createSnapshot();
+      pendingHistoryRef.current = null;
+      historyDirtyRef.current = false;
+      setBgLayers(next.bgLayers);
+      setCollisionLayer(next.collisionLayer);
+      setPlacedObjects(next.placedObjects);
+      return {
+        past: [...prev.past, current].slice(-HISTORY_LIMIT),
+        future: rest,
+      };
+    });
+  }, [createSnapshot]);
 
   const usedTileStats = useMemo(() => {
     const counts = new Map<number, number>();
@@ -600,43 +1018,54 @@ const MapEditor = () => {
     [tilesetObjects, tileset.id],
   );
   const builtinObjectsForSet = useMemo(() => {
-    if (!activeObjectPack?.objects || activeObjectPack.objects.length === 0) return [];
-    return activeObjectPack.objects
-      .filter((source) => source?.id && source?.image)
-      .map((source) => {
-      const pixelWidth = Number(source.pixelWidth) || tileSize;
-      const pixelHeight = Number(source.pixelHeight) || tileSize;
-      const tileWidth = Math.max(1, Math.ceil(pixelWidth / tileSize));
-      const tileHeight = Math.max(1, Math.ceil(pixelHeight / tileSize));
-      const normalizedName = source.name.replace(/(\D)(\d)/g, '$1 $2');
-      return {
-        id: source.id,
-        name: normalizedName,
-        tilesetId: tileset.id,
-        tileX: 0,
-        tileY: 0,
-        tileWidth,
-        tileHeight,
-        anchor: source.anchor ?? ('bottom-left' as ObjectAnchor),
-        imagePath: source.image,
-        pixelWidth,
-        pixelHeight,
-        packId: activeObjectPack.id,
-        packName: activeObjectPack.name,
-        readonly: true,
-      };
-    });
-  }, [activeObjectPack, tileSize, tileset.id]);
+    // Load objects from ALL packs that have objects
+    const allObjects: ObjectDefinition[] = [];
+    for (const pack of objectPacks) {
+      if (!pack.objects || pack.objects.length === 0) continue;
+      for (const source of pack.objects) {
+        if (!source?.id || !source?.image) continue;
+        const pixelWidth = Number(source.pixelWidth) || tileSize;
+        const pixelHeight = Number(source.pixelHeight) || tileSize;
+
+        // For terrain/paths, always use 1x1 tile grid regardless of pixel size
+        // This ensures 64x64 terrain tiles align to single grid cells
+        const isGroundTile = isGroundCategory(source.category);
+        const isFence = source.category === 'fences';
+        const tileWidth = isGroundTile || isFence ? 1 : Math.max(1, Math.ceil(pixelWidth / tileSize));
+        const tileHeight = isGroundTile || isFence ? 1 : Math.max(1, Math.ceil(pixelHeight / tileSize));
+
+        const normalizedName = source.name.replace(/(\D)(\d)/g, '$1 $2');
+        allObjects.push({
+          id: source.id,
+          name: normalizedName,
+          tilesetId: tileset.id,
+          tileX: 0,
+          tileY: 0,
+          tileWidth,
+          tileHeight,
+          anchor: source.anchor ?? ('bottom-left' as ObjectAnchor),
+          imagePath: source.image,
+          pixelWidth,
+          pixelHeight,
+          packId: pack.id,
+          packName: pack.name,
+          category: source.category,
+          readonly: true,
+        });
+      }
+    }
+    return allObjects;
+  }, [objectPacks, tileSize, tileset.id]);
   const tilesetObjectsForSet = useMemo(
     () => [...builtinObjectsForSet, ...userObjectsForSet],
     [builtinObjectsForSet, userObjectsForSet],
   );
   const activeObject = tilesetObjectsForSet.find((obj) => obj.id === activeObjectId) ?? null;
-  const activeToolLabel =
+    const activeToolLabel =
     activeTool === 'stamp'
       ? `Stamp${activeStamp ? `: ${activeStamp.name}` : ''}${stampRotation ? ` (${stampRotation}deg)` : ''}`
       : activeTool === 'object'
-      ? `Object${activeObject ? `: ${activeObject.name}` : ''}`
+      ? `Object${activeObject ? `: ${activeObject.name}` : ''}${activeObjectRotation ? ` (${activeObjectRotation}°)` : ''}`
       : `${activeTool.charAt(0).toUpperCase()}${activeTool.slice(1)}`;
 
   const objectsById = useMemo(() => {
@@ -646,6 +1075,95 @@ const MapEditor = () => {
     }
     return map;
   }, [tilesetObjectsForSet]);
+
+  const selectedInteractable = useMemo(() => {
+    if (!selectedInteractableId) return null;
+    return interactables.find((item) => item.objectInstanceId === selectedInteractableId) ?? null;
+  }, [interactables, selectedInteractableId]);
+
+  const selectedInteractablePlacement = useMemo(() => {
+    const placementId = selectedInteractable?.placedObjectId ?? selectedInteractableId;
+    if (!placementId) return null;
+    return placedObjects.find((placement) => placement.id === placementId) ?? null;
+  }, [placedObjects, selectedInteractable?.placedObjectId, selectedInteractableId]);
+
+  const selectedInteractableBounds = useMemo(() => {
+    if (!selectedInteractablePlacement) return null;
+    const def = objectsById.get(selectedInteractablePlacement.objectId);
+    if (!def) return null;
+    return getObjectTileBounds(def, {
+      ...selectedInteractablePlacement,
+      rotation: getPlacementRotation(selectedInteractablePlacement),
+    });
+  }, [selectedInteractablePlacement, objectsById]);
+
+  const inferInteractableType = useCallback(
+    (objectId: string): (typeof INTERACTABLE_TYPE_OPTIONS)[number]['id'] => {
+      const lower = objectId.toLowerCase();
+      if (lower.includes('bulletin')) return 'bulletin';
+      if (lower.includes('vending')) return 'vending';
+      if (lower.includes('television') || lower.includes('tv')) return 'tv';
+      if (lower.includes('board')) return 'board';
+      return 'custom';
+    },
+    [],
+  );
+
+	  useEffect(() => {
+	    if (!selectedInteractableId) return;
+	    const inferred =
+	      selectedInteractablePlacement ? inferInteractableType(selectedInteractablePlacement.objectId) : 'custom';
+	    const fromData = selectedInteractable?.objectType;
+	    setInteractableTypeDraft(fromData && isInteractableTypeId(fromData) ? fromData : inferred);
+	    setInteractableNameDraft(selectedInteractable?.displayName ?? '');
+	    setInteractableRadiusDraft(selectedInteractable?.interactionRadius ?? 2);
+	  }, [inferInteractableType, selectedInteractable, selectedInteractableId, selectedInteractablePlacement]);
+
+  const zigzagTerrainOptions = useMemo(
+    () => tilesetObjectsForSet.filter((obj) => obj.category === 'terrain'),
+    [tilesetObjectsForSet],
+  );
+
+  useEffect(() => {
+    if (zigzagTerrainOptions.length === 0) {
+      setDecalGrassId(null);
+      setDecalSandId(null);
+      setDecalWaterId(null);
+      return;
+    }
+
+    const nameToId = new Map(
+      zigzagTerrainOptions.map((opt) => [opt.name.toLowerCase().trim(), opt.id]),
+    );
+    const desiredGrass = nameToId.get('grass');
+    const desiredSand = nameToId.get('sand');
+    const desiredWater = nameToId.get('water') ?? nameToId.get('sea');
+
+    if (!decalGrassId || !zigzagTerrainOptions.some((opt) => opt.id === decalGrassId)) {
+      setDecalGrassId(desiredGrass ?? zigzagTerrainOptions[0].id);
+    }
+    if (
+      !decalSandId ||
+      !zigzagTerrainOptions.some((opt) => opt.id === decalSandId) ||
+      decalSandId === decalGrassId
+    ) {
+      const fallback =
+        desiredSand && desiredSand !== decalGrassId
+          ? desiredSand
+          : zigzagTerrainOptions.find((opt) => opt.id !== decalGrassId)?.id;
+      setDecalSandId(fallback ?? null);
+    }
+    if (!decalWaterId || !zigzagTerrainOptions.some((opt) => opt.id === decalWaterId)) {
+      const fallback =
+        desiredWater && desiredWater !== decalGrassId && desiredWater !== decalSandId
+          ? desiredWater
+          : zigzagTerrainOptions.find(
+              (opt) => opt.id !== decalGrassId && opt.id !== decalSandId,
+            )?.id;
+      setDecalWaterId(fallback ?? null);
+    }
+  }, [zigzagTerrainOptions, decalGrassId, decalSandId, decalWaterId]);
+
 
   useEffect(() => {
     setActiveStampId(null);
@@ -674,12 +1192,17 @@ const MapEditor = () => {
     setStampFlipY(false);
   }, [activeStampId]);
 
+  useEffect(() => {
+    if (activeObject?.category !== 'stamp') {
+      setHoverPixelOffset(null);
+    }
+  }, [activeObject?.category]);
+
   const resetMap = (options?: { animated: MapAnimatedSprite[] }) => {
     setBgLayers(createBlankLayers(DEFAULT_LAYER_COUNT, MAP_WIDTH, MAP_HEIGHT));
     setCollisionLayer(createBlankLayer(MAP_WIDTH, MAP_HEIGHT));
     setAnimatedSprites(options?.animated ?? []);
     setPlacedObjects([]);
-    setRecentTiles([]);
     setSelectedTileId(null);
     setActiveLayerIndex(0);
     setPaletteMode('all');
@@ -839,34 +1362,16 @@ const MapEditor = () => {
     return { sx: col * tileSize, sy: row * tileSize };
   };
 
-  const pushRecentTile = (tileId: number) => {
-    if (tileId < 0) return;
-    setRecentTiles((prev) => {
-      const filtered = prev.filter((id) => id !== tileId);
-      return [tileId, ...filtered].slice(0, RECENT_TILES_MAX);
-    });
-  };
-
-  const pushRecentObject = (objectId: string) => {
-    if (!objectId) return;
-    setRecentObjects((prev) => {
-      const filtered = prev.filter((id) => id !== objectId);
-      return [objectId, ...filtered].slice(0, RECENT_OBJECTS_MAX);
-    });
-  };
-
   const selectObjectId = (objectId: string) => {
     if (!objectId) return;
     setActiveObjectId(objectId);
     setActiveTool('object');
     setActiveMode('objects');
-    pushRecentObject(objectId);
   };
 
   const selectTileId = (tileId: number, options?: { layerOverride?: number }) => {
     setSelectedTileId(tileId);
     if (tileId >= 0) {
-      pushRecentTile(tileId);
       setActiveTool('brush');
       if (typeof options?.layerOverride === 'number' && options.layerOverride >= 0) {
         setActiveLayerIndex(options.layerOverride);
@@ -955,23 +1460,6 @@ const MapEditor = () => {
       setLastTileMode(mode);
     }
   }, []);
-
-  const activateTileTool = useCallback((tool: 'brush' | 'eraser' | 'eyedropper') => {
-    if (activeMode === 'objects' || activeMode === 'prefabs') {
-      const preset = MODE_PRESETS.find((item) => item.id === lastTileMode);
-      if (preset) {
-        setActiveMode(preset.id);
-        if (preset.category) {
-          setActiveCategory(preset.category);
-          setPaletteMode('all');
-        }
-        if (typeof preset.layer === 'number') {
-          setActiveLayerIndex(preset.layer);
-        }
-      }
-    }
-    setActiveTool(tool);
-  }, [activeMode, lastTileMode]);
 
   const allTileIds = useMemo(
     () => Array.from({ length: tilesetRows * tilesetCols }, (_, index) => index),
@@ -1125,10 +1613,78 @@ const MapEditor = () => {
     );
   }, [hoverInfo, transformedStampSize]);
 
+  function getPlacementRotation(placement: { rotation?: ObjectRotation }) {
+    return normalizeRotation(placement.rotation ?? 0);
+  }
+
+  function getObjectTileSize(object: ObjectDefinition, rotation: ObjectRotation = 0) {
+    const rotated = rotation === 90 || rotation === 270;
+    return {
+      tileWidth: rotated ? object.tileHeight : object.tileWidth,
+      tileHeight: rotated ? object.tileWidth : object.tileHeight,
+    };
+  }
+
+  function getObjectAnchorOffset(object: ObjectDefinition, rotation: ObjectRotation = 0) {
+    const { tileWidth, tileHeight } = getObjectTileSize(object, rotation);
+    if (object.anchor === 'center') {
+      return {
+        x: Math.floor(tileWidth / 2),
+        y: Math.floor(tileHeight / 2),
+      };
+    }
+    if (object.anchor === 'bottom-left') {
+      return { x: 0, y: tileHeight - 1 };
+    }
+    return { x: 0, y: 0 };
+  }
+
+  function getObjectTileBounds(
+    object: ObjectDefinition,
+    placement: { col: number; row: number; rotation?: ObjectRotation },
+  ) {
+    const rotation = getPlacementRotation(placement);
+    const { tileWidth, tileHeight } = getObjectTileSize(object, rotation);
+    const anchor = getObjectAnchorOffset(object, rotation);
+    const startCol = placement.col - anchor.x;
+    const startRow = placement.row - anchor.y;
+    return {
+      startCol,
+      startRow,
+      endCol: startCol + tileWidth - 1,
+      endRow: startRow + tileHeight - 1,
+    };
+  }
+
+  function getObjectPixelBounds(
+    object: ObjectDefinition,
+    placement: { col: number; row: number; rotation?: ObjectRotation; pixelOffsetX?: number; pixelOffsetY?: number },
+  ) {
+    const rotation = getPlacementRotation(placement);
+    const { tileWidth, tileHeight } = getObjectTileSize(object, rotation);
+    const bounds = getObjectTileBounds(object, placement);
+    const offsetX = placement.pixelOffsetX ?? 0;
+    const offsetY = placement.pixelOffsetY ?? 0;
+    return {
+      ...bounds,
+      left: bounds.startCol * tileSize + offsetX,
+      top: bounds.startRow * tileSize + offsetY,
+      width: tileWidth * tileSize,
+      height: tileHeight * tileSize,
+    };
+  }
+
   const objectPreviewBounds = useMemo(() => {
     if (!hoverInfo || !activeObject) return null;
-    return getObjectPixelBounds(activeObject, { col: hoverInfo.col, row: hoverInfo.row });
-  }, [activeObject, hoverInfo, tileSize]);
+    const usePixelOffset = activeObject.category === 'stamp' && hoverPixelOffset;
+    return getObjectPixelBounds(activeObject, {
+      col: hoverInfo.col,
+      row: hoverInfo.row,
+      rotation: activeObjectRotation,
+      pixelOffsetX: usePixelOffset ? hoverPixelOffset?.x : undefined,
+      pixelOffsetY: usePixelOffset ? hoverPixelOffset?.y : undefined,
+    });
+  }, [activeObject, hoverInfo, tileSize, activeObjectRotation, hoverPixelOffset]);
 
   const objectPreviewValid = useMemo(() => {
     if (!objectPreviewBounds) return true;
@@ -1140,29 +1696,377 @@ const MapEditor = () => {
     );
   }, [objectPreviewBounds]);
 
+  const deletePreviewBounds = useMemo(() => {
+    if (!deleteModifierActive || !hoverInfo) return null;
+    for (let i = placedObjects.length - 1; i >= 0; i -= 1) {
+      const placement = placedObjects[i];
+      const objectDef = objectsById.get(placement.objectId);
+      if (!objectDef) continue;
+      const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
+      if (
+        hoverInfo.col >= bounds.startCol &&
+        hoverInfo.col <= bounds.endCol &&
+        hoverInfo.row >= bounds.startRow &&
+        hoverInfo.row <= bounds.endRow
+      ) {
+        return bounds;
+      }
+    }
+    return null;
+  }, [deleteModifierActive, hoverInfo, placedObjects, objectsById]);
+
   const placedObjectsSorted = useMemo(() => {
     const list = [...placedObjects];
+    
+    // Helper to determine zLayer: ground (0), stamps (1), other standing objects (2)
+    const getZLayer = (objectId: string): number => {
+      const def = objectsById.get(objectId);
+      if (!def) return 2;
+      const category = (def as any).category;
+      if (isGroundCategory(category)) return 0;
+      if (category === 'stamp') return 1;
+      return 2;
+    };
+    
     list.sort((a, b) => {
       const aDef = objectsById.get(a.objectId);
       const bDef = objectsById.get(b.objectId);
       if (!aDef || !bDef) return 0;
-      const aBounds = getObjectTileBounds(aDef, a);
-      const bBounds = getObjectTileBounds(bDef, b);
+      
+      // First sort by zLayer (ground tiles before standing objects)
+      const aZLayer = getZLayer(a.objectId);
+      const bZLayer = getZLayer(b.objectId);
+      if (aZLayer !== bZLayer) return aZLayer - bZLayer;
+      
+      // Then sort by Y position (endRow)
+      const aBounds = getObjectTileBounds(aDef, { ...a, rotation: getPlacementRotation(a) });
+      const bBounds = getObjectTileBounds(bDef, { ...b, rotation: getPlacementRotation(b) });
       if (aBounds.endRow !== bBounds.endRow) return aBounds.endRow - bBounds.endRow;
       return aBounds.startCol - bBounds.startCol;
     });
     return list;
   }, [placedObjects, objectsById]);
 
-  const quickbarTileSlots = useMemo(
-    () => Array.from({ length: QUICKBAR_SLOTS }, (_, index) => recentTiles[index] ?? null),
-    [recentTiles],
-  );
+  const placedObjectsByLayer = useMemo(() => {
+    const ground: PlacedObject[] = [];
+    const stamps: PlacedObject[] = [];
+    const standing: PlacedObject[] = [];
+    for (const placement of placedObjectsSorted) {
+      const def = objectsById.get(placement.objectId);
+      const category = def?.category;
+      const isGround = isGroundCategory(category);
+      if (isGround) {
+        ground.push(placement);
+      } else if (category === 'stamp') {
+        stamps.push(placement);
+      } else {
+        standing.push(placement);
+      }
+    }
+    return { ground, stamps, standing };
+  }, [placedObjectsSorted, objectsById]);
 
-  const quickbarObjectSlots = useMemo(() => {
-    const available = recentObjects.filter((id) => objectsById.has(id));
-    return Array.from({ length: QUICKBAR_SLOTS }, (_, index) => available[index] ?? null);
-  }, [recentObjects, objectsById]);
+  const autoCollisionLayer = useMemo(() => {
+    const layer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
+    if (!autoCollisionEnabled) return layer;
+    for (const placement of placedObjects) {
+      const objectDef = objectsById.get(placement.objectId);
+      if (!objectDef) continue;
+      if (isGroundCategory(objectDef.category)) continue;
+      const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
+      const startCol = Math.max(0, bounds.startCol);
+      const endCol = Math.min(MAP_WIDTH - 1, bounds.endCol);
+      const startRow = Math.max(0, bounds.startRow);
+      const endRow = Math.min(MAP_HEIGHT - 1, bounds.endRow);
+      for (let col = startCol; col <= endCol; col += 1) {
+        for (let row = startRow; row <= endRow; row += 1) {
+          layer[col][row] = COLLISION_BLOCKED;
+        }
+      }
+    }
+    return layer;
+  }, [autoCollisionEnabled, placedObjects, objectsById]);
+
+  const effectiveCollisionLayer = useMemo(() => {
+    const next = autoCollisionLayer.map((column, col) =>
+      column.map((value, row) => {
+        const override = collisionLayer[col]?.[row] ?? -1;
+        if (override === COLLISION_WALKABLE) return -1;
+        if (override !== -1) return COLLISION_BLOCKED;
+        return value;
+      }),
+    );
+    return next;
+  }, [autoCollisionLayer, collisionLayer]);
+
+  const decalPlacements = useMemo(() => {
+    if (!showDecals || !terrainDecalConfig) return [];
+    const grassSheet = decalSheets.grassInSand;
+    const sandSheet = decalSheets.shoreOnSand;
+    const waterSheet = decalSheets.shoreOnWater;
+    if (!grassSheet) return [];
+    if (terrainDecalConfig.waterId && (!sandSheet || !waterSheet)) return [];
+
+    const { grassId, sandId, waterId } = terrainDecalConfig;
+    const grid: number[][] = Array.from({ length: MAP_WIDTH }, () => Array.from({ length: MAP_HEIGHT }, () => 0));
+
+    for (const placement of placedObjects) {
+      if (placement.col < 0 || placement.row < 0 || placement.col >= MAP_WIDTH || placement.row >= MAP_HEIGHT) continue;
+      if (placement.objectId === grassId) {
+        grid[placement.col][placement.row] = 1;
+      } else if (placement.objectId === sandId) {
+        grid[placement.col][placement.row] = 2;
+      } else if (waterId && placement.objectId === waterId) {
+        grid[placement.col][placement.row] = 3;
+      }
+    }
+
+    const placements: Array<{ col: number; row: number; sheet: DecalSheetKey; frameKey: string; offsetX?: number; offsetY?: number }> = [];
+
+    const pickFrame = (sheetKey: DecalSheetKey, prefix: string, col: number, row: number, seed: number) => {
+      const sheet = decalSheets[sheetKey];
+      if (!sheet) return null;
+      const count = sheet.variantCounts[prefix] ?? 0;
+      if (count <= 0) return null;
+      const index = pickVariantIndex(col, row, seed, count);
+      const key = `${prefix}_${index}`;
+      if (!sheet.frames[key]) return null;
+      return key;
+    };
+
+    const addDecal = (
+      sheetKey: DecalSheetKey,
+      prefix: string,
+      col: number,
+      row: number,
+      seed: number,
+      offsetX?: number,
+      offsetY?: number,
+    ) => {
+      const key = pickFrame(sheetKey, prefix, col, row, seed);
+      if (!key) return;
+      placements.push({ col, row, sheet: sheetKey, frameKey: key, offsetX, offsetY });
+    };
+
+    const grassEdge = {
+      N: grassSheet.variantCounts['grass_in_sand_edge_N'] ? 'grass_in_sand_edge_N' : 'grass_in_sand_N',
+      E: grassSheet.variantCounts['grass_in_sand_edge_E'] ? 'grass_in_sand_edge_E' : 'grass_in_sand_E',
+      S: grassSheet.variantCounts['grass_in_sand_edge_S'] ? 'grass_in_sand_edge_S' : 'grass_in_sand_S',
+      W: grassSheet.variantCounts['grass_in_sand_edge_W'] ? 'grass_in_sand_edge_W' : 'grass_in_sand_W',
+    };
+    const grassTuft =
+      grassSheet.variantCounts['grass_in_sand_tuft'] ? 'grass_in_sand_tuft' : 'grass_tuft';
+
+    const shoreSandEdge = {
+      N: 'shore_on_sand_edge_N',
+      E: 'shore_on_sand_edge_E',
+      S: 'shore_on_sand_edge_S',
+      W: 'shore_on_sand_edge_W',
+    };
+    const shoreWaterEdge = {
+      N: 'shore_on_water_edge_N',
+      E: 'shore_on_water_edge_E',
+      S: 'shore_on_water_edge_S',
+      W: 'shore_on_water_edge_W',
+    };
+
+    const cornerOffset = Math.max(3, Math.round(tileSize * 0.2));
+    const cornerSoftenChanceSand = 55;
+    const cornerSoftenChanceWater = 50;
+
+    for (let col = 0; col < MAP_WIDTH; col += 1) {
+      for (let row = 0; row < MAP_HEIGHT; row += 1) {
+        const cell = grid[col][row];
+        const north = row > 0 ? grid[col][row - 1] : 0;
+        const south = row < MAP_HEIGHT - 1 ? grid[col][row + 1] : 0;
+        const west = col > 0 ? grid[col - 1][row] : 0;
+        const east = col < MAP_WIDTH - 1 ? grid[col + 1][row] : 0;
+
+        if (cell === 2) {
+          if (north === 1) addDecal('grassInSand', grassEdge.N, col, row, 1);
+          if (east === 1) addDecal('grassInSand', grassEdge.E, col, row, 2);
+          if (south === 1) addDecal('grassInSand', grassEdge.S, col, row, 3);
+          if (west === 1) addDecal('grassInSand', grassEdge.W, col, row, 4);
+
+          if (north === 1 && east === 1) addDecal('grassInSand', 'grass_in_sand_corner_NE', col, row, 5);
+          if (north === 1 && west === 1) addDecal('grassInSand', 'grass_in_sand_corner_NW', col, row, 6);
+          if (south === 1 && east === 1) addDecal('grassInSand', 'grass_in_sand_corner_SE', col, row, 7);
+          if (south === 1 && west === 1) addDecal('grassInSand', 'grass_in_sand_corner_SW', col, row, 8);
+
+          const nearGrass = north === 1 || south === 1 || east === 1 || west === 1;
+          if (nearGrass && (grassSheet.variantCounts[grassTuft] ?? 0) > 0) {
+            const roll = stableHash(col, row, 9) % 100;
+            if (roll < 18) {
+              addDecal('grassInSand', grassTuft, col, row, 10);
+            }
+          }
+
+          if (waterId && sandSheet) {
+            if (north === 3) addDecal('shoreOnSand', shoreSandEdge.N, col, row, 11);
+            if (east === 3) addDecal('shoreOnSand', shoreSandEdge.E, col, row, 12);
+            if (south === 3) addDecal('shoreOnSand', shoreSandEdge.S, col, row, 13);
+            if (west === 3) addDecal('shoreOnSand', shoreSandEdge.W, col, row, 14);
+
+            if (north === 3 && east === 3) addDecal('shoreOnSand', 'shore_on_sand_corner_NE', col, row, 15);
+            if (north === 3 && west === 3) addDecal('shoreOnSand', 'shore_on_sand_corner_NW', col, row, 16);
+            if (south === 3 && east === 3) addDecal('shoreOnSand', 'shore_on_sand_corner_SE', col, row, 17);
+            if (south === 3 && west === 3) addDecal('shoreOnSand', 'shore_on_sand_corner_SW', col, row, 18);
+
+            const nearWater = north === 3 || south === 3 || east === 3 || west === 3;
+            if (nearWater && sandSheet.variantCounts['shore_on_sand_tuft'] > 0) {
+              const roll = stableHash(col, row, 19) % 100;
+              if (roll < 22) {
+                addDecal('shoreOnSand', 'shore_on_sand_tuft', col, row, 20);
+              }
+            }
+
+            if (sandSheet.variantCounts['shore_on_sand_tuft'] > 0) {
+              const addCornerTuft = (dx: number, dy: number, seed: number) => {
+                const roll = stableHash(col, row, seed) % 100;
+                if (roll < cornerSoftenChanceSand) {
+                  addDecal('shoreOnSand', 'shore_on_sand_tuft', col, row, seed + 100, dx, dy);
+                }
+              };
+              if (north === 3 && east === 3) addCornerTuft(cornerOffset, -cornerOffset, 31);
+              if (north === 3 && west === 3) addCornerTuft(-cornerOffset, -cornerOffset, 32);
+              if (south === 3 && east === 3) addCornerTuft(cornerOffset, cornerOffset, 33);
+              if (south === 3 && west === 3) addCornerTuft(-cornerOffset, cornerOffset, 34);
+            }
+          }
+        }
+
+        if (cell === 3 && waterId && waterSheet) {
+          if (north === 2) addDecal('shoreOnWater', shoreWaterEdge.N, col, row, 21);
+          if (east === 2) addDecal('shoreOnWater', shoreWaterEdge.E, col, row, 22);
+          if (south === 2) addDecal('shoreOnWater', shoreWaterEdge.S, col, row, 23);
+          if (west === 2) addDecal('shoreOnWater', shoreWaterEdge.W, col, row, 24);
+
+          if (north === 2 && east === 2) addDecal('shoreOnWater', 'shore_on_water_corner_NE', col, row, 25);
+          if (north === 2 && west === 2) addDecal('shoreOnWater', 'shore_on_water_corner_NW', col, row, 26);
+          if (south === 2 && east === 2) addDecal('shoreOnWater', 'shore_on_water_corner_SE', col, row, 27);
+          if (south === 2 && west === 2) addDecal('shoreOnWater', 'shore_on_water_corner_SW', col, row, 28);
+
+          const nearSand = north === 2 || south === 2 || east === 2 || west === 2;
+          if (nearSand && waterSheet.variantCounts['shore_on_water_tuft'] > 0) {
+            const roll = stableHash(col, row, 29) % 100;
+            if (roll < 18) {
+              addDecal('shoreOnWater', 'shore_on_water_tuft', col, row, 30);
+            }
+          }
+
+          if (waterSheet.variantCounts['shore_on_water_tuft'] > 0) {
+            const addCornerTuft = (dx: number, dy: number, seed: number) => {
+              const roll = stableHash(col, row, seed) % 100;
+              if (roll < cornerSoftenChanceWater) {
+                addDecal('shoreOnWater', 'shore_on_water_tuft', col, row, seed + 100, dx, dy);
+              }
+            };
+            if (north === 2 && east === 2) addCornerTuft(cornerOffset, -cornerOffset, 41);
+            if (north === 2 && west === 2) addCornerTuft(-cornerOffset, -cornerOffset, 42);
+            if (south === 2 && east === 2) addCornerTuft(cornerOffset, cornerOffset, 43);
+            if (south === 2 && west === 2) addCornerTuft(-cornerOffset, cornerOffset, 44);
+          }
+        }
+      }
+    }
+    return placements;
+  }, [showDecals, terrainDecalConfig, decalSheets, placedObjects]);
+
+  const pathBorderTypeByObjectId = useMemo(() => {
+    if (pathBorderRules.length === 0) return new Map<string, string>();
+    const rulesByKey = new Map<string, string>();
+    for (const rule of pathBorderRules) {
+      if (!rule.name) continue;
+      const base = stripExtension(getBaseName(rule.baseTile));
+      if (base) {
+        rulesByKey.set(normalizeKey(base), rule.name);
+      }
+      rulesByKey.set(normalizeKey(rule.name), rule.name);
+    }
+    const map = new Map<string, string>();
+    for (const obj of tilesetObjectsForSet) {
+      if (!obj.imagePath) continue;
+      if (obj.category !== 'paths' && obj.category !== 'flooring') continue;
+      const imageKey = normalizeKey(stripExtension(getBaseName(obj.imagePath)));
+      const nameKey = normalizeKey(obj.name);
+      const match = rulesByKey.get(imageKey) ?? rulesByKey.get(nameKey);
+      if (match) {
+        map.set(obj.id, match);
+      }
+    }
+    return map;
+  }, [pathBorderRules, tilesetObjectsForSet]);
+
+  const pathBorderPlacements = useMemo(() => {
+    if (!showDecals) return [];
+    if (!terrainDecalConfig) return [];
+    if (pathBorderTypeByObjectId.size === 0) return [];
+    if (Object.keys(pathBorderSheets).length === 0) return [];
+    const terrainIds = new Set([terrainDecalConfig.grassId, terrainDecalConfig.sandId, terrainDecalConfig.waterId].filter(Boolean));
+    if (terrainIds.size === 0) return [];
+
+    const terrainGrid: boolean[][] = Array.from({ length: MAP_WIDTH }, () => Array.from({ length: MAP_HEIGHT }, () => false));
+    const pathGrid: (string | null)[][] = Array.from({ length: MAP_WIDTH }, () => Array.from({ length: MAP_HEIGHT }, () => null));
+
+    for (const placement of placedObjects) {
+      if (placement.col < 0 || placement.row < 0 || placement.col >= MAP_WIDTH || placement.row >= MAP_HEIGHT) continue;
+      if (terrainIds.has(placement.objectId)) {
+        terrainGrid[placement.col][placement.row] = true;
+        continue;
+      }
+      const borderType = pathBorderTypeByObjectId.get(placement.objectId);
+      if (borderType) {
+        pathGrid[placement.col][placement.row] = borderType;
+      }
+    }
+
+    const placements: Array<{ col: number; row: number; sheetName: string; frameKey: string }> = [];
+
+    for (let col = 0; col < MAP_WIDTH; col += 1) {
+      for (let row = 0; row < MAP_HEIGHT; row += 1) {
+        const sheetName = pathGrid[col][row];
+        if (!sheetName) continue;
+        const sheet = pathBorderSheets[sheetName];
+        if (!sheet) continue;
+        const north = row > 0 ? terrainGrid[col][row - 1] : false;
+        const south = row < MAP_HEIGHT - 1 ? terrainGrid[col][row + 1] : false;
+        const west = col > 0 ? terrainGrid[col - 1][row] : false;
+        const east = col < MAP_WIDTH - 1 ? terrainGrid[col + 1][row] : false;
+
+        if (north) placements.push({ col, row, sheetName, frameKey: `${sheetName}_edge_N` });
+        if (east) placements.push({ col, row, sheetName, frameKey: `${sheetName}_edge_E` });
+        if (south) placements.push({ col, row, sheetName, frameKey: `${sheetName}_edge_S` });
+        if (west) placements.push({ col, row, sheetName, frameKey: `${sheetName}_edge_W` });
+
+        if (north && east) placements.push({ col, row, sheetName, frameKey: `${sheetName}_corner_NE` });
+        if (north && west) placements.push({ col, row, sheetName, frameKey: `${sheetName}_corner_NW` });
+        if (south && east) placements.push({ col, row, sheetName, frameKey: `${sheetName}_corner_SE` });
+        if (south && west) placements.push({ col, row, sheetName, frameKey: `${sheetName}_corner_SW` });
+      }
+    }
+    return placements;
+  }, [showDecals, terrainDecalConfig, pathBorderTypeByObjectId, pathBorderSheets, placedObjects]);
+
+  const terrainBarSlots = useMemo(() => {
+    const slots: string[] = [];
+    const addSlot = (id?: string | null) => {
+      if (!id || slots.includes(id)) return;
+      slots.push(id);
+    };
+    addSlot(terrainDecalConfig?.grassId);
+    addSlot(terrainDecalConfig?.sandId);
+    addSlot(terrainDecalConfig?.waterId ?? null);
+    for (const opt of zigzagTerrainOptions) {
+      if (slots.length >= 3) break;
+      addSlot(opt.id);
+    }
+    return slots.slice(0, 3);
+  }, [terrainDecalConfig, zigzagTerrainOptions]);
+
+  const terrainBarSlotIds = useMemo(
+    () => Array.from({ length: QUICKBAR_SLOTS }, (_, index) => terrainBarSlots[index] ?? null),
+    [terrainBarSlots],
+  );
 
   const showObjectPanel = activeMode === 'objects' || activeTool === 'object' || objectCaptureMode;
   const showStampPanel = activeMode === 'prefabs' || activeTool === 'stamp' || stampCaptureMode;
@@ -1196,36 +2100,6 @@ const MapEditor = () => {
     }
     return `placed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   };
-
-  function getObjectAnchorOffset(object: ObjectDefinition) {
-    if (object.anchor === 'bottom-left') {
-      return { x: 0, y: object.tileHeight - 1 };
-    }
-    return { x: 0, y: 0 };
-  }
-
-  function getObjectTileBounds(object: ObjectDefinition, placement: { col: number; row: number }) {
-    const anchor = getObjectAnchorOffset(object);
-    const startCol = placement.col - anchor.x;
-    const startRow = placement.row - anchor.y;
-    return {
-      startCol,
-      startRow,
-      endCol: startCol + object.tileWidth - 1,
-      endRow: startRow + object.tileHeight - 1,
-    };
-  }
-
-  function getObjectPixelBounds(object: ObjectDefinition, placement: { col: number; row: number }) {
-    const bounds = getObjectTileBounds(object, placement);
-    return {
-      ...bounds,
-      left: bounds.startCol * tileSize,
-      top: bounds.startRow * tileSize,
-      width: object.tileWidth * tileSize,
-      height: object.tileHeight * tileSize,
-    };
-  }
 
   const saveStampFromSelection = () => {
     if (!selectionBounds) return;
@@ -1688,6 +2562,7 @@ const MapEditor = () => {
     if (col + stampSize.width > MAP_WIDTH || row + stampSize.height > MAP_HEIGHT) {
       return;
     }
+    markHistoryDirty();
     setBgLayers((prev) => {
       const next = prev.map((layer) => layer.map((column) => [...column]));
       const layerCount = Math.min(activeStamp.layers.length, next.length);
@@ -1712,9 +2587,9 @@ const MapEditor = () => {
     });
   };
 
-  const placeObjectAt = (row: number, col: number) => {
+  const placeObjectAt = (row: number, col: number, options?: { pixelOffsetX?: number; pixelOffsetY?: number }) => {
     if (!activeObject) return;
-    const bounds = getObjectTileBounds(activeObject, { col, row });
+    const bounds = getObjectTileBounds(activeObject, { col, row, rotation: activeObjectRotation });
     if (
       bounds.startCol < 0 ||
       bounds.startRow < 0 ||
@@ -1723,16 +2598,46 @@ const MapEditor = () => {
     ) {
       return;
     }
-    setPlacedObjects((prev) => [
-      ...prev,
-      {
-        id: createPlacedObjectId(),
-        objectId: activeObject.id,
-        col,
-        row,
-      },
-    ]);
-    pushRecentObject(activeObject.id);
+    const isGroundObject = isGroundCategory((activeObject as any).category);
+    const isStampObject = activeObject.category === 'stamp';
+    setPlacedObjects((prev) => {
+      if (isGroundObject) {
+        const allowOverlay = groundOverlayRef.current;
+        const hasSame = prev.some((placement) => placement.col === col && placement.row === row && placement.objectId === activeObject.id);
+        if (hasSame) return prev;
+        const filtered = allowOverlay
+          ? prev
+          : prev.filter((placement) => {
+              if (placement.col !== col || placement.row !== row) return true;
+              const objDef = objectsById.get(placement.objectId);
+              return !isGroundCategory(objDef?.category);
+            });
+        markHistoryDirty();
+        return [
+          ...filtered,
+          {
+            id: createPlacedObjectId(),
+            objectId: activeObject.id,
+            col,
+            row,
+            rotation: activeObjectRotation,
+          },
+        ];
+      }
+      markHistoryDirty();
+      return [
+        ...prev,
+        {
+          id: createPlacedObjectId(),
+          objectId: activeObject.id,
+          col,
+          row,
+          rotation: activeObjectRotation,
+          pixelOffsetX: isStampObject ? options?.pixelOffsetX : undefined,
+          pixelOffsetY: isStampObject ? options?.pixelOffsetY : undefined,
+        },
+      ];
+    });
   };
 
   const removeObjectAt = (row: number, col: number) => {
@@ -1742,8 +2647,9 @@ const MapEditor = () => {
         const placement = next[i];
         const objectDef = objectsById.get(placement.objectId);
         if (!objectDef) continue;
-        const bounds = getObjectTileBounds(objectDef, placement);
+        const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
         if (col >= bounds.startCol && col <= bounds.endCol && row >= bounds.startRow && row <= bounds.endRow) {
+          markHistoryDirty();
           next.splice(i, 1);
           break;
         }
@@ -1752,17 +2658,52 @@ const MapEditor = () => {
     });
   };
 
+  const findTopPlacedObjectAt = useCallback(
+    (row: number, col: number) => {
+      for (let i = placedObjects.length - 1; i >= 0; i -= 1) {
+        const placement = placedObjects[i];
+        const objectDef = objectsById.get(placement.objectId);
+        if (!objectDef) continue;
+        const bounds = getObjectTileBounds(objectDef, { ...placement, rotation: getPlacementRotation(placement) });
+        if (col >= bounds.startCol && col <= bounds.endCol && row >= bounds.startRow && row <= bounds.endRow) {
+          return placement;
+        }
+      }
+      return null;
+    },
+    [placedObjects, objectsById],
+  );
+
+  const applyCollisionAt = useCallback(
+    (row: number, col: number, mode: 'block' | 'clear' | 'auto') => {
+      if (col < 0 || row < 0 || col >= MAP_WIDTH || row >= MAP_HEIGHT) return;
+      const nextValue =
+        mode === 'block' ? COLLISION_BLOCKED : mode === 'clear' ? COLLISION_WALKABLE : -1;
+      setCollisionLayer((prev) => {
+        const column = prev[col];
+        if (!column) return prev;
+        if (column[row] === nextValue) return prev;
+        markHistoryDirty();
+        const next = prev.map((colValues) => [...colValues]);
+        next[col][row] = nextValue;
+        return next;
+      });
+    },
+    [markHistoryDirty],
+  );
+
   const applyToolAt = (
     row: number,
     col: number,
     tool: 'brush' | 'eraser' | 'eyedropper' | 'stamp' | 'object',
+    options?: { pixelOffsetX?: number; pixelOffsetY?: number },
   ) => {
     if (tool === 'stamp') {
       placeStampAt(row, col);
       return;
     }
     if (tool === 'object') {
-      placeObjectAt(row, col);
+      placeObjectAt(row, col, options);
       return;
     }
     if (tool === 'eyedropper') {
@@ -1776,6 +2717,7 @@ const MapEditor = () => {
       const targetLayer = prev[activeLayerIndex];
       if (!targetLayer?.[col]) return prev;
       if (targetLayer[col][row] === tileIdToPlace) return prev;
+      markHistoryDirty();
       const next = prev.map((layer, layerIndex) => {
         if (layerIndex !== activeLayerIndex) return layer;
         const nextLayer = layer.map((column) => [...column]);
@@ -1785,9 +2727,6 @@ const MapEditor = () => {
       });
       return next;
     });
-    if (tileIdToPlace >= 0) {
-      pushRecentTile(tileIdToPlace);
-    }
   };
 
   const handlePointerDown = (
@@ -1796,6 +2735,7 @@ const MapEditor = () => {
     col: number,
   ) => {
     event.preventDefault();
+    if (event.button !== 0) return;
     if (stampCaptureMode) {
       setStampSelection({ startRow: row, startCol: col, endRow: row, endCol: col });
       setIsStampSelecting(true);
@@ -1807,32 +2747,70 @@ const MapEditor = () => {
       col,
       tileId,
       tileLayerIndex: layerIndex,
-      collisionValue: collisionLayer[col]?.[row] ?? -1,
+      collisionValue: effectiveCollisionLayer[col]?.[row] ?? -1,
     });
-    if (activeTool === 'object' && event.button === 2) {
+
+    if (interactableEditMode) {
+      const placement = findTopPlacedObjectAt(row, col);
+      setSelectedInteractableId(placement?.id ?? null);
+      return;
+    }
+
+    const tool = activeTool;
+    const isStampObject = tool === 'object' && activeObject?.category === 'stamp';
+    const pixelOffset = isStampObject ? getPointerPixelOffset(event) : null;
+    if (pixelOffset) {
+      setHoverPixelOffset(pixelOffset);
+    }
+    if (tool !== 'eyedropper' || collisionEditMode) {
+      beginHistoryCapture();
+    }
+    if (collisionEditMode) {
+      collisionDragRef.current = true;
+      setIsPointerDown(true);
+      applyCollisionAt(row, col, collisionBrush);
+      return;
+    }
+    const isGroundObject =
+      tool === 'object' && activeObject && isGroundCategory((activeObject as any).category);
+    const isDeleteModifier = tool === 'object' && (event.ctrlKey || event.metaKey);
+    if (isDeleteModifier) {
+      deleteDragRef.current = true;
+      setIsPointerDown(true);
       removeObjectAt(row, col);
       return;
     }
-    const tool = event.button === 2 ? 'eraser' : activeTool;
+    groundOverlayRef.current = Boolean(isGroundObject && event.shiftKey);
     dragToolRef.current = tool;
     setIsPointerDown(true);
-    applyToolAt(row, col, tool);
-    if (tool === 'eyedropper' || tool === 'stamp' || tool === 'object') {
+    applyToolAt(row, col, tool, pixelOffset ? { pixelOffsetX: pixelOffset.x, pixelOffsetY: pixelOffset.y } : undefined);
+    if (tool === 'eyedropper' || tool === 'stamp' || (tool === 'object' && !isGroundObject)) {
       dragToolRef.current = null;
       setIsPointerDown(false);
     }
   };
 
-  const handlePointerEnter = (row: number, col: number) => {
+  const handlePointerEnter = (row: number, col: number, event?: ReactPointerEvent<HTMLDivElement>) => {
     if (stampCaptureMode && isStampSelecting) {
       setStampSelection((prev) =>
         prev ? { ...prev, endRow: row, endCol: col } : { startRow: row, startCol: col, endRow: row, endCol: col },
       );
       return;
     }
+    if (event && activeTool === 'object' && activeObject?.category === 'stamp') {
+      setHoverPixelOffset(getPointerPixelOffset(event));
+    }
     const { tileId, layerIndex } = getTopTileAt(row, col);
-    const collisionValue = collisionLayer[col]?.[row] ?? -1;
+    const collisionValue = effectiveCollisionLayer[col]?.[row] ?? -1;
     setHoverInfo({ row, col, tileId, tileLayerIndex: layerIndex, collisionValue });
+    if (collisionEditMode && isPointerDown && collisionDragRef.current) {
+      applyCollisionAt(row, col, collisionBrush);
+      return;
+    }
+    if (isPointerDown && deleteDragRef.current) {
+      removeObjectAt(row, col);
+      return;
+    }
     if (isPointerDown && dragToolRef.current) {
       applyToolAt(row, col, dragToolRef.current);
     }
@@ -1862,18 +2840,198 @@ const MapEditor = () => {
   };
 
   useEffect(() => {
+    const handleModifierKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        setDeleteModifierActive(true);
+      }
+    };
+    const handleModifierKeyUp = (event: KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) {
+        setDeleteModifierActive(false);
+      }
+      if (event.key === 'Control' || event.key === 'Meta') {
+        setDeleteModifierActive(false);
+      }
+    };
+    const handleBlur = () => {
+      setDeleteModifierActive(false);
+    };
+    window.addEventListener('keydown', handleModifierKeyDown);
+    window.addEventListener('keyup', handleModifierKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleModifierKeyDown);
+      window.removeEventListener('keyup', handleModifierKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
     const handlePointerUp = () => {
       setIsPointerDown(false);
       dragToolRef.current = null;
+      groundOverlayRef.current = false;
+      deleteDragRef.current = false;
+      collisionDragRef.current = false;
       setIsStampSelecting(false);
       setIsPaletteSelecting(false);
       setIsObjectPaletteSelecting(false);
+      commitHistoryCapture();
     };
     window.addEventListener('pointerup', handlePointerUp);
     return () => {
       window.removeEventListener('pointerup', handlePointerUp);
     };
+  }, [commitHistoryCapture]);
+
+  const buildSavePayload = useCallback(
+    (): SavedMapPayload => ({
+      version: MAP_SAVE_VERSION,
+      mapWidth: MAP_WIDTH,
+      mapHeight: MAP_HEIGHT,
+      tileset,
+      bgLayers: cloneLayers(bgLayers),
+      collisionLayer: cloneLayer(collisionLayer),
+      autoCollisionEnabled,
+      placedObjects: clonePlacedObjects(placedObjects),
+      interactables: cloneInteractables(interactables),
+      animatedSprites: [...animatedSprites],
+      terrainDecals: terrainDecalConfig ?? null,
+    }),
+    [
+      animatedSprites,
+      bgLayers,
+      collisionLayer,
+      interactables,
+      placedObjects,
+      tileset,
+      terrainDecalConfig,
+      autoCollisionEnabled,
+    ],
+  );
+
+  const applySavedPayload = useCallback((payload: SavedMapPayload) => {
+    if (!payload) return;
+    if (payload.mapWidth !== MAP_WIDTH || payload.mapHeight !== MAP_HEIGHT) {
+      alert(
+        `Saved map size ${payload.mapWidth}×${payload.mapHeight} does not match current ${MAP_WIDTH}×${MAP_HEIGHT}.`,
+      );
+      return;
+    }
+    setTileset(payload.tileset ?? DEFAULT_TILESET);
+    setBgLayers(payload.bgLayers ?? createBlankLayers(DEFAULT_LAYER_COUNT, MAP_WIDTH, MAP_HEIGHT));
+    setCollisionLayer(payload.collisionLayer ?? createBlankLayer(MAP_WIDTH, MAP_HEIGHT));
+    setAutoCollisionEnabled(payload.autoCollisionEnabled ?? true);
+    setPlacedObjects(normalizePlacedObjects(payload.placedObjects ?? []));
+    setInteractables(payload.interactables ?? []);
+    setAnimatedSprites(payload.animatedSprites ?? []);
+    if (payload.terrainDecals?.grassId && payload.terrainDecals?.sandId) {
+      setDecalGrassId(normalizeLegacyId(payload.terrainDecals.grassId));
+      setDecalSandId(normalizeLegacyId(payload.terrainDecals.sandId));
+      setDecalWaterId(payload.terrainDecals.waterId ? normalizeLegacyId(payload.terrainDecals.waterId) : null);
+    }
+    setHistory({ past: [], future: [] });
+    pendingHistoryRef.current = null;
+    historyDirtyRef.current = false;
+    setActiveObjectRotation(0);
+    setSelectedInteractableId(null);
+    setInteractableEditMode(false);
   }, []);
+
+  useEffect(() => {
+    const normalized = normalizePlacedObjects(placedObjects);
+    if (normalized !== placedObjects) {
+      setPlacedObjects(normalized);
+    }
+  }, [placedObjects]);
+
+  useEffect(() => {
+    const placedIds = new Set(placedObjects.map((placement) => placement.id));
+    setInteractables((prev) => {
+      const next = prev.filter((interactable) => {
+        const refId = interactable.placedObjectId ?? interactable.objectInstanceId;
+        return placedIds.has(refId);
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [placedObjects]);
+
+  const saveMapToLocal = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const payload = buildSavePayload();
+      window.localStorage.setItem(MAP_SAVE_STORAGE_KEY, JSON.stringify(payload));
+      alert('Map saved locally.');
+    } catch (error) {
+      console.error('Failed to save map:', error);
+      alert('Failed to save map.');
+    }
+  }, [buildSavePayload]);
+
+  const loadMapFromLocal = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(MAP_SAVE_STORAGE_KEY);
+    if (!raw) {
+      alert('No saved map found.');
+      return;
+    }
+    const shouldLoad = window.confirm('Load saved map? Unsaved changes will be lost.');
+    if (!shouldLoad) return;
+    try {
+      const parsed = JSON.parse(raw) as SavedMapPayload;
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid save data');
+      }
+      applySavedPayload(parsed);
+      alert('Map loaded.');
+    } catch (error) {
+      console.error('Failed to load map:', error);
+      alert('Failed to load map.');
+    }
+  }, [applySavedPayload]);
+
+  const upsertSelectedInteractable = useCallback(() => {
+    if (!selectedInteractablePlacement || !selectedInteractableBounds) {
+      alert('Select an object first.');
+      return;
+    }
+    const objectInstanceId = selectedInteractablePlacement.id;
+    const hitbox = {
+      kind: 'tileRect' as const,
+      x: selectedInteractableBounds.startCol,
+      y: selectedInteractableBounds.startRow,
+      w: selectedInteractableBounds.endCol - selectedInteractableBounds.startCol + 1,
+      h: selectedInteractableBounds.endRow - selectedInteractableBounds.startRow + 1,
+    };
+    setInteractables((prev) => {
+      const next = prev.filter((item) => item.objectInstanceId !== objectInstanceId);
+      next.push({
+        objectInstanceId,
+        placedObjectId: objectInstanceId,
+        objectType: interactableTypeDraft,
+        hitbox,
+        interactionRadius: interactableRadiusDraft || undefined,
+        displayName: interactableNameDraft.trim() || undefined,
+      });
+      return next;
+    });
+    markHistoryDirty();
+    alert('Interactable saved.');
+  }, [
+    interactableNameDraft,
+    interactableRadiusDraft,
+    interactableTypeDraft,
+    markHistoryDirty,
+    selectedInteractableBounds,
+    selectedInteractablePlacement,
+  ]);
+
+  const removeSelectedInteractable = useCallback(() => {
+    if (!selectedInteractableId) return;
+    setInteractables((prev) => prev.filter((item) => item.objectInstanceId !== selectedInteractableId));
+    markHistoryDirty();
+    alert('Interactable removed.');
+  }, [markHistoryDirty, selectedInteractableId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1882,30 +3040,34 @@ const MapEditor = () => {
       const tag = target?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
       const key = event.key.toLowerCase();
-      if (key === 'b') activateTileTool('brush');
-      if (key === 'e') activateTileTool('eraser');
-      if (key === 'i') activateTileTool('eyedropper');
-      if (key === 's') applyMode('prefabs');
-      if (key === 'o') applyMode('objects');
+      const isMeta = event.metaKey || event.ctrlKey;
+      if (isMeta && key === 'z' && !event.shiftKey) {
+        if (!canUndo) return;
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (isMeta && (key === 'y' || (key === 'z' && event.shiftKey))) {
+        if (!canRedo) return;
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (key === 'r' && activeMode === 'objects' && activeObject) {
+        const isGround = isGroundCategory(activeObject.category);
+        if (isGround) return;
+        event.preventDefault();
+        setActiveObjectRotation((prev) => normalizeRotation(prev + (event.shiftKey ? -90 : 90)));
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [activeMode, activeObject, canRedo, canUndo, redo, undo]);
 
   // Export map data
   const exportMap = () => {
-    // Generate object map from placements
-    const objectMapLayer = createBlankLayer(MAP_WIDTH, MAP_HEIGHT);
-    // This is a simplified reconstruction; ideally we'd track the full object layer state
-    // But since placedObjects tracks explicit objects, we might want to rely on that.
-    // However, the engine expects `objmap` to be a dense int array for collision/rendering if used that way.
-    // In gentle.js, `objmap` is [ [row...] ].
-    // Let's assume we just want to export the collision layer as the object map for now,
-    // or if we have distinct object layers, export those.
-    // The current state has `collisionLayer`.
-    
     // Construct valid JS content matching data/gentle.js format
     const jsContent = `
 export const tilesetpath = "${tilesetUrl}";
@@ -1917,9 +3079,15 @@ export const tilesetpxh = ${tileset.pixelHeight};
 
 export const bgtiles = ${JSON.stringify(bgLayers)};
 
-export const objmap = ${JSON.stringify([collisionLayer])};
+export const objmap = ${JSON.stringify([effectiveCollisionLayer])};
+
+export const placedobjects = ${JSON.stringify(placedObjects)};
+
+export const interactables = ${JSON.stringify(interactables)};
 
 export const animatedsprites = ${JSON.stringify(animatedSprites)};
+
+export const terraindecals = ${terrainDecalConfig ? JSON.stringify(terrainDecalConfig) : 'null'};
 
 export const mapwidth = ${MAP_WIDTH};
 export const mapheight = ${MAP_HEIGHT};
@@ -1938,44 +3106,58 @@ export const mapheight = ${MAP_HEIGHT};
     alert("Map exported! Replace 'data/gentle.js' with this file.");
   };
 
+
+
+  const filteredObjects = useMemo(() => {
+    if (activeMode !== 'objects') return [];
+    
+    // If we are in "Buildings" sub-cat, only show buildings
+    if (activeSubCategory === 'buildings') {
+       return tilesetObjectsForSet.filter(obj => obj.category === 'buildings');
+    }
+
+    // Otherwise show other props based on activeSubCategory
+    return tilesetObjectsForSet.filter(obj => 
+        // If category matches activeSubCategory
+        (obj.category === activeSubCategory) ||
+        // Fallback: if object has no category, maybe show it in 'nature' or 'props'?
+        (!obj.category && activeSubCategory === 'nature') 
+    );
+  }, [tilesetObjectsForSet, activeMode, activeSubCategory]);
+
+  const isPropsSubCategory = PROP_SUBCATEGORIES.includes(activeSubCategory as (typeof PROP_SUBCATEGORIES)[number]);
+  const isPathsSubCategory = PATH_SUBCATEGORIES.some((cat) => cat.id === activeSubCategory);
+  const isStampSubCategory = activeSubCategory === 'stamp';
+  const propSubTabCategories = Array.from(PROP_SUBCATEGORIES);
+  const pathSubTabCategories = PATH_SUBCATEGORIES.map((cat) => cat.id);
+  const showObjectSubTabs = (isPropsSubCategory || isPathsSubCategory) && !isStampSubCategory;
+  const objectSubTabCategories = isPathsSubCategory ? pathSubTabCategories : propSubTabCategories;
+
   const renderSidebar = () => {
     return (
        <div className="flex-1 min-h-0 relative z-10 w-full h-full pt-6">
          <StardewFrame className="w-full h-full bg-[#8b6b4a] flex flex-col pt-8 pb-4 px-3" style={{ padding: '32px 12px 16px' }}>
            <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar space-y-3">
             
-            {/* Tileset Selector - Minimalist */}
-            <div className="mb-2">
-              <select
-                value={tileset.id}
-                onChange={(event) => handleTilesetChange(event.target.value)}
-                className="w-full bg-[#5a4030] border-2 border-[#6d4c30] text-[10px] px-2 py-1 rounded text-[#f3e2b5] font-display uppercase tracking-wide opacity-80 hover:opacity-100 transition-opacity"
-              >
-                {tilesetOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Tileset Selector Removed */}
 
             {/* Mode-Specific Content */}
             {activeMode === 'prefabs' ? (
               /* Stamp/Prop Panel */
               <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                     <button onClick={() => setStampCaptureMode(p => !p)} className={`text-[10px] px-2 py-1 border-2 text-[#f3e2b5] rounded uppercase ${stampCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
+                     <button onClick={() => setStampCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${stampCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
                        {stampCaptureMode ? 'Creating...' : 'New Stamp'}
                      </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-3 gap-1">
                    {tilesetStampsForSet.map(stamp => (
                       <button 
                         key={stamp.id} 
                         onClick={() => { setActiveStampId(stamp.id); applyMode('prefabs'); }}
-                        className={`p-2 bg-[#3b2a21] rounded border-2 text-center group relative ${activeStampId === stamp.id ? 'border-[#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
+                        className={`p-1 bg-[#3b2a21] rounded border-2 text-center group relative ${activeStampId === stamp.id ? 'border-[#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
                       >
-                         <span className="text-[9px] text-[#f3e2b5] block truncate">{stamp.name}</span>
+                         <span className="text-[8px] text-[#f3e2b5] block truncate">{stamp.name}</span>
                          <div className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-[8px] text-red-300 cursor-pointer" onClick={(e) => { e.stopPropagation(); removeStamp(stamp.id); }}>x</span>
                          </div>
@@ -1984,31 +3166,70 @@ export const mapheight = ${MAP_HEIGHT};
                   </div>
               </div>
             ) : activeMode === 'objects' ? (
-              /* Object Panel */
+              /* Object Panel with Sub-Category Tabs */
               <div className="flex flex-col gap-2">
+                   {/* Sub-Category Tabs */}
+                   {activeSubCategory !== 'buildings' && (isPropsSubCategory || isPathsSubCategory) && (
+                       <div className="flex flex-wrap gap-1 mb-2 px-1">
+                          {(isPathsSubCategory ? PATH_SUBCATEGORIES : PROP_SUBCATEGORIES).map(cat => (
+                             <button
+                                key={typeof cat === 'string' ? cat : cat.id}
+                                onClick={() => setActiveSubCategory(typeof cat === 'string' ? cat : cat.id)}
+                                className={`flex-1 text-[8px] py-1 border-b-2 uppercase tracking-tight transition-colors ${
+                                    activeSubCategory === (typeof cat === 'string' ? cat : cat.id) 
+                                    ? 'text-[#f3e2b5] border-[#ffd93d] font-bold' 
+                                    : 'text-[#a88b6a] border-transparent hover:text-[#d4b078]'
+                                }`}
+                             >
+                                {typeof cat === 'string' ? cat : cat.label}
+                             </button>
+                          ))}
+                       </div>
+                   )}
+
                    <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                     <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[10px] px-2 py-1 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
-                       {objectCaptureMode ? 'Creating...' : 'New Object'}
-                     </button>
+                     {activeSubCategory !== 'buildings' && (
+                        <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
+                            {objectCaptureMode ? 'Creating...' : 'New Object'}
+                        </button>
+                     )}
                   </div>
-                   <div className="grid grid-cols-2 gap-1">
-                      {tilesetObjectsForSet.map(obj => {
+
+                   <div className="grid grid-cols-3 gap-2">
+                      {filteredObjects.length === 0 && (
+                          <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic">
+                              No {activeSubCategory} found.
+                          </div>
+                      )}
+                      
+                      {filteredObjects.map(obj => {
                          const preview = getObjectPreviewData(obj);
                          return (
                            <div key={obj.id} 
                                 onClick={() => selectObjectId(obj.id)}
-                                className={`aspect-square bg-[#3b2a21] rounded border-2 relative cursor-pointer group ${activeObjectId === obj.id ? 'border-[#ffd93d] shadow-[0_0_8px_#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
+                                className={`aspect-square bg-[#3b2a21] rounded border-2 relative cursor-pointer group flex items-center justify-center overflow-hidden ${activeObjectId === obj.id ? 'border-[#ffd93d] shadow-[0_0_8px_#ffd93d]' : 'border-[#5a4030] hover:border-[#8b6b4a]'}`}
                            >
                                <div 
-                                  className="absolute inset-2 bg-no-repeat bg-center"
+                                  className="bg-no-repeat shrink-0"
                                   style={{
+                                      width: preview.width,
+                                      height: preview.height,
                                       backgroundImage: `url(${preview.imageUrl})`,
                                       backgroundPosition: preview.backgroundPosition,
                                       backgroundSize: preview.backgroundSize,
-                                      transform: 'scale(0.8)'
+                                      imageRendering: 'pixelated'
                                   }}
                                />
-                               <span className="absolute bottom-0 w-full text-center text-[8px] bg-black/50 text-white truncate px-0.5">{obj.name}</span>
+                               <span
+                                       className="absolute bottom-0 w-full text-center text-[7px] font-bold uppercase tracking-tight py-0.5 truncate px-1"
+                                       style={{
+                                         background: 'linear-gradient(180deg, rgba(139,90,43,0.85) 0%, rgba(90,56,37,0.95) 100%)',
+                                         color: '#f4e0c0',
+                                         textShadow: '0 1px 1px rgba(0,0,0,0.5)',
+                                         borderTop: '1px solid rgba(244,224,192,0.3)'
+                                       }}
+                                       title={obj.name}
+                                     >{obj.name}</span>
                            </div>
                          );
                       })}
@@ -2017,8 +3238,7 @@ export const mapheight = ${MAP_HEIGHT};
             ) : (
               /* Terrain / Path Panel (Tile Grid) */
               <div className="flex flex-col gap-2">
-                 {/* Filter Tabs if needed, or just show all */}
-                 <div className="grid gap-[1px]" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${tileSize}px, 1fr))` }}>
+                 <div className="grid gap-[3px] auto-rows-auto" style={{ gridTemplateColumns: `repeat(3, 1fr)` }}>
                     {paletteTileIds.map(tileId => {
                        const { sx, sy } = getTilePos(tileId);
                        const isSelected = selectedTileId === tileId;
@@ -2050,68 +3270,6 @@ export const mapheight = ${MAP_HEIGHT};
     );
   };
 
-    /* -------------------------------------------------------------------------
-   * RENDER: Top Toolbar
-   * ----------------------------------------------------------------------- */
-  const renderToolbar = () => {
-    return (
-      <div className="col-start-2 row-start-1 h-[72px] flex items-center relative z-20">
-       <StardewFrame className="w-full h-full flex items-center justify-between px-4 py-2 gap-4">
-           {/* Wooden Tabs Section */}
-           <div className="flex items-center gap-1">
-               {[
-                 { label: 'TERRAIN', mode: 'terrain' as EditorMode, category: 'all' as TileCategoryFilter },
-                 { label: 'PATHS', mode: 'paths' as EditorMode, category: 'paths' as TileCategoryFilter },
-                 { label: 'PROPS', mode: 'prefabs' as EditorMode, category: null },
-                 { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null }
-               ].map((tab) => (
-                  <StardewTab
-                    key={tab.label}
-                    label={tab.label}
-                    isActive={activeMode === tab.mode}
-                    onClick={() => {
-                       applyMode(tab.mode);
-                       if (tab.category) setActiveCategory(tab.category);
-                    }}
-                    className="flex-shrink-0"
-                  />
-               ))}
-           </div>
-
-           {/* Tool Icons Section */}
-           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#4a3022] rounded-lg border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
-               {[
-                { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png' },
-                { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png' },
-                { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png' },
-              ].map((tool) => (
-                <button
-                  key={tool.id}
-                  onClick={() => {
-                    if (tool.id === 'stamp') applyMode('prefabs');
-                    else activateTileTool(tool.id as any);
-                  }}
-                  className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm ${
-                    (tool.id === 'stamp' && activeMode === 'prefabs') ||
-                    activeTool === tool.id
-                      ? 'bg-[#e8d4b0] border-2 border-[#ffd93d] shadow-[0_0_8px_rgba(255,217,61,0.5)] scale-110 z-10'
-                      : 'bg-[#8b6b4a] border-2 border-[#5a3a2a] hover:bg-[#d4b078] hover:-translate-y-0.5'
-                  }`}
-                  title={tool.id.toUpperCase()}
-                >
-                  <img
-                    src={tool.icon}
-                    alt={tool.id}
-                    className="w-7 h-7 rendering-pixelated drop-shadow-sm"
-                  />
-                </button>
-              ))}
-           </div>
-       </StardewFrame>
-      </div>
-    );
-  };
-
   /* -------------------------------------------------------------------------
    * RENDER: Right Panel (Options)
    * ----------------------------------------------------------------------- */
@@ -2127,11 +3285,63 @@ export const mapheight = ${MAP_HEIGHT};
                  
                  <label className="flex items-center gap-3 cursor-pointer group hover:brightness-110 transition-all">
                     <StardewCheckbox 
-                      label="GRID" 
+                      label="COLLISION" 
                       checked={showCollision} 
                       onChange={setShowCollision}
                     />
                  </label>
+
+                 <label className="flex items-center gap-3 cursor-pointer group hover:brightness-110 transition-all">
+                    <StardewCheckbox 
+                      label="AUTO COLLISION" 
+                      checked={autoCollisionEnabled} 
+                      onChange={setAutoCollisionEnabled}
+                    />
+                 </label>
+
+                 <label className="flex items-center gap-3 cursor-pointer group hover:brightness-110 transition-all">
+                    <StardewCheckbox 
+                      label="EDIT COLLISION" 
+                      checked={collisionEditMode} 
+                      onChange={(checked) => setCollisionEditMode(checked)}
+                    />
+                 </label>
+
+                 {collisionEditMode && (
+                   <div className="flex items-center gap-2">
+                     <button
+                       onClick={() => setCollisionBrush('block')}
+                       className={`text-[9px] px-2 py-1 rounded border ${
+                         collisionBrush === 'block'
+                           ? 'bg-red-600 text-white border-red-800'
+                           : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                       }`}
+                     >
+                       BLOCK
+                     </button>
+                     <button
+                       onClick={() => setCollisionBrush('clear')}
+                       className={`text-[9px] px-2 py-1 rounded border ${
+                         collisionBrush === 'clear'
+                           ? 'bg-green-600 text-white border-green-800'
+                           : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                       }`}
+                     >
+                       CLEAR
+                     </button>
+                     <button
+                       onClick={() => setCollisionBrush('auto')}
+                       className={`text-[9px] px-2 py-1 rounded border ${
+                         collisionBrush === 'auto'
+                           ? 'bg-[#8b6b4a] text-white border-[#5a4030]'
+                           : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                       }`}
+                       title="Reset to auto-collision"
+                     >
+                       AUTO
+                     </button>
+                   </div>
+                 )}
 
                  <label className="flex items-center gap-3 cursor-pointer group hover:brightness-110 transition-all">
                     <StardewCheckbox 
@@ -2171,138 +3381,176 @@ export const mapheight = ${MAP_HEIGHT};
         <div className="col-start-2 row-start-3 flex gap-4 h-[84px] p-2">
              <StardewFrame className="flex-1 flex items-center justify-center px-4">
                 <div className="flex gap-2 p-3 bg-[#e8d4b0] rounded-lg border-2 border-[#d4b078] shadow-[inset_0_2px_6px_rgba(0,0,0,0.3)]">
-                   {activeMode === 'objects' ? (
-                      quickbarObjectSlots.map((objectId, index) => {
-                         if (!objectId) {
-                            return (
-                                <div key={`qb-obj-empty-${index}`} className="relative w-12 h-12 border-2 border-[#c2a075] bg-[#d9bd92] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] rounded-sm flex items-center justify-center">
-                                  <span className="text-[#a88b6a]/50 text-xl">+</span>
-                                  <span className="absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center bg-[#8b6b4a] text-[#f6e2b0] text-[10px] font-bold border border-[#5a4030] rounded-full z-10">{index + 1}</span>
-                                </div>
-                            );
-                         }
-                         const objDef = objectsById.get(objectId);
-                         if (!objDef) return null;
-                         const preview = getObjectPreviewData(objDef);
-                         return (
-                            <button
-                                key={`qb-obj-${index}`}
-                                onClick={() => selectObjectId(objectId)}
-                                className={`relative w-12 h-12 border-2 rounded-sm active:scale-95 transition-all group ${
-                                    activeObjectId === objectId
-                                    ? 'border-[#ffd93d] bg-[#fdf6d8] shadow-[0_0_8px_#ffd93d] z-10'
-                                    : 'border-[#8b6b4a] bg-[#f9eaca] hover:border-[#a88b6a]'
-                                }`}
-                            >
-                                <span className={`absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center text-[10px] font-bold border rounded-full z-20 ${
-                                  activeObjectId === objectId ? 'bg-[#ffd93d] text-[#5a4030] border-[#e8b030]' : 'bg-[#8b6b4a] text-[#f6e2b0] border-[#5a4030]' 
-                                }`}>{index + 1}</span>
-                                <div 
-                                    className="w-full h-full bg-no-repeat bg-center"
-                                    style={{
-                                        backgroundImage: `url(${preview.imageUrl})`,
-                                        backgroundPosition: preview.backgroundPosition,
-                                        backgroundSize: preview.backgroundSize,
-                                        transform: 'scale(0.8)'
-                                    }}
-                                />
-                            </button>
-                         );
-                      })
-                   ) : (
-                      quickbarTileSlots.map((tileId, index) => {
-                        if (tileId === null || tileId === undefined) {
-                            return (
-                                <div key={`qb-tile-empty-${index}`} className="relative w-12 h-12 border-2 border-[#c2a075] bg-[#d9bd92] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] rounded-sm flex items-center justify-center">
-                                  <span className="absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center bg-[#8b6b4a] text-[#f6e2b0] text-[10px] font-bold border border-[#5a4030] rounded-full z-10">{index + 1}</span>
-                                </div>
-                            );
-                        }
-                        const pos = getTilePos(tileId);
-                        return (
-                            <button
-                                key={`qb-tile-${index}`}
-                                onClick={() => selectTileId(tileId)}
-                                className={`relative w-12 h-12 border-2 rounded-sm active:scale-95 transition-all group ${
-                                    selectedTileId === tileId
-                                    ? 'border-[#ffd93d] bg-[#fdf6d8] shadow-[0_0_8px_#ffd93d] z-10'
-                                    : 'border-[#8b6b4a] bg-[#f9eaca] hover:border-[#a88b6a]'
-                                }`}
-                            >
-                                <span className={`absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center text-[10px] font-bold border rounded-full z-20 ${
-                                  selectedTileId === tileId ? 'bg-[#ffd93d] text-[#5a4030] border-[#e8b030]' : 'bg-[#8b6b4a] text-[#f6e2b0] border-[#5a4030]' 
-                                }`}>{index + 1}</span>
-                                <div
-                                    className="w-full h-full rendering-pixelated"
-                                    style={{
-                                        backgroundImage: `url(${tilesetUrl})`,
-                                        backgroundPosition: `-${pos.sx}px -${pos.sy}px`,
-                                        backgroundSize: `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                                    }}
-                                />
-                            </button>
-                        );
-                      })
-                   )}
+                  {terrainBarSlotIds.map((objectId, index) => {
+                    if (!objectId) {
+                      return (
+                        <div
+                          key={`terrain-slot-empty-${index}`}
+                          className="relative w-12 h-12 border-2 border-[#c2a075] bg-[#d9bd92] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] rounded-sm flex items-center justify-center"
+                        >
+                          <span className="text-[#a88b6a]/50 text-xl">+</span>
+                          <span className="absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center bg-[#8b6b4a] text-[#f6e2b0] text-[10px] font-bold border border-[#5a4030] rounded-full z-10">{index + 1}</span>
+                        </div>
+                      );
+                    }
+                    const objDef = objectsById.get(objectId);
+                    if (!objDef) {
+                      return (
+                        <div
+                          key={`terrain-slot-missing-${index}`}
+                          className="relative w-12 h-12 border-2 border-[#c2a075] bg-[#d9bd92] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] rounded-sm flex items-center justify-center"
+                        >
+                          <span className="absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center bg-[#8b6b4a] text-[#f6e2b0] text-[10px] font-bold border border-[#5a4030] rounded-full z-10">{index + 1}</span>
+                        </div>
+                      );
+                    }
+                    const preview = getObjectPreviewData(objDef);
+                    const isActive = activeObjectId === objectId;
+                    return (
+                      <button
+                        key={`terrain-slot-${index}`}
+                        onClick={() => selectObjectId(objectId)}
+                        className={`relative w-12 h-12 border-2 rounded-sm active:scale-95 transition-all group ${
+                          isActive
+                            ? 'border-[#ffd93d] bg-[#fdf6d8] shadow-[0_0_8px_#ffd93d] z-10'
+                            : 'border-[#8b6b4a] bg-[#f9eaca] hover:border-[#a88b6a]'
+                        }`}
+                      >
+                        <span
+                          className={`absolute -top-2 -left-2 w-5 h-5 flex items-center justify-center text-[10px] font-bold border rounded-full z-20 ${
+                            isActive ? 'bg-[#ffd93d] text-[#5a4030] border-[#e8b030]' : 'bg-[#8b6b4a] text-[#f6e2b0] border-[#5a4030]'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <div
+                          className="w-full h-full bg-no-repeat bg-center"
+                          style={{
+                            backgroundImage: `url(${preview.imageUrl})`,
+                            backgroundPosition: preview.backgroundPosition,
+                            backgroundSize: preview.backgroundSize,
+                            transform: 'scale(0.8)',
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
-             </StardewFrame>
-             <StardewFrame className="w-auto flex items-center px-6 gap-4">
-                 <div className="flex items-center gap-1 ml-2 bg-[#3b2a21] p-1 rounded border border-[#5a4030]">
-                    <span className="text-[#f6e2b0] text-[10px] uppercase font-bold px-1 font-display">Layer</span>
-                    <button onClick={() => setActiveLayerIndex(0)} className={`px-2 py-0.5 text-[10px] border-2 rounded font-display transition-colors ${activeLayerIndex === 0 ? 'bg-[#8b6b4a] border-[#ffd93d] text-[#fff2c4]' : 'bg-[#5a4030] border-[#6d4c30] text-[#a88b6a] hover:bg-[#6d4c30]'}`}>Base</button>
-                    <button onClick={() => setActiveLayerIndex(1)} className={`px-2 py-0.5 text-[10px] border-2 rounded font-display transition-colors ${activeLayerIndex === 1 ? 'bg-[#8b6b4a] border-[#ffd93d] text-[#fff2c4]' : 'bg-[#5a4030] border-[#6d4c30] text-[#a88b6a] hover:bg-[#6d4c30]'}`}>Overlay</button>
-                 </div>
-                 <div className="text-[#f6e2b0]/60 text-[10px] font-display">
-                    Map: {MAP_WIDTH}x{MAP_HEIGHT}
-                 </div>
              </StardewFrame>
         </div>
     );
   };
 
+  const renderPlacedObject = (placement: PlacedObject) => {
+    const objectDef = objectsById.get(placement.objectId);
+    if (!objectDef) return null;
+    const placementRotation = getPlacementRotation(placement);
+    const bounds = getObjectPixelBounds(objectDef, { ...placement, rotation: placementRotation });
+    const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
+
+    const isGroundTile = isGroundCategory((objectDef as any).category);
+    const baseWidth = isGroundTile
+      ? tileSize
+      : (objectDef.pixelWidth ?? objectDef.tileWidth * tileSize) * ((objectDef as any).scale ?? 1.0);
+    const baseHeight = isGroundTile
+      ? tileSize
+      : (objectDef.pixelHeight ?? objectDef.tileHeight * tileSize) * ((objectDef as any).scale ?? 1.0);
+    const rotatedSize = getRotatedSize(baseWidth, baseHeight, placementRotation);
+
+    let objectOffsetX = 0;
+    let objectOffsetY = 0;
+    if (!isGroundTile && objectDef.imagePath) {
+      if (objectDef.anchor === 'bottom-left') {
+        objectOffsetY = Math.max(0, bounds.height - rotatedSize.height);
+      } else if (objectDef.anchor === 'center') {
+        objectOffsetX = Math.max(0, Math.round((bounds.width - rotatedSize.width) / 2));
+        objectOffsetY = Math.max(0, Math.round((bounds.height - rotatedSize.height) / 2));
+      }
+    }
+    return (
+      <div
+        key={placement.id}
+        className="absolute"
+        style={{
+          left: bounds.left + objectOffsetX,
+          top: bounds.top + objectOffsetY,
+          width: rotatedSize.width,
+          height: rotatedSize.height,
+        }}
+      >
+        <div
+          className="absolute"
+          style={{
+            width: baseWidth,
+            height: baseHeight,
+            backgroundImage: `url(${objectImageUrl})`,
+            backgroundPosition: objectDef.imagePath
+              ? '0px 0px'
+              : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
+            backgroundSize: objectDef.imagePath
+              ? `${baseWidth}px ${baseHeight}px`
+              : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+            backgroundRepeat: 'no-repeat',
+            imageRendering: 'pixelated',
+            transformOrigin: 'top left',
+            transform: getRotationTransform(baseWidth, baseHeight, placementRotation),
+          }}
+        />
+      </div>
+    );
+  };
+
   const renderCanvas = () => {
       // Dimensions of the scaled content
-      const contentWidth = mapPixelWidth * 0.7;
-      const contentHeight = mapPixelHeight * 0.7;
+      const contentWidth = mapPixelWidth * canvasScale;
+      const contentHeight = mapPixelHeight * canvasScale;
 
       return (
-        <div 
-          ref={canvasContainerRef}
-          className="w-full h-full overflow-auto custom-scrollbar bg-[#a89070] relative"
-        >
-          {/* Main Map Content - Wrapped to fix scroll bounds for scaled content */}
-          <div style={{ width: contentWidth, height: contentHeight, position: 'relative', margin: 'auto' }}>
-            <div
-                className="relative origin-top-left"
-                style={{ 
-                    width: mapPixelWidth, 
-                    height: mapPixelHeight,
-                    transform: 'scale(0.7)',
-                    transformOrigin: 'top left',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                }}
-            >
-             {/* Base Layers */}         <div
-               className="absolute inset-0 bg-[#d4c4a0] border-2 border-[#8b6b4a] shadow-xl rounded"
-               style={{
-                 display: 'grid',
-                 gridTemplateColumns: `repeat(${MAP_WIDTH}, ${tileSize}px)`,
-               }}
-             >
-                {/* BG Layers */}
-                {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
-                  Array.from({ length: MAP_WIDTH }).map((_, cIndex) => {
-                    const hasTile = bgLayers.some((layer) => (layer[cIndex]?.[rIndex] ?? -1) >= 0);
-                    return (
+        <div className="w-full h-full relative bg-[#a89070]">
+          <div
+            ref={canvasContainerRef}
+            className="absolute inset-0 overflow-auto custom-scrollbar"
+          >
+            {/* Main Map Content - Wrapped to fix scroll bounds for scaled content */}
+            <div style={{ width: contentWidth, height: contentHeight, position: 'relative', margin: 'auto' }}>
+              <div
+                  className="relative origin-top-left"
+                  style={{ 
+                      width: mapPixelWidth, 
+                      height: mapPixelHeight,
+                      transform: `scale(${canvasScale})`,
+                      transformOrigin: 'top left',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                  }}
+              >
+             {/* Base Layers */}
+             <div className="absolute inset-0">
+               <div className="absolute inset-0 bg-[#d4c4a0] shadow-xl rounded" />
+               <div
+                 className="absolute inset-0"
+                 onContextMenu={(event) => event.preventDefault()}
+                 style={{
+                   display: 'grid',
+                   gridTemplateColumns: `repeat(${MAP_WIDTH}, ${tileSize}px)`,
+                   touchAction: 'none',
+                 }}
+               >
+                  {/* BG Layers */}
+                   {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
+                    Array.from({ length: MAP_WIDTH }).map((_, cIndex) => (
                       <div
                         key={`${rIndex}-${cIndex}`}
                         onPointerDown={(event) => handlePointerDown(event, rIndex, cIndex)}
-                        onPointerEnter={() => handlePointerEnter(rIndex, cIndex)}
-                        className={`border hover:border-[#ffd93d] hover:shadow-[0_0_8px_rgba(255,217,61,0.5)] cursor-crosshair relative transition-all duration-75 ${
-                          hasTile ? 'border-[#8b6b4a]/20' : 'border-[#8b6b4a]/40'
-                        }`}
+                        onPointerEnter={(event) => handlePointerEnter(rIndex, cIndex, event)}
+                        onPointerMove={(event) => {
+                          if (activeTool === 'object' && activeObject?.category === 'stamp') {
+                            setHoverPixelOffset(getPointerPixelOffset(event));
+                          }
+                          if (isPointerDown) handlePointerEnter(rIndex, cIndex, event);
+                        }}
+                        className="cursor-crosshair relative transition-all duration-75 hover:ring-2 hover:ring-[#ffd93d] hover:shadow-[0_0_8px_rgba(255,217,61,0.5)]"
                         style={{ width: tileSize, height: tileSize }}
                       >
                          {bgLayers.map((layer, layerIndex) => {
@@ -2320,48 +3568,84 @@ export const mapheight = ${MAP_HEIGHT};
                                }}
                              />
                            );
-                         })}
-                      </div>
-                    );
-                  })
-                )}
+                       })}
+                     </div>
+                    ))
+                  )}
+               </div>
+               <div
+                 className="absolute inset-0 pointer-events-none rounded"
+                 style={{
+                   backgroundImage:
+                     'linear-gradient(to right, var(--stardew-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--stardew-grid) 1px, transparent 1px)',
+                   backgroundSize: `${tileSize}px ${tileSize}px`,
+                   backgroundPosition: '0 0',
+                 }}
+               />
+               <div className="absolute inset-0 pointer-events-none border-2 border-[#8b6b4a] rounded" />
              </div>
 
              {/* Placed Objects */}
-             {placedObjectsSorted.length > 0 && (
+             {showObjects &&
+               (placedObjectsByLayer.ground.length > 0 ||
+                 placedObjectsByLayer.stamps.length > 0 ||
+                 placedObjectsByLayer.standing.length > 0) && (
                 <div className="absolute inset-0 pointer-events-none">
-                  {placedObjectsSorted.map((placement) => {
-                    const objectDef = objectsById.get(placement.objectId);
-                    if (!objectDef) return null;
-                    const bounds = getObjectPixelBounds(objectDef, placement);
-                    const objectImageUrl = objectDef.imagePath ? resolveAssetPath(objectDef.imagePath) : tilesetUrl;
-                    const objectPixelWidth = objectDef.pixelWidth ?? objectDef.tileWidth * tileSize;
-                    const objectPixelHeight = objectDef.pixelHeight ?? objectDef.tileHeight * tileSize;
-                    const objectOffsetY =
-                      objectDef.imagePath && objectDef.anchor === 'bottom-left'
-                        ? Math.max(0, bounds.height - objectPixelHeight)
-                        : 0;
-                    return (
-                      <div
-                        key={placement.id}
-                        className="absolute"
-                        style={{
-                          left: bounds.left,
-                          top: bounds.top,
-                          width: bounds.width,
-                          height: bounds.height,
-                          backgroundImage: `url(${objectImageUrl})`,
-                          backgroundPosition: objectDef.imagePath
-                            ? `0px ${objectOffsetY}px`
-                            : `-${objectDef.tileX * tileSize}px -${objectDef.tileY * tileSize}px`,
-                          backgroundSize: objectDef.imagePath
-                            ? `${objectPixelWidth}px ${objectPixelHeight}px`
-                            : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                          backgroundRepeat: 'no-repeat',
-                        }}
-                      />
-                    );
-                  })}
+                  {placedObjectsByLayer.ground.map((placement) => renderPlacedObject(placement))}
+                  {showDecals && (decalPlacements.length > 0 || pathBorderPlacements.length > 0) && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {decalPlacements.map((decal, index) => {
+                        const sheet = decalSheets[decal.sheet];
+                        const frame = sheet?.frames[decal.frameKey];
+                        if (!frame) return null;
+                        const scale = tileSize / sheet.meta.tileSize;
+                        const backgroundSize = `${sheet.meta.width * scale}px ${sheet.meta.height * scale}px`;
+                        return (
+                          <div
+                            key={`decal-${decal.col}-${decal.row}-${decal.sheet}-${decal.frameKey}-${index}`}
+                            className="absolute"
+                            style={{
+                              left: decal.col * tileSize + (decal.offsetX ?? 0),
+                              top: decal.row * tileSize + (decal.offsetY ?? 0),
+                              width: tileSize,
+                              height: tileSize,
+                              backgroundImage: `url(${sheet.url})`,
+                              backgroundPosition: `-${frame.x * scale}px -${frame.y * scale}px`,
+                              backgroundSize,
+                              backgroundRepeat: 'no-repeat',
+                              imageRendering: 'pixelated',
+                            }}
+                          />
+                        );
+                      })}
+                      {pathBorderPlacements.map((decal, index) => {
+                        const sheet = pathBorderSheets[decal.sheetName];
+                        const frame = sheet?.frames[decal.frameKey];
+                        if (!frame) return null;
+                        const scale = tileSize / sheet.meta.tileSize;
+                        const backgroundSize = `${sheet.meta.width * scale}px ${sheet.meta.height * scale}px`;
+                        return (
+                          <div
+                            key={`path-border-${decal.col}-${decal.row}-${decal.sheetName}-${decal.frameKey}-${index}`}
+                            className="absolute"
+                            style={{
+                              left: decal.col * tileSize,
+                              top: decal.row * tileSize,
+                              width: tileSize,
+                              height: tileSize,
+                              backgroundImage: `url(${sheet.url})`,
+                              backgroundPosition: `-${frame.x * scale}px -${frame.y * scale}px`,
+                              backgroundSize,
+                              backgroundRepeat: 'no-repeat',
+                              imageRendering: 'pixelated',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  {placedObjectsByLayer.stamps.map((placement) => renderPlacedObject(placement))}
+                  {placedObjectsByLayer.standing.map((placement) => renderPlacedObject(placement))}
                 </div>
              )}
 
@@ -2379,8 +3663,16 @@ export const mapheight = ${MAP_HEIGHT};
                 <div className="absolute inset-0 pointer-events-none" style={{ display: 'grid', gridTemplateColumns: `repeat(${MAP_WIDTH}, ${tileSize}px)` }}>
                   {Array.from({ length: MAP_HEIGHT }).map((_, rIndex) =>
                     Array.from({ length: MAP_WIDTH }).map((_, cIndex) => {
-                      const collisionValue = collisionLayer[cIndex]?.[rIndex] ?? -1;
-                      const overlayClass = collisionValue === COLLISION_WALKABLE ? 'bg-green-500/30' : collisionValue === COLLISION_BLOCKED ? 'bg-red-500/30' : collisionValue !== -1 ? 'bg-yellow-500/30' : '';
+                      const overrideValue = collisionLayer[cIndex]?.[rIndex] ?? -1;
+                      const effectiveValue = effectiveCollisionLayer[cIndex]?.[rIndex] ?? -1;
+                      const overlayClass =
+                        overrideValue === COLLISION_WALKABLE
+                          ? 'bg-green-500/30'
+                          : overrideValue !== -1
+                            ? 'bg-red-500/45'
+                            : effectiveValue !== -1
+                              ? 'bg-red-500/20'
+                              : '';
                       return <div key={`collision-${rIndex}-${cIndex}`} className={overlayClass} style={{ width: tileSize, height: tileSize }} />;
                     })
                   )}
@@ -2401,49 +3693,173 @@ export const mapheight = ${MAP_HEIGHT};
              )}
 
              {/* Object Preview */}
-             {activeTool === 'object' && activeObject && hoverInfo && (tilesetLoaded || activeObject.imagePath) && objectPreviewBounds && (
-                <div className="absolute pointer-events-none" style={{ left: objectPreviewBounds.left, top: objectPreviewBounds.top, width: objectPreviewBounds.width, height: objectPreviewBounds.height, opacity: objectPreviewValid ? 0.7 : 0.4 }}>
-                   <div className="absolute inset-0" style={{ backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`, backgroundPosition: activeObject.imagePath ? `0px ${activeObject.anchor === 'bottom-left' ? Math.max(0, objectPreviewBounds.height - (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize)) : 0}px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`, backgroundSize: activeObject.imagePath ? `${(activeObject.pixelWidth ?? activeObject.tileWidth * tileSize)}px ${(activeObject.pixelHeight ?? activeObject.tileHeight * tileSize)}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`, backgroundRepeat: 'no-repeat' }} />
-                   <div className={`absolute inset-0 border-2 ${objectPreviewValid ? 'border-emerald-300/70' : 'border-red-400/70'}`} />
-                </div>
-             )}
+             {activeTool === 'object' && activeObject && hoverInfo && (tilesetLoaded || activeObject.imagePath) && objectPreviewBounds && (() => {
+                const isGroundTile = isGroundCategory((activeObject as any).category);
+                const previewScale =
+                  !isGroundTile && activeObject.imagePath
+                    ? ((activeObject as any).scale ?? 1.0)
+                    : 1.0;
+                const baseWidth = isGroundTile
+                  ? tileSize
+                  : (activeObject.pixelWidth ?? activeObject.tileWidth * tileSize) * previewScale;
+                const baseHeight = isGroundTile
+                  ? tileSize
+                  : (activeObject.pixelHeight ?? activeObject.tileHeight * tileSize) * previewScale;
+                const rotatedSize = getRotatedSize(baseWidth, baseHeight, activeObjectRotation);
+                const previewWidth = objectPreviewBounds.width;
+                const previewHeight = objectPreviewBounds.height;
+                let previewOffsetX = 0;
+                let previewOffsetY = 0;
+                if (!isGroundTile) {
+                  if (activeObject.anchor === 'bottom-left') {
+                    previewOffsetY = Math.max(0, objectPreviewBounds.height - rotatedSize.height);
+                  } else if (activeObject.anchor === 'center') {
+                    previewOffsetX = Math.max(0, Math.round((objectPreviewBounds.width - rotatedSize.width) / 2));
+                    previewOffsetY = Math.max(0, Math.round((objectPreviewBounds.height - rotatedSize.height) / 2));
+                  }
+                }
+
+                return (
+                  <div className="absolute pointer-events-none" style={{ left: objectPreviewBounds.left, top: objectPreviewBounds.top, width: previewWidth, height: previewHeight, opacity: objectPreviewValid ? 0.7 : 0.4 }}>
+                     <div
+                       className="absolute"
+                       style={{
+                         top: previewOffsetY,
+                         left: previewOffsetX,
+                         width: baseWidth,
+                         height: baseHeight,
+                         backgroundImage: `url(${activeObject.imagePath ? resolveAssetPath(activeObject.imagePath) : tilesetUrl})`,
+                         backgroundPosition: activeObject.imagePath ? `0px 0px` : `-${activeObject.tileX * tileSize}px -${activeObject.tileY * tileSize}px`,
+                         backgroundSize: activeObject.imagePath ? `${baseWidth}px ${baseHeight}px` : `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
+                         backgroundRepeat: 'no-repeat',
+                         transformOrigin: 'top left',
+                         transform: getRotationTransform(baseWidth, baseHeight, activeObjectRotation),
+                         imageRendering: 'pixelated',
+                       }}
+                     />
+                     <div className={`absolute inset-0 border-2 ${objectPreviewValid ? 'border-emerald-300/70' : 'border-red-400/70'}`} />
+                  </div>
+                );
+             })()}
+
+             {/* Delete Preview */}
+             {deleteModifierActive && activeTool === 'object' && hoverInfo && (() => {
+               const bounds = deletePreviewBounds ?? {
+                 startCol: hoverInfo.col,
+                 startRow: hoverInfo.row,
+                 endCol: hoverInfo.col,
+                 endRow: hoverInfo.row,
+               };
+               const width = (bounds.endCol - bounds.startCol + 1) * tileSize;
+               const height = (bounds.endRow - bounds.startRow + 1) * tileSize;
+               return (
+                 <div
+                   className="absolute pointer-events-none"
+                   style={{
+                     left: bounds.startCol * tileSize,
+                     top: bounds.startRow * tileSize,
+                     width,
+                     height,
+                     backgroundColor: 'rgba(248, 113, 113, 0.18)',
+                     border: '2px solid rgba(248, 113, 113, 0.9)',
+                     boxSizing: 'border-box',
+                   }}
+                 />
+               );
+             })()}
 
              {/* Selection Bounds */}
              {selectionBounds && (
                 <div className="absolute pointer-events-none border-2 border-cyan-400/80 bg-cyan-400/10" style={{ left: selectionBounds.minCol * tileSize, top: selectionBounds.minRow * tileSize, width: (selectionBounds.maxCol - selectionBounds.minCol + 1) * tileSize, height: (selectionBounds.maxRow - selectionBounds.minRow + 1) * tileSize }} />
              )}
-          </div>
+
+             {interactableEditMode && selectedInteractableBounds && (
+               <div
+                 className="absolute pointer-events-none border-2 border-[#ffd93d] bg-[#ffd93d]/10"
+                 style={{
+                   left: selectedInteractableBounds.startCol * tileSize,
+                   top: selectedInteractableBounds.startRow * tileSize,
+                   width: (selectedInteractableBounds.endCol - selectedInteractableBounds.startCol + 1) * tileSize,
+                   height: (selectedInteractableBounds.endRow - selectedInteractableBounds.startRow + 1) * tileSize,
+                 }}
+               />
+             )}
+              </div>
+            </div>
           </div>
           
            {/* Hover Info Overlay - Floating in Canvas Area */}
            <div className="fixed bottom-4 right-4 bg-black/80 text-[#f6e2b0] px-3 py-1.5 rounded-md pointer-events-none z-50 text-[10px] border border-[#5a4030] shadow shadow-black/50 font-mono">
               {hoverInfo
-                ? `X ${hoverInfo.col} Y ${hoverInfo.row} | ${activeLayerIndex === 0 ? 'Base' : 'Overlay'} | Tool ${activeToolLabel}`
-                : `Hover to inspect | ${activeLayerIndex === 0 ? 'Base' : 'Overlay'} | ${activeToolLabel}`}
+                ? `X ${hoverInfo.col} Y ${hoverInfo.row} | ${activeToolLabel}`
+                : `Hover to inspect | ${activeToolLabel}`}
+           </div>
+
+           {/* Zoom Controls - Floating in Canvas Corner */}
+           <div
+             className={`absolute bottom-3 right-3 z-40 ${
+               isZoomCollapsed
+                 ? 'bg-[#3b2a21]/95 px-2 py-1.5 rounded-lg border border-[#6d4c30] shadow-lg'
+                 : 'flex items-center gap-2 bg-[#3b2a21]/95 px-3 py-2 rounded-lg border-2 border-[#6d4c30] shadow-lg'
+             }`}
+           >
+             {isZoomCollapsed ? (
+               <button
+                 onClick={() => setIsZoomCollapsed(false)}
+                 className="text-[9px] text-[#f3e2b5] px-2 py-1 rounded bg-[#5a4030] border border-[#6d4c30] hover:bg-[#6d4c30]"
+                 title="Show zoom controls"
+               >
+                 ZOOM {Math.round(canvasScale * 100)}%
+               </button>
+             ) : (
+               <>
+                 <button 
+                    onClick={() => setCanvasScale(s => Math.max(0.3, s - 0.1))}
+                    className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                    title="Zoom Out"
+                 >−</button>
+                 <span className="text-[#ffd93d] text-[10px] font-display font-bold min-w-[40px] text-center">
+                    {Math.round(canvasScale * 100)}%
+                 </span>
+                 <button 
+                    onClick={() => setCanvasScale(s => Math.min(2.0, s + 0.1))}
+                    className="w-7 h-7 bg-[#5a4030] border border-[#6d4c30] rounded text-[#f3e2b5] text-sm font-bold hover:bg-[#6d4c30] active:scale-95"
+                    title="Zoom In"
+                 >+</button>
+                 <button 
+                    onClick={() => setCanvasScale(0.7)}
+                    className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
+                    title="Reset Zoom"
+                 >↺</button>
+                 <button
+                    onClick={() => setIsZoomCollapsed(true)}
+                    className="text-[8px] text-[#a88b6a] hover:text-[#f3e2b5] ml-1"
+                    title="Minimize"
+                 >
+                   MIN
+                 </button>
+               </>
+             )}
            </div>
         </div>
     );
   };
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-[#fdf6d8] flex items-center justify-center font-display">
+    <div className="w-screen h-screen overflow-hidden bg-[#fdf6d8] font-display">
       <div 
-        className="relative select-none p-4 transition-all duration-300 origin-center"
+        className="relative select-none p-3 w-full h-full"
         style={{
-          transform: 'scale(1.3)', // Scale up entire UI by 30% for thicker borders
           display: 'grid',
-          // Flexible columns: Sidebars take content width, Main takes remaining
-          gridTemplateColumns: 'min-content 1fr min-content', 
-          gridTemplateRows: 'auto 1fr auto', // Header takes content, Main fills, Footer takes content
+          gridTemplateColumns: '360px 1fr 260px',
+          gridTemplateRows: 'auto 1fr auto',
           gridTemplateAreas: `
-            ". header header"
+            "sidebar-left header header"
             "sidebar-left main sidebar-right"
             "sidebar-left footer sidebar-right"
           `,
-          gap: '10px', // Slightly reduced gap for scaled view
+          gap: '10px',
           imageRendering: 'pixelated',
-          width: '77%', // 100% / 1.3 to fit within viewport after scaling
-          height: '77%',
         }}
       >
         {/* --------------------------------------------------------------------------
@@ -2452,7 +3868,7 @@ export const mapheight = ${MAP_HEIGHT};
             Responsive Width: min-content (based on children)
            -------------------------------------------------------------------------- */}
          {/* Hanging Sign - Positioned absolutely relative to the scaled grid container, at the top left column */}
-         <div className="absolute top-0 left-[140px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%) translateY(-25%)' }}>
+         <div className="absolute top-0 left-[180px] z-30 pointer-events-none" style={{ transform: 'translateX(-50%) translateY(-25%)' }}>
              <HangingSign scale={0.9} />
          </div>
 
@@ -2461,26 +3877,13 @@ export const mapheight = ${MAP_HEIGHT};
             Area: sidebar-left
             Responsive Width: min-content (based on children)
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-left', transform: 'translateY(-5%)' }} className="relative h-full pt-4 min-w-[260px] min-h-[450px]">
+        <div style={{ gridArea: 'sidebar-left' }} className="relative h-full pt-4 min-w-[260px] min-h-[450px]">
             {/* Hanging Sign removed from here */}
             
             <StardewFrame className="w-full h-full flex flex-col pt-4 pb-2 px-2" >
                <div className="flex-1 min-h-0 w-full h-full overflow-hidden rounded-sm relative"> {/* overflow-hidden to clip content to frame */}
                  <div className="absolute inset-0 overflow-y-auto overflow-x-hidden custom-scrollbar px-2 py-1"> {/* Scroll container with padding */}
-                  {/* Tileset Selector */}
-                  <div className="mb-2">
-                    <select
-                      value={tileset.id}
-                      onChange={(event) => handleTilesetChange(event.target.value)}
-                      className="w-full bg-[#5a4030] border-2 border-[#6d4c30] text-[9px] px-1 py-1 rounded text-[#f3e2b5] font-display uppercase tracking-wide opacity-80 hover:opacity-100 transition-opacity"
-                    >
-                      {tilesetOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Tileset Selector removed - no longer needed */}
 
                   {/* Mode Content */}
                   {activeMode === 'prefabs' ? (
@@ -2507,13 +3910,32 @@ export const mapheight = ${MAP_HEIGHT};
                     </div>
                   ) : activeMode === 'objects' ? (
                     <div className="flex flex-col gap-2">
-                         <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                           <button onClick={() => setObjectCaptureMode(p => !p)} className={`text-[9px] px-2 py-0.5 border-2 text-[#f3e2b5] rounded uppercase ${objectCaptureMode ? 'bg-[#9c2a2a] border-[#e8d4b0]' : 'bg-[#3b2a21] border-[#6d4c30] hover:bg-[#5a4030]'}`}>
-                             {objectCaptureMode ? 'Creating...' : 'New Object'}
-                           </button>
-                        </div>
+                         {/* Sub-Category Tabs (Stardew style) */}
+                         {showObjectSubTabs && (
+                             <StardewSubTabGroup
+                                categories={objectSubTabCategories}
+                                activeCategory={activeSubCategory}
+                                onSelect={setActiveSubCategory}
+                                className="mb-3"
+                             />
+                         )}
+
+                         {/* Objects Grid - use filteredObjects which filters by activeSubCategory */}
                          <div className="grid grid-cols-3 gap-2">
-                            {tilesetObjectsForSet.map(obj => {
+                            {filteredObjects.length === 0 && (
+                                <div className="col-span-3 text-center text-[9px] text-[#f3e2b5]/50 py-4 italic space-y-2">
+                                    <div>No {activeSubCategory} found.</div>
+                                    {tilesetObjectsForSet.length === 0 && (
+                                      <button
+                                        onClick={reloadAssets}
+                                        className="px-2 py-1 text-[8px] uppercase tracking-wide border border-[#6d4c30] bg-[#3b2a21] text-[#f3e2b5] rounded hover:bg-[#5a4030]"
+                                      >
+                                        Refresh Assets
+                                      </button>
+                                    )}
+                                </div>
+                            )}
+                            {filteredObjects.map(obj => {
                                const preview = getObjectPreviewData(obj);
                                return (
                                  <div key={obj.id} 
@@ -2531,7 +3953,16 @@ export const mapheight = ${MAP_HEIGHT};
                                             imageRendering: 'pixelated'
                                         }}
                                      />
-                                     <span className="absolute bottom-0 w-full text-center text-[8px] bg-black/50 text-white truncate px-0.5">{obj.name}</span>
+                                     <span
+                                       className="absolute bottom-0 w-full text-center text-[7px] font-bold uppercase tracking-tight py-0.5 truncate px-1"
+                                       style={{
+                                         background: 'linear-gradient(180deg, rgba(139,90,43,0.85) 0%, rgba(90,56,37,0.95) 100%)',
+                                         color: '#f4e0c0',
+                                         textShadow: '0 1px 1px rgba(0,0,0,0.5)',
+                                         borderTop: '1px solid rgba(244,224,192,0.3)'
+                                       }}
+                                       title={obj.name}
+                                     >{obj.name}</span>
                                  </div>
                                );
                             })}
@@ -2573,24 +4004,33 @@ export const mapheight = ${MAP_HEIGHT};
             Area: header
             Responsive Height: auto (min 56px)
            -------------------------------------------------------------------------- */}
-         <div style={{ gridArea: 'header' }} className="flex h-[108px] gap-[10px] justify-end pr-[15%]"> {/* pr-15% shifts it left */}
+         <div style={{ gridArea: 'header' }} className="flex h-[108px] gap-[10px] justify-center">
              {/* Header Left: Tabs (Fit to content) */}
              <div className="h-full w-fit"> 
                  <StardewFrame className="flex items-center px-4 h-full" >
                      <div className="flex items-center gap-2">
                          {[
-                           { label: 'TERRAIN', mode: 'terrain' as EditorMode, category: 'all' as TileCategoryFilter },
-                           { label: 'PATHS', mode: 'paths' as EditorMode, category: 'paths' as TileCategoryFilter },
-                           { label: 'PROPS', mode: 'prefabs' as EditorMode, category: null },
-                           { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null }
+                           { label: 'PATHS', mode: 'objects' as EditorMode, category: null, subCategory: 'paths' },
+                           { label: 'PROPS', mode: 'objects' as EditorMode, category: null, subCategory: 'nature' },
+                           { label: 'BUILDINGS', mode: 'objects' as EditorMode, category: null, subCategory: 'buildings' },
+                           { label: 'STAMP', mode: 'objects' as EditorMode, category: null, subCategory: 'stamp' }
                          ].map((tab) => (
                             <div key={tab.label} className="relative">
                                 <StardewTab
                                   label={tab.label}
-                                  isActive={activeMode === tab.mode}
+                                  isActive={
+                                    tab.label === 'PATHS'
+                                      ? activeMode === tab.mode && PATH_SUBCATEGORIES.some((cat) => cat.id === activeSubCategory)
+                                      : tab.label === 'PROPS'
+                                        ? activeMode === tab.mode && PROP_SUBCATEGORIES.includes(activeSubCategory as (typeof PROP_SUBCATEGORIES)[number])
+                                        : tab.subCategory
+                                          ? activeMode === tab.mode && activeSubCategory === tab.subCategory
+                                          : activeMode === tab.mode
+                                  }
                                   onClick={() => {
                                      applyMode(tab.mode);
                                      if (tab.category) setActiveCategory(tab.category);
+                                     if (tab.subCategory) setActiveSubCategory(tab.subCategory);
                                   }}
                                   className="flex-shrink-0 scale-90 origin-center"
                                 />
@@ -2600,127 +4040,79 @@ export const mapheight = ${MAP_HEIGHT};
                  </StardewFrame>
              </div>
 
-             {/* Header Right: Tools (Matches Sidebar Right width effectively) */}
-             <div className="h-fit pl-1 w-fit">
-                 <StardewFrame className="flex items-center justify-center px-3 h-full w-full" >
-                      <div className="flex items-center gap-1.5 justify-center w-full">
-                         {[
-                          { id: 'brush', icon: '/ai-town/assets/ui/icons/brush.png' },
-                          { id: 'eraser', icon: '/ai-town/assets/ui/icons/eraser.png' },
-                          { id: 'stamp', icon: '/ai-town/assets/ui/icons/stamp.png' },
-                        ].map((tool) => (
-                          <button
-                            key={tool.id}
-                            onClick={() => {
-                              if (tool.id === 'stamp') applyMode('prefabs');
-                              else activateTileTool(tool.id as any);
-                            }}
-                            className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm ${
-                              (tool.id === 'stamp' && activeMode === 'prefabs') ||
-                              activeTool === tool.id
-                                ? 'bg-[#e8d4b0] border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] scale-100 z-10'  // Active: Inset/Pressed
-                                : 'bg-[#e8d4b0] border-2 border-[#8b6b4a] shadow-[inset_0_-2px_0_rgba(0,0,0,0.2),0_2px_0_rgba(0,0,0,0.2)] hover:bg-[#ffe6b5] hover:-translate-y-0.5' // Inactive: Raised
-                            }`}
-                            title={tool.id.toUpperCase()}
-                          >
-                            <img
-                              src={tool.icon}
-                              alt={tool.id}
-                              className="w-5 h-5 rendering-pixelated drop-shadow-sm"
-                            />
-                          </button>
-                        ))}
-                     </div>
-                 </StardewFrame>
-             </div>
+             {/* Tools removed for simplified workflow */}
         </div>
 
         {/* --------------------------------------------------------------------------
             Zone: Main (Canvas)
             Area: main
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'main' }} className="relative flex items-center justify-center min-h-0 min-w-0"> {/* min-h/w-0 prevents grid blowout */}
-            <div className="border-[6px] border-[#6d4c30] bg-[#d4c4a0] shadow-[inset_0_0_20px_rgba(0,0,0,0.2)] rounded overflow-hidden flex ring-4 ring-[#8b6b4a]" style={{ width: '90%', height: '90%', maxWidth: '800px', maxHeight: '600px' }}>
+        <div style={{ gridArea: 'main' }} className="relative flex items-center justify-center min-h-0 min-w-0">
+            <div className="w-full h-full border-[6px] border-[#6d4c30] bg-[#d4c4a0] shadow-[inset_0_0_20px_rgba(0,0,0,0.2)] rounded overflow-hidden flex ring-4 ring-[#8b6b4a]">
                 {renderCanvas()}
             </div>
         </div>
 
         {/* --------------------------------------------------------------------------
-            Zone: Footer (Quickbar)
+            Zone: Footer (Terrain Bar)
             Area: footer
             Responsive Height: auto
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'footer', transform: 'translateY(-15%)' }} className="flex justify-center items-center h-[100px]">
+        <div style={{ gridArea: 'footer' }} className="flex justify-center items-center h-[100px]">
              <div className="h-full">
                 <StardewFrame className="h-full flex items-center justify-center px-4" >
                      <div className="flex gap-2 items-center">
-                        {/* Render Quickbar Slots */}
-                        {Array.from({ length: 8 }).map((_, index) => {
-                           let content = null;
-                        const objectId = activeMode === 'objects' ? quickbarObjectSlots[index] : null;
-                        const tileId = activeMode !== 'objects' ? quickbarTileSlots[index] : null;
-                        const isActive = activeMode === 'objects' ? activeObjectId === objectId : selectedTileId === tileId && tileId !== null;
-
-                           if (activeMode === 'objects' && objectId) {
-                                   const objDef = objectsById.get(objectId);
-                                   if (objDef) {
-                                       const preview = getObjectPreviewData(objDef);
-                                       content = (
-                                           <div 
-                                                className="bg-no-repeat bg-center"
-                                                style={{
-                                                    width: `${objDef.pixelWidth ?? objDef.tileWidth * tileSize}px`,
-                                                    height: `${objDef.pixelHeight ?? objDef.tileHeight * tileSize}px`,
-                                                    backgroundImage: `url(${preview.imageUrl})`,
-                                                    backgroundPosition: preview.backgroundPosition,
-                                                    backgroundSize: preview.backgroundSize,
-                                                    transform: 'scale(0.8)',
-                                                    imageRendering: 'pixelated'
-                                                }}
-                                            />
-                                       );
-                                   }
-                           } else if (activeMode !== 'objects' && tileId !== null && tileId !== undefined) {
-                                   const pos = getTilePos(tileId);
-                                   content = (
-                                        <div
-                                            className="rendering-pixelated"
-                                            style={{
-                                                width: `${tileSize}px`,
-                                                height: `${tileSize}px`,
-                                                backgroundImage: `url(${tilesetUrl})`,
-                                                backgroundPosition: `-${pos.sx}px -${pos.sy}px`,
-                                                backgroundSize: `${tilesetCols * tileSize}px ${tilesetRows * tileSize}px`,
-                                            }}
-                                        />
-                                   );
-                           }
+                        {terrainBarSlotIds.map((objectId, index) => {
+                           const objDef = objectId ? objectsById.get(objectId) : null;
+                           const isActive = Boolean(objectId && activeObjectId === objectId);
+                           const content = objDef
+                             ? (() => {
+                                 const preview = getObjectPreviewData(objDef);
+                                 return (
+                                   <div
+                                     className="bg-no-repeat bg-center"
+                                     style={{
+                                       width: `${objDef.pixelWidth ?? objDef.tileWidth * tileSize}px`,
+                                       height: `${objDef.pixelHeight ?? objDef.tileHeight * tileSize}px`,
+                                       backgroundImage: `url(${preview.imageUrl})`,
+                                       backgroundPosition: preview.backgroundPosition,
+                                       backgroundSize: preview.backgroundSize,
+                                       transform: 'scale(0.8)',
+                                       imageRendering: 'pixelated',
+                                     }}
+                                   />
+                                 );
+                               })()
+                             : null;
 
                            return (
-                              <button
-                                  key={`qb-${index}`}
-                                  onClick={() => {
-                                    if(activeMode === 'objects' && objectId) selectObjectId(objectId);
-                                    if(activeMode !== 'objects' && tileId !== null) selectTileId(tileId);
-                                  }}
-                                  className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm overflow-hidden group ${
-                                      isActive
-                                      ? 'bg-[#e8d4b0] border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] scale-105 z-10' // Active: Inset
-                                      : 'bg-[#e8d4b0] border-2 border-[#8b6b4a] shadow-[inset_0_-2px_0_rgba(0,0,0,0.2),0_2px_0_rgba(0,0,0,0.2)] hover:bg-[#ffe6b5] hover:-translate-y-0.5' // Inactive: Raised (Matches Header Tools)
-                                  }`}
-                              >
-                                  <span className={`absolute -top-1 -left-1 w-3 h-3 flex items-center justify-center text-[7px] font-bold border rounded-full z-20 ${
-                                    isActive ? 'bg-[#ffd93d] text-[#5a4030] border-[#e8b030]' : 'bg-[#8b6b4a] text-[#f6e2b0] border-[#5a4030]' 
-                                  }`}>{index + 1}</span>
-                                  
-                                  {!content && (
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
-                                        <div className="w-6 h-6 rounded-full border-2 border-[#d4b078]" />
-                                    </div>
-                                  )}
-                                  
-                                  {content}
-                              </button>
+                             <button
+                               key={`terrain-slot-${index}`}
+                               onClick={() => {
+                                 if (objectId) selectObjectId(objectId);
+                               }}
+                               className={`relative w-10 h-10 flex items-center justify-center transition-all duration-75 rounded-sm overflow-hidden group ${
+                                 isActive
+                                   ? 'bg-[#e8d4b0] border-2 border-[#6d4c30] shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] scale-105 z-10'
+                                   : 'bg-[#e8d4b0] border-2 border-[#8b6b4a] shadow-[inset_0_-2px_0_rgba(0,0,0,0.2),0_2px_0_rgba(0,0,0,0.2)] hover:bg-[#ffe6b5] hover:-translate-y-0.5'
+                               }`}
+                             >
+                               <span
+                                 className={`absolute -top-1 -left-1 w-3 h-3 flex items-center justify-center text-[7px] font-bold border rounded-full z-20 ${
+                                   isActive ? 'bg-[#ffd93d] text-[#5a4030] border-[#e8b030]' : 'bg-[#8b6b4a] text-[#f6e2b0] border-[#5a4030]'
+                                 }`}
+                               >
+                                 {index + 1}
+                               </span>
+
+                               {!content && (
+                                 <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+                                   <div className="w-6 h-6 rounded-full border-2 border-[#d4b078]" />
+                                 </div>
+                               )}
+
+                               {content}
+                             </button>
                            );
                         })}
                      </div>
@@ -2733,63 +4125,225 @@ export const mapheight = ${MAP_HEIGHT};
             Area: sidebar-right
             Responsive Width: min-content or fixed
            -------------------------------------------------------------------------- */}
-        <div style={{ gridArea: 'sidebar-right', alignSelf: 'end' }} className="flex flex-col justify-end h-full pl-2 w-[180px]">
-
-            <StardewFrame className="p-4 w-full" >
-                <div className="flex flex-col gap-2">
-                   {/* Export Button moved here */}
+        <div style={{ gridArea: 'sidebar-right', alignSelf: 'start' }} className="flex flex-col pt-4 pl-2 w-full">
+            <StardewFrame className="p-3 w-full">
+                <div className="flex flex-col gap-1">
                    <button 
-                        onClick={exportMap}
-                        className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-2 rounded text-[10px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider mb-2 w-full"
+                        onClick={saveMapToLocal}
+                        className="bg-[#3b6b8f] border-2 border-[#26445c] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#4a7ca5] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
                     >
-                        EXPORT
+                        💾 <span>SAVE</span>
                     </button>
-                    <div className="h-0.5 bg-[#6d4c30] w-full mb-2 opacity-30" />
+                    <button 
+                        onClick={loadMapFromLocal}
+                        className="bg-[#2f587a] border-2 border-[#1f3b52] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#3d6c94] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        📂 <span>LOAD</span>
+                    </button>
+                   {/* Export Button */}
+                    <button 
+                        onClick={exportMap}
+                        className="bg-[#4a8f4a] border-2 border-[#2e5e2e] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#5aa85a] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        💾 <span>EXPORT</span>
+                    </button>
+                    <button
+                        onClick={reloadAssets}
+                        className="bg-[#6b5a3b] border-2 border-[#4a3b26] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#7a6845] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        🔄 <span>REFRESH</span>
+                    </button>
+                    <button 
+                        onClick={() => setShowAssetSlicer(true)}
+                        className="bg-[#8b4513] border-2 border-[#5d2f0d] text-[#f3e2b5] px-2 py-1.5 rounded text-[9px] hover:bg-[#a0522d] active:scale-95 shadow-sm font-display uppercase tracking-wider w-full flex items-center justify-center gap-1"
+                    >
+                        ✂️ <span>SLICE</span>
+                    </button>
+                    
+                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-30" />
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide collision overlay">
                       <StardewCheckbox 
-                        label="GRID" 
+                        label="COLLISION" 
                         checked={showCollision} 
                         onChange={setShowCollision}
-                        className="scale-90 origin-left"
+                        className="scale-70 origin-left"
                       />
                    </label>
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Auto collision from objects">
+                      <StardewCheckbox 
+                        label="AUTO" 
+                        checked={autoCollisionEnabled} 
+                        onChange={setAutoCollisionEnabled}
+                        className="scale-70 origin-left"
+                      />
+                   </label>
+
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Edit collision overrides">
+                      <StardewCheckbox 
+                        label="EDIT" 
+                        checked={collisionEditMode} 
+                        onChange={(checked) => setCollisionEditMode(checked)}
+                        className="scale-70 origin-left"
+                      />
+                   </label>
+
+                   {collisionEditMode && (
+                     <div className="flex items-center gap-1 justify-center">
+                       <button
+                         onClick={() => setCollisionBrush('block')}
+                         className={`text-[7px] px-1.5 py-0.5 rounded border ${
+                           collisionBrush === 'block'
+                             ? 'bg-red-600 text-white border-red-800'
+                             : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                         }`}
+                       >
+                         BLOCK
+                       </button>
+                       <button
+                         onClick={() => setCollisionBrush('clear')}
+                         className={`text-[7px] px-1.5 py-0.5 rounded border ${
+                           collisionBrush === 'clear'
+                             ? 'bg-green-600 text-white border-green-800'
+                             : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                         }`}
+                       >
+                         CLEAR
+                       </button>
+                       <button
+                         onClick={() => setCollisionBrush('auto')}
+                         className={`text-[7px] px-1.5 py-0.5 rounded border ${
+                           collisionBrush === 'auto'
+                             ? 'bg-[#8b6b4a] text-white border-[#5a4030]'
+                             : 'bg-[#3b2a21] text-[#f3e2b5] border-[#6d4c30]'
+                         }`}
+                         title="Reset to auto-collision"
+                       >
+                         AUTO
+                       </button>
+                     </div>
+                   )}
+
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide placed objects">
                       <StardewCheckbox 
                         label="OBJ" 
-                        checked={activeMode === 'objects'} 
-                        onChange={() => applyMode('objects')}
-                        className="scale-90 origin-left"
+                        checked={showObjects} 
+                        onChange={setShowObjects}
+                        className="scale-70 origin-left"
                       />
                    </label>
 
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Show/Hide animated sprites">
                        <StardewCheckbox 
-                        label="BGM" 
-                        checked={true} 
-                        onChange={() => {}}
-                        className="scale-90 origin-left"
+                        label="ANIM" 
+                        checked={showAnimatedSprites} 
+                        onChange={setShowAnimatedSprites}
+                        className="scale-70 origin-left"
                       />
                    </label>
+
+                   <div className="h-px bg-[#6d4c30] w-full my-1.5 opacity-20" />
+
+                   <label className="flex items-center gap-1 cursor-pointer hover:brightness-110 transition-all" title="Bind an object as an interactable (app host)">
+                      <StardewCheckbox
+                        label="APP"
+                        checked={interactableEditMode}
+                        onChange={(checked) => {
+                          setInteractableEditMode(checked);
+                          if (!checked) setSelectedInteractableId(null);
+                        }}
+                        className="scale-70 origin-left"
+                      />
+                   </label>
+
+                   <div className="text-[#8b6b4a] text-[8px] font-display text-center">
+                      Apps: {interactables.length}
+                   </div>
+
+                   {interactableEditMode && (
+                     <div className="mt-1 rounded border border-[#6d4c30]/40 bg-[#fdf6d8] p-2">
+                       <div className="text-[8px] text-[#5a4030] font-display font-bold mb-1">
+                         Click an object to select
+                       </div>
+                       {selectedInteractablePlacement && selectedInteractableBounds ? (
+                         <div className="space-y-1">
+                           <div className="text-[7px] text-[#6d4c30] font-mono break-all">
+                             id: {selectedInteractablePlacement.id}
+                           </div>
+                           <div className="text-[7px] text-[#6d4c30] font-mono break-all">
+                             hitbox: {selectedInteractableBounds.startCol},{selectedInteractableBounds.startRow} →{' '}
+                             {selectedInteractableBounds.endCol},{selectedInteractableBounds.endRow}
+                           </div>
+
+                           <select
+                             value={interactableTypeDraft}
+                             onChange={(e) => setInteractableTypeDraft(e.target.value as InteractableTypeId)}
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                           >
+                             {INTERACTABLE_TYPE_OPTIONS.map((opt) => (
+                               <option key={opt.id} value={opt.id}>
+                                 {opt.label}
+                               </option>
+                             ))}
+                           </select>
+
+                           <input
+                             value={interactableNameDraft}
+                             onChange={(e) => setInteractableNameDraft(e.target.value)}
+                             placeholder="Display name (optional)"
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                           />
+
+                           <input
+                             type="number"
+                             min={0}
+                             max={20}
+                             value={interactableRadiusDraft}
+                             onChange={(e) => setInteractableRadiusDraft(Number(e.target.value))}
+                             className="w-full text-[9px] px-2 py-1 border border-[#6d4c30]/40 bg-white text-[#3b2a21] rounded"
+                             placeholder="Radius"
+                           />
+
+                           <div className="flex gap-1">
+                             <button
+                               onClick={upsertSelectedInteractable}
+                               className="flex-1 bg-[#4a8f4a] border border-[#2e5e2e] text-[#f3e2b5] px-2 py-1 rounded text-[9px] hover:bg-[#5aa85a] active:scale-95 font-display uppercase tracking-wider"
+                             >
+                               Save
+                             </button>
+                             <button
+                               onClick={removeSelectedInteractable}
+                               disabled={!selectedInteractable}
+                               className={`flex-1 border px-2 py-1 rounded text-[9px] active:scale-95 font-display uppercase tracking-wider ${
+                                 selectedInteractable
+                                   ? 'bg-[#9c2a2a] border-[#6d1c1c] text-[#f3e2b5] hover:bg-[#b13434]'
+                                   : 'bg-[#d4c4a0] border-[#b99f75] text-[#8b6b4a] cursor-not-allowed'
+                               }`}
+                             >
+                               Remove
+                             </button>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="text-[8px] text-[#8b6b4a] italic">
+                           No object selected.
+                         </div>
+                       )}
+                     </div>
+                   )}
                    
-                   <label className="flex items-center gap-2 cursor-pointer group hover:brightness-110 transition-all">
-                       <StardewCheckbox 
-                        label="SFX" 
-                        checked={false} 
-                        onChange={() => {}}
-                        className="opacity-50 scale-90 origin-left"
-                      />
-                   </label>
+                   <div className="text-[#8b6b4a] text-[8px] font-display text-center">
+                      {MAP_WIDTH}×{MAP_HEIGHT}
+                   </div>
                  </div>
-
             </StardewFrame>
-             <div className="mt-1 text-center">
-                 <div className="text-[#8b6b4a] text-[8px] font-display font-bold">{MAP_WIDTH}x{MAP_HEIGHT}</div>
-             </div>
         </div>
 
       </div>
+      {showAssetSlicer && (
+        <AssetSlicer onClose={() => setShowAssetSlicer(false)} />
+      )}
     </div>
   );
 };

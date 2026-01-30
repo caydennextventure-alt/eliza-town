@@ -741,6 +741,7 @@ p[contenteditable='true']:empty::before {
   height: 52px;
   image-rendering: pixelated;
 }
+
 /* Custom Stardew Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 12px;
@@ -764,4 +765,9 @@ p[contenteditable='true']:empty::before {
 
 .custom-scrollbar::-webkit-scrollbar-corner {
   background: #3b2a21;
+}
+/* Pixel art image rendering */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }

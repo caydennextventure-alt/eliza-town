@@ -67,7 +67,6 @@ export function MessageInput({
     messageUuid = messageUuid || crypto.randomUUID();
     await writeMessage({
       worldId,
-      playerId: humanPlayer.id,
       conversationId: conversation.id,
       text,
       messageUuid,

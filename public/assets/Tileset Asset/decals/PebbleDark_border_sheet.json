@@ -1,0 +1,53 @@
+{
+  "tileSize": 32,
+  "frames": {
+    "PebbleDark_edge_N": {
+      "x": 0,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_edge_E": {
+      "x": 32,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_edge_S": {
+      "x": 64,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_edge_W": {
+      "x": 96,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_corner_NE": {
+      "x": 0,
+      "y": 32,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_corner_NW": {
+      "x": 32,
+      "y": 32,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_corner_SE": {
+      "x": 64,
+      "y": 32,
+      "w": 32,
+      "h": 32
+    },
+    "PebbleDark_corner_SW": {
+      "x": 96,
+      "y": 32,
+      "w": 32,
+      "h": 32
+    }
+  }
+}

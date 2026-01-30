@@ -1,5 +1,11 @@
 import { ConvexError, v } from 'convex/values';
-import { DatabaseReader, MutationCtx, internalAction, mutation, query } from '../_generated/server';
+import {
+  DatabaseReader,
+  MutationCtx,
+  internalAction,
+  internalMutation,
+  query,
+} from '../_generated/server';
 import { insertInput } from './insertInput';
 import { Game } from './game';
 import '../util/noisyLogConfig';
@@ -162,7 +168,7 @@ export const runStep = internalAction({
   },
 });
 
-export const sendInput = mutation({
+export const sendInput = internalMutation({
   args: {
     worldId: v.id('worlds'),
     name: v.string(),
