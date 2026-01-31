@@ -56,6 +56,8 @@ if (cachedBackendVersion) {
 const mergedEnv = {
   ...process.env,
   CONVEX_AGENT_MODE: process.env.CONVEX_AGENT_MODE ?? 'anonymous',
+  // Flag used by Convex functions to relax auth for E2E-only flows.
+  AITOWN_E2E: process.env.AITOWN_E2E ?? '1',
   ELIZA_API_DEBUG: process.env.ELIZA_API_DEBUG ?? '0',
   E2E_ELIZA_DEBUG: process.env.E2E_ELIZA_DEBUG ?? '0',
   ELIZA_DISABLE_LEGACY: process.env.ELIZA_DISABLE_LEGACY ?? '1',

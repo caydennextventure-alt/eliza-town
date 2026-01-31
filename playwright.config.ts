@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = 'http://127.0.0.1:4173';
+const vitePort = process.env.E2E_VITE_PORT ?? '4173';
+const baseURL = `http://127.0.0.1:${vitePort}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -15,7 +16,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev:e2e',
+    command: `E2E_VITE_PORT=${vitePort} npm run dev:e2e`,
     url: `${baseURL}/ai-town/`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

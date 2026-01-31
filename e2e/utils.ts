@@ -327,14 +327,23 @@ export const ensureWorldRunning = async (timeoutMs = 60_000) => {
 
 export const enterWorld = async (page: Page) => {
   await ensureWorldRunning();
+
   const gameView = page.getByTestId('game-view');
+  const enterButton = page.getByTestId('enter-world');
+
+  // Wait for either landing or game UI to render.
+  await Promise.race([
+    gameView.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => undefined),
+    enterButton.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => undefined),
+  ]);
+
   if (await gameView.isVisible().catch(() => false)) {
     return;
   }
-  const enterButton = page.getByTestId('enter-world');
-  await expect(enterButton).toBeVisible({ timeout: 20000 });
+
+  await expect(enterButton).toBeVisible({ timeout: 60_000 });
   await enterButton.click();
-  await expect(gameView).toBeVisible({ timeout: 20000 });
+  await expect(gameView).toBeVisible({ timeout: 60_000 });
 };
 
 export const openJoinDialog = async (

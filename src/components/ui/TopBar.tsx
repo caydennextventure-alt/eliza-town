@@ -11,6 +11,7 @@ type TopBarButtonProps = {
   onClick?: () => void;
   variant?: 'default' | 'danger';
   className?: string;
+  dataTestId?: string;
 };
 
 function TopBarButton({
@@ -22,12 +23,14 @@ function TopBarButton({
   onClick,
   variant = 'default',
   className,
+  dataTestId,
 }: TopBarButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
+      data-testid={dataTestId}
       className={clsx(
         'flex items-center gap-2 px-3 py-1.5 text-sm transition-all rounded',
         'hover:bg-white/10',
@@ -150,6 +153,7 @@ export default function TopBar({
           label="Exit"
           variant="danger"
           onClick={onExitClick}
+          dataTestId="exit-world"
         />
       </div>
     </div>
