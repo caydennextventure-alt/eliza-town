@@ -17,14 +17,16 @@ type IconButtonProps = {
   isActive?: boolean;
   onClick?: () => void;
   disabled?: boolean;
+  dataTestId?: string;
 };
 
-function IconButton({ icon, label, shortcut, isActive, onClick, disabled }: IconButtonProps) {
+function IconButton({ icon, label, shortcut, isActive, onClick, disabled, dataTestId }: IconButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={dataTestId}
       title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
       className={clsx(
         'w-10 h-10 flex items-center justify-center rounded-lg transition-all',
@@ -96,16 +98,19 @@ export default function Sidebar({
             icon={<Users size={18} />}
             label="Characters"
             onClick={onCharactersClick}
+            dataTestId="open-characters"
           />
           <IconButton
             icon={<UserPlus size={18} />}
             label="New Agent"
             onClick={onNewAgentClick}
+            dataTestId="open-create-agent"
           />
           <IconButton
             icon={<List size={18} />}
             label="Agents"
             onClick={onAgentsClick}
+            dataTestId="open-agent-list"
           />
         </div>
 
@@ -124,6 +129,7 @@ export default function Sidebar({
                 shortcut="N"
                 isActive={isNight}
                 onClick={onNightToggle}
+                dataTestId="toggle-night"
               />
             )}
             {canUseBuildMode && (
@@ -133,6 +139,7 @@ export default function Sidebar({
                 shortcut="B"
                 isActive={buildMode}
                 onClick={onBuildToggle}
+                dataTestId="toggle-build-mode"
               />
             )}
             {canUseRoomBuilder && (
@@ -142,6 +149,7 @@ export default function Sidebar({
                 shortcut="P"
                 isActive={roomBuildMode}
                 onClick={onRoomBuildToggle}
+                dataTestId="toggle-room-builder"
               />
             )}
           </div>

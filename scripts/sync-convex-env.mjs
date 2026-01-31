@@ -27,6 +27,8 @@ const envKeys = [
   'WEREWOLF_PHASE_MS_DAY_RESOLUTION',
   'WEREWOLF_PHASE_MS_ENDED',
   'AITOWN_DISABLE_AGENT_OPERATIONS',
+  // E2E runs without interactive auth; allow a stable synthetic user id in Convex functions.
+  'AITOWN_E2E',
   // Dev UX: allow unauthenticated editing/room ownership via guestKey.
   'ALLOW_UNAUTHENTICATED_TOWN_EDIT',
 ];
