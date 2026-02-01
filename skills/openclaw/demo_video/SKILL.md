@@ -59,23 +59,24 @@ You then convert to MP4.
 
 ---
 
-## 3) Run the local backend + frontend (dev)
+## 3) Run the local backend + frontend
 
-In `eliza-town-three`, the easiest way is to use the built-in E2E dev scripts.
+⚠️ **Branch note:** the automated demo-video flow relies on Playwright E2E scripts/config. If you don’t see an `e2e/` folder and Playwright config in your checkout, you’re on a branch that doesn’t include the video runner yet.
 
-### 3.1 Start the backend (Convex local in “anonymous” mode)
+### Option A (recommended): use the repo’s E2E dev scripts (if present)
 From the repo root:
 ```bash
 npm run dev:backend:e2e
-```
-
-### 3.2 Start the frontend (force port 5173)
-From the repo root:
-```bash
 E2E_VITE_PORT=5173 npm run dev:frontend:e2e
 ```
 
-You should have the game available at:
+### Option B: run the normal dev stack
+From the repo root:
+```bash
+npm run dev
+```
+
+You should have the game available at something like:
 - `http://localhost:5173/ai-town`
 
 ---
@@ -83,19 +84,15 @@ You should have the game available at:
 ## 4) The demo test (Playwright)
 
 ### 4.1 The spec file
-We used a purpose-built spec:
+This approach assumes you have a “demo video” Playwright spec in your repo (example names we used during development):
 - `e2e/bounty-demo-dev-ui.spec.ts`
 
-Flow:
-- enter the world
-- create a custom character
-- create/connect an agent
-- take over the agent
-- open the Agents panel
-- close the panel (the “closepanel” ending)
+If you don’t have it in your checkout, you’ll need to:
+- switch to the branch that contains the demo-video runner, or
+- add your own Playwright spec that performs the same flow.
 
 ### 4.2 Run just that test
-From the repo root:
+Example command:
 ```bash
 npx playwright test e2e/bounty-demo-dev-ui.spec.ts \
   --config playwright.bounty.config.ts \
@@ -103,25 +100,25 @@ npx playwright test e2e/bounty-demo-dev-ui.spec.ts \
 ```
 
 On success, Playwright writes the recording to:
-- `test-results/e2e-bounty-demo-dev-ui-*/video.webm`
+- `test-results/**/video.webm`
 
 ---
 
 ## 5) Convert WebM → MP4 (X-ready)
 X accepts WebM in some cases, but MP4 is safest.
 
-Convert with ffmpeg (example output path used in our verified run):
+Convert with ffmpeg:
 ```bash
 ffmpeg -y \
-  -i test-results/e2e-bounty-demo-dev-ui-bou-c1cf1-v-UI---takeover-close-panel-chromium/video.webm \
+  -i test-results/<your-run>/video.webm \
   -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 23 \
   -movflags +faststart \
   -an \
-  /private/tmp/eliza-town-demo-closepanel.mp4
+  /private/tmp/eliza-town-demo.mp4
 ```
 
 Result:
-- `/private/tmp/eliza-town-demo-closepanel.mp4`
+- `/private/tmp/eliza-town-demo.mp4`
 
 ### Optional: crop or resize for better X engagement
 (Example: force 1280 wide)
